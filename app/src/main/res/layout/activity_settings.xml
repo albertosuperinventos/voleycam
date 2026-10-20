@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@color/bg"
+  android:fillViewport="true">
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="20dp">
+
+    <!-- Columna izquierda: emisión -->
+    <LinearLayout
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:layout_marginEnd="20dp"
+      android:orientation="vertical">
+
+      <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Emisión"
+        android:textColor="@color/accent"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+      <TextView style="@style/FormLabel" android:text="Plataforma" />
+      <RadioGroup
+        android:id="@+id/rgPlatform"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <RadioButton android:id="@+id/rbYoutube" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="YouTube" android:textColor="@color/text" />
+        <RadioButton android:id="@+id/rbFacebook" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:text="Facebook" android:textColor="@color/text" />
+        <RadioButton android:id="@+id/rbCustom" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:text="Otro (RTMP)" android:textColor="@color/text" />
+      </RadioGroup>
+
+      <TextView android:id="@+id/lblYoutube" style="@style/FormLabel" android:text="Clave de emisión de YouTube" />
+      <EditText android:id="@+id/etYoutube" style="@style/FormInput" android:hint="xxxx-xxxx-xxxx-xxxx-xxxx" android:inputType="textVisiblePassword" />
+
+      <TextView android:id="@+id/lblFacebook" style="@style/FormLabel" android:text="Clave de emisión de Facebook" />
+      <EditText android:id="@+id/etFacebook" style="@style/FormInput" android:hint="FB-xxxxxxxx" android:inputType="textVisiblePassword" />
+
+      <TextView android:id="@+id/lblCustom" style="@style/FormLabel" android:text="URL completa (rtmp:// o rtmps://)" />
+      <EditText android:id="@+id/etCustom" style="@style/FormInput" android:hint="rtmp://servidor/app/clave" android:inputType="textUri" />
+
+      <TextView style="@style/FormLabel" android:text="Calidad" />
+      <RadioGroup
+        android:id="@+id/rgRes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <RadioButton android:id="@+id/rb480" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="480p" android:textColor="@color/text" />
+        <RadioButton android:id="@+id/rb720" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:text="720p" android:textColor="@color/text" />
+        <RadioButton android:id="@+id/rb1080" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:text="1080p" android:textColor="@color/text" />
+      </RadioGroup>
+
+      <TextView style="@style/FormLabel" android:text="Bitrate de vídeo (kbps)" />
+      <EditText android:id="@+id/etBitrate" style="@style/FormInput" android:inputType="number" />
+      <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Orientativo: 480p 1500 · 720p 3000 · 1080p 5000. Se baja solo si la red va justa."
+        android:textColor="@color/muted"
+        android:textSize="12sp" />
+
+      <TextView style="@style/FormLabel" android:text="Fotogramas por segundo" />
+      <RadioGroup
+        android:id="@+id/rgFps"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <RadioButton android:id="@+id/rb25" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="25" android:textColor="@color/text" />
+        <RadioButton android:id="@+id/rb30" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:text="30" android:textColor="@color/text" />
+      </RadioGroup>
+
+      <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swRecord"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Grabar también en el móvil al emitir"
+        android:textColor="@color/text" />
+    </LinearLayout>
+
+    <!-- Columna derecha: mando -->
+    <LinearLayout
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:orientation="vertical">
+
+      <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Mando remoto"
+        android:textColor="@color/accent"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+      <TextView style="@style/FormLabel" android:text="Dirección de la web de control (GitHub Pages)" />
+      <EditText android:id="@+id/etRemote" style="@style/FormInput" android:hint="https://usuario.github.io/sportcam/" android:inputType="textUri" />
+
+      <TextView style="@style/FormLabel" android:text="Clave del canal" />
+      <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+          android:id="@+id/tvKey"
+          android:layout_width="0dp"
+          android:layout_height="wrap_content"
+          android:layout_weight="1"
+          android:fontFamily="monospace"
+          android:textColor="@color/text"
+          android:textIsSelectable="true"
+          android:textSize="14sp" />
+        <Button
+          android:id="@+id/btnNewKey"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:text="Nueva" />
+      </LinearLayout>
+
+      <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Escanea este código con el otro móvil para abrir el mando:"
+        android:textColor="@color/muted"
+        android:textSize="13sp" />
+
+      <ImageView
+        android:id="@+id/ivQr"
+        android:layout_width="220dp"
+        android:layout_height="220dp"
+        android:layout_marginTop="8dp"
+        android:background="#FFFFFF"
+        android:padding="8dp" />
+
+      <TextView
+        android:id="@+id/tvQrHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="@color/muted"
+        android:textSize="12sp" />
+
+      <Button
+        android:id="@+id/btnSave"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:backgroundTint="@color/accent"
+        android:text="Guardar"
+        android:textColor="@color/bg"
+        android:textStyle="bold" />
+    </LinearLayout>
+  </LinearLayout>
+</ScrollView>

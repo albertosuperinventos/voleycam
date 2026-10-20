@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/root"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="#000000">
+
+  <SurfaceView
+    android:id="@+id/preview"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+
+  <!-- Estado: arriba al centro (el marcador va arriba a la izquierda) -->
+  <LinearLayout
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_gravity="top|center_horizontal"
+    android:layout_marginTop="10dp"
+    android:background="@drawable/bg_pill"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="6dp">
+
+    <TextView
+      android:id="@+id/tvStatus"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="● SIN EMITIR"
+      android:textColor="@color/muted"
+      android:textSize="13sp"
+      android:textStyle="bold" />
+
+    <TextView
+      android:id="@+id/tvInfo"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="12dp"
+      android:textColor="@color/text"
+      android:textSize="13sp" />
+  </LinearLayout>
+
+  <TextView
+    android:id="@+id/tvZoom"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center"
+    android:background="@drawable/bg_pill"
+    android:paddingStart="14dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="6dp"
+    android:textColor="@color/text"
+    android:textSize="16sp"
+    android:textStyle="bold"
+    android:visibility="gone" />
+
+  <!-- Botonera derecha -->
+  <LinearLayout
+    android:id="@+id/controls"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_gravity="end|center_vertical"
+    android:layout_marginEnd="12dp"
+    android:gravity="center_horizontal"
+    android:orientation="vertical">
+
+    <TextView android:id="@+id/btnLive" style="@style/CamBtn" android:layout_width="64dp" android:layout_height="52dp" android:text="EN\nDIRECTO" android:textSize="11sp" android:background="@drawable/bg_btn_live" />
+    <TextView android:id="@+id/btnRec" style="@style/CamBtn" android:text="REC" />
+    <TextView android:id="@+id/btnRemote" style="@style/CamBtn" android:text="MANDO" android:textSize="11sp" />
+
+    <LinearLayout
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal">
+      <TextView android:id="@+id/btnZoomOut" style="@style/CamBtn" android:layout_width="36dp" android:text="−" android:textSize="18sp" />
+      <TextView android:id="@+id/btnZoomIn" style="@style/CamBtn" android:layout_width="36dp" android:layout_marginStart="4dp" android:text="+" android:textSize="18sp" />
+    </LinearLayout>
+
+    <TextView android:id="@+id/btnSwitch" style="@style/CamBtn" android:text="⟲" android:textSize="20sp" />
+    <TextView android:id="@+id/btnSettings" style="@style/CamBtn" android:text="⚙" android:textSize="20sp" />
+  </LinearLayout>
+
+  <!-- Panel del mando (web de control) a la izquierda -->
+  <FrameLayout
+    android:id="@+id/remotePanel"
+    android:layout_width="380dp"
+    android:layout_height="match_parent"
+    android:layout_gravity="start"
+    android:background="@color/bg"
+    android:elevation="8dp">
+
+    <WebView
+      android:id="@+id/web"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent" />
+  </FrameLayout>
+</FrameLayout>

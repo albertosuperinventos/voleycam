@@ -1,0 +1,96 @@
+package app.superinventos.sportcam
+
+import android.graphics.Color
+import org.json.JSONObject
+
+data class TeamInfo(val name: String, val short: String, val color: Int, val logo: String)
+
+/** Estado que la web de control envía a la app para pintar el marcador. */
+data class OverlayState(
+  val sport: String,
+  val home: TeamInfo,
+  val away: TeamInfo,
+  val scoreH: Int, val scoreA: Int,
+  val setsH: Int, val setsA: Int,
+  val setNo: Int,
+  val serve: String,
+  val history: List<Pair<Int, Int>>,
+  val finished: Boolean,
+  val clockRunning: Boolean,
+  val clockBaseMs: Long,
+  val clockStartedAt: Long,
+  val clockDown: Boolean,
+  val clockDurMs: Long,
+  val period: String,
+  val bannerShow: Boolean,
+  val bannerText: String,
+  val breakShow: Boolean,
+  val breakText: String,
+  val sponsShow: Boolean,
+  val sponsSec: Int,
+  val sponsorLogos: List<String>,
+  val serverOffset: Long,
+) {
+  val isVolley get() = sport != "football"
+
+  /** Milisegundos a mostrar en el reloj en este instante. */
+  fun clockMs(nowLocal: Long = System.currentTimeMillis()): Long {
+    val now = nowLocal + serverOffset
+    val elapsed = clockBaseMs + if (clockRunning) maxOf(0L, now - clockStartedAt) else 0L
+    return if (clockDown) maxOf(0L, clockDurMs - elapsed) else elapsed
+  }
+
+  companion object {
+    private fun color(s: String?, def: Int): Int = try {
+      if (s.isNullOrBlank()) def else Color.parseColor(s)
+    } catch (_: IllegalArgumentException) { def }
+
+    private fun team(o: JSONObject?, defName: String, defColor: Int) = TeamInfo(
+      name = o?.optString("name").orEmpty().ifBlank { defName },
+      short = o?.optString("short").orEmpty().ifBlank { defName.take(3) }.uppercase(),
+      color = color(o?.optString("color"), defColor),
+      logo = o?.optString("logo").orEmpty()
+    )
+
+    fun parse(json: String): OverlayState {
+      val o = JSONObject(json)
+      val score = o.optJSONObject("score") ?: JSONObject()
+      val sets = o.optJSONObject("sets") ?: JSONObject()
+      val clock = o.optJSONObject("clock") ?: JSONObject()
+      val banner = o.optJSONObject("banner") ?: JSONObject()
+      val brk = o.optJSONObject("brk") ?: JSONObject()
+      val spons = o.optJSONObject("spons") ?: JSONObject()
+      val hist = mutableListOf<Pair<Int, Int>>()
+      o.optJSONArray("history")?.let { arr ->
+        for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { hist += it.optInt("h") to it.optInt("a") }
+      }
+      val logos = mutableListOf<String>()
+      o.optJSONArray("sponsorLogos")?.let { arr -> for (i in 0 until arr.length()) arr.optString(i).takeIf { it.isNotBlank() }?.let { logos += it } }
+      return OverlayState(
+        sport = o.optString("sport", "volley"),
+        home = team(o.optJSONObject("home"), "LOCAL", Color.rgb(30, 107, 255)),
+        away = team(o.optJSONObject("away"), "VISITANTE", Color.rgb(255, 59, 59)),
+        scoreH = score.optInt("h"), scoreA = score.optInt("a"),
+        setsH = sets.optInt("h"), setsA = sets.optInt("a"),
+        setNo = o.optInt("setNo", 1),
+        serve = o.optString("serve", ""),
+        history = hist,
+        finished = o.optBoolean("finished"),
+        clockRunning = clock.optBoolean("running"),
+        clockBaseMs = clock.optLong("baseMs"),
+        clockStartedAt = clock.optLong("startedAt"),
+        clockDown = clock.optString("dir") == "down",
+        clockDurMs = clock.optLong("durMs", 40 * 60000L),
+        period = clock.optString("period", ""),
+        bannerShow = banner.optBoolean("show"),
+        bannerText = banner.optString("text", ""),
+        breakShow = brk.optBoolean("show"),
+        breakText = brk.optString("text", ""),
+        sponsShow = spons.optBoolean("show", true),
+        sponsSec = spons.optInt("sec", 10).coerceIn(3, 120),
+        sponsorLogos = logos,
+        serverOffset = o.optLong("serverOffset"),
+      )
+    }
+  }
+}

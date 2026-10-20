@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "c": {
+      "$key": {
+        ".read": "$key.length >= 16",
+        ".write": "$key.length >= 16"
+      }
+    }
+  }
+}

@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b1220">
+<title>SportCam · Mando</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b1220; --panel:#141d2f; --panel2:#1b263c; --line:#26334d;
+  --text:#eef2f8; --muted:#8c9ab3; --accent:#c6f432; --danger:#ff5d5d; --warn:#ffb020;
+  --r:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 Inter,system-ui,sans-serif;height:100%}
+body{display:flex;flex-direction:column;min-height:100%;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit;border:0;background:var(--panel2);border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:600}
+button:active{transform:scale(.97)}
+button.primary{background:var(--accent);color:#0b1220}
+button.danger{background:transparent;color:var(--danger);border:1px solid #5a2a2a}
+button.ghost{background:transparent;border:1px solid var(--line)}
+button.on{background:var(--accent);color:#0b1220}
+input,select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+input[type=color]{padding:2px;height:42px}
+label{display:block;color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
+header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header h1{font:800 22px 'Barlow Condensed',sans-serif;letter-spacing:.03em;margin:0;flex:1}
+header h1 span{color:var(--accent)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--danger)}
+.dot.ok{background:#3ddc84}
+.chip{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+main{padding:14px 16px;flex:1}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.card h2{font:700 13px Inter,sans-serif;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px}
+.row{display:flex;gap:10px;align-items:center}
+.row>*{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.muted{color:var(--muted)}
+.hidden{display:none!important}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#0e1626;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:10}
+nav button{flex:1;background:none;border-radius:0;padding:12px 4px;color:var(--muted);font-size:13px}
+nav button.act{color:var(--accent)}
+
+/* Marcador */
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tpanel{position:relative;border-radius:var(--r);background:var(--panel);border:1px solid var(--line);overflow:hidden;user-select:none}
+.tpanel .bar{height:6px}
+.tpanel .hit{display:flex;flex-direction:column;align-items:center;padding:12px 8px 6px;cursor:pointer}
+.tpanel .hit:active{background:var(--panel2)}
+.logo{width:44px;height:44px;border-radius:50%;background:#0006 center/contain no-repeat;border:1px solid var(--line)}
+.tname{font:700 20px 'Barlow Condensed',sans-serif;letter-spacing:.04em;margin-top:6px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pts{font:800 84px/1 'Barlow Condensed',sans-serif;margin:4px 0}
+.tfoot{display:flex;gap:6px;padding:0 8px 10px}
+.tfoot button{flex:1;padding:8px}
+.serve{position:absolute;top:14px;right:10px;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:transparent;padding:0}
+.serve.on{background:var(--warn);border-color:var(--warn)}
+.mid{display:flex;justify-content:center;gap:16px;align-items:center;margin:12px 0;font:700 18px 'Barlow Condensed',sans-serif;letter-spacing:.05em}
+.mid b{color:var(--accent);font-size:26px}
+.clock{font:800 64px/1 'Barlow Condensed',sans-serif;text-align:center;letter-spacing:.02em}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btns button{flex:1 1 30%}
+.final{text-align:center;color:var(--accent);font:800 20px 'Barlow Condensed',sans-serif;letter-spacing:.08em;margin:8px 0}
+
+/* Listas */
+.item{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item .grow{flex:1;min-width:0}
+.item .sw{width:14px;height:14px;border-radius:4px;display:inline-block;vertical-align:middle;margin-right:6px}
+.preview-logo{width:64px;height:64px;border-radius:12px;background:#0006 center/contain no-repeat;border:1px dashed var(--line);flex:0 0 64px}
+.gate{max-width:420px;margin:12vh auto;padding:0 20px;text-align:center}
+.gate h1{font:800 40px 'Barlow Condensed',sans-serif;margin:0 0 6px}
+.gate h1 span{color:var(--accent)}
+code{background:var(--panel2);padding:2px 6px;border-radius:6px;word-break:break-all}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--accent);color:#0b1220;padding:10px 16px;border-radius:10px;font-weight:700;z-index:20}
+body.native nav{position:sticky}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="config.js"></script>
+<script src="logic.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+'use strict';
+/* ================= Arranque ================= */
+const $app = document.getElementById('app');
+const hash = new URLSearchParams(location.hash.slice(1));
+const IS_NATIVE = hash.get('native') === '1' && !!window.SportCamNative;
+if (IS_NATIVE) document.body.classList.add('native');
+
+function getKey() {
+  const k = hash.get('k');
+  if (k) { try { localStorage.setItem('sc_key', k); } catch (e) {} return k; }
+  try { return localStorage.getItem('sc_key') || ''; } catch (e) { return ''; }
+}
+let KEY = getKey();
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cfg = window.SPORTCAM_FIREBASE || {};
+
+function toast(msg) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 1800);
+}
+
+if (!cfg.databaseURL) {
+  $app.innerHTML = `<div class="gate"><h1>Sport<span>Cam</span></h1>
+    <p class="muted">Falta configurar Firebase en <code>docs/config.js</code>. Sigue los pasos del README.</p></div>`;
+} else if (!KEY || KEY.length < 16) {
+  $app.innerHTML = `<div class="gate"><h1>Sport<span>Cam</span></h1>
+    <p class="muted">Escanea el código QR que aparece en Ajustes de la app, o pega aquí la clave del canal.</p>
+    <input id="kin" placeholder="Clave del canal" autocomplete="off">
+    <p><button class="primary" id="kok" style="width:100%">Entrar</button></p></div>`;
+  document.getElementById('kok').onclick = () => {
+    const v = document.getElementById('kin').value.trim();
+    if (v.length < 16) return toast('Clave no válida');
+    try { localStorage.setItem('sc_key', v); } catch (e) {}
+    location.hash = 'k=' + encodeURIComponent(v); location.reload();
+  };
+} else {
+  start();
+}
+
+/* ================= App ================= */
+function start() {
+  firebase.initializeApp(cfg);
+  const db = firebase.database();
+  const base = db.ref('c/' + KEY);
+  const liveRef = base.child('live');
+  const teamsRef = base.child('teams');
+  const sponsRef = base.child('sponsors');
+
+  let live = SC.defaultLive();
+  let teams = {};
+  let sponsors = {};
+  let offset = 0;
+  let connected = false;
+  let loaded = false;
+  let tab = 'score';
+  const undo = [];
+  let editing = null;   // id de equipo en edición o 'new'
+  let draftLogo = null; // logo pendiente en el formulario de equipo
+
+  const now = () => Date.now() + offset;
+
+  db.ref('.info/connected').on('value', s => { connected = !!s.val(); renderHeader(); });
+  db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; pushNative(); });
+  liveRef.on('value', s => {
+    loaded = true;
+    if (s.val() == null) { liveRef.set(SC.defaultLive()); return; }
+    live = SC.normalize(s.val()); render(); pushNative();
+  });
+  teamsRef.on('value', s => { teams = s.val() || {}; render(); pushNative(); });
+  sponsRef.on('value', s => { sponsors = s.val() || {}; render(); pushNative(); });
+
+  /* ---------- Acciones ---------- */
+  function act(fn) {
+    undo.push(JSON.stringify(live)); if (undo.length > 60) undo.shift();
+    liveRef.transaction(cur => fn(SC.normalize(cur), now()));
+    if (navigator.vibrate) navigator.vibrate(15);
+  }
+  function setField(path, val) { liveRef.child(path).set(val); }
+  function doUndo() {
+    const prev = undo.pop();
+    if (!prev) return toast('Nada que deshacer');
+    liveRef.set(JSON.parse(prev));
+  }
+
+  /* ---------- Puente con la app Android ---------- */
+  let nativeTimer = null;
+  function teamView(id, fallback) {
+    const t = teams[id] || {};
+    return { name: t.name || fallback, short: t.short || fallback.slice(0, 3).toUpperCase(),
+             color: t.color || (fallback === 'LOCAL' ? '#1e6bff' : '#ff3b3b'), logo: t.logo || '' };
+  }
+  function pushNative() {
+    if (!IS_NATIVE || !loaded) return;
+    clearTimeout(nativeTimer);
+    nativeTimer = setTimeout(() => {
+      const model = Object.assign({}, live, {
+        home: teamView(live.homeId, 'LOCAL'),
+        away: teamView(live.awayId, 'VISITANTE'),
+        sponsorLogos: Object.values(sponsors).map(s => s.logo).filter(Boolean),
+        serverOffset: offset
+      });
+      try { window.SportCamNative.onState(JSON.stringify(model)); } catch (e) {}
+    }, 40);
+  }
+
+  /* ---------- Imágenes ---------- */
+  function fileToLogo(file, max = 160) {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onerror = rej;
+      fr.onload = () => {
+        const img = new Image();
+        img.onerror = rej;
+        img.onload = () => {
+          const k = Math.min(1, max / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          let url = c.toDataURL('image/webp', 0.9);
+          if (!url.startsWith('data:image/webp')) url = c.toDataURL('image/png');
+          res(url);
+        };
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+  function pickImage() {
+    return new Promise(res => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*';
+      inp.onchange = async () => { const f = inp.files[0]; if (!f) return res(null); res(await fileToLogo(f)); };
+      inp.click();
+    });
+  }
+
+  /* ---------- Render ---------- */
+  function shell() {
+    $app.innerHTML = `
+      <header><div class="dot" id="dot"></div><h1>Sport<span>Cam</span></h1><span class="chip" id="sportChip"></span></header>
+      <main id="main"></main>
+      <nav>
+        <button data-tab="score">Marcador</button>
+        <button data-tab="graphics">Rótulos</button>
+        <button data-tab="teams">Equipos</button>
+        <button data-tab="match">Partido</button>
+      </nav>`;
+    $app.querySelectorAll('nav button').forEach(b => b.onclick = () => { tab = b.dataset.tab; editing = null; render(); window.scrollTo(0, 0); });
+  }
+  shell();
+
+  function renderHeader() {
+    const d = document.getElementById('dot'); if (d) d.className = 'dot' + (connected ? ' ok' : '');
+    const c = document.getElementById('sportChip'); if (c) c.textContent = live.sport === 'football' ? 'Fútbol' : 'Voleibol';
+  }
+
+  function render() {
+    renderHeader();
+    $app.querySelectorAll('nav button').forEach(b => b.classList.toggle('act', b.dataset.tab === tab));
+    const m = document.getElementById('main');
+    if (!loaded) { m.innerHTML = '<p class="muted">Conectando…</p>'; return; }
+    // No pisar lo que el usuario está escribiendo: se repinta al salir del campo
+    const ae = document.activeElement;
+    if (ae && m.contains(ae) && /INPUT|SELECT/.test(ae.tagName) && ae.type !== 'file') {
+      ae.addEventListener('blur', () => setTimeout(render, 0), { once: true });
+      return;
+    }
+    m.innerHTML = tab === 'score' ? viewScore() : tab === 'graphics' ? viewGraphics() : tab === 'teams' ? viewTeams() : viewMatch();
+    bind(m);
+    tickClock();
+  }
+
+  function teamPanel(side) {
+    const t = teamView(side === 'h' ? live.homeId : live.awayId, side === 'h' ? 'LOCAL' : 'VISITANTE');
+    const volley = live.sport === 'volley';
+    return `<div class="tpanel">
+      <div class="bar" style="background:${esc(t.color)}"></div>
+      ${volley ? `<button class="serve ${live.serve === side ? 'on' : ''}" data-act="serve" data-s="${side}" title="Saque"></button>` : ''}
+      <div class="hit" data-act="${volley ? 'point' : 'goal'}" data-s="${side}">
+        <div class="logo" style="${t.logo ? `background-image:url('${t.logo}')` : ''}"></div>
+        <div class="tname">${esc(t.short)}</div>
+        <div class="pts">${live.score[side]}</div>
+      </div>
+      <div class="tfoot"><button class="ghost" data-act="minus" data-s="${side}">−1</button></div>
+    </div>`;
+  }
+
+  function viewScore() {
+    const volley = live.sport === 'volley';
+    let h = `<div class="teams">${teamPanel('h')}${teamPanel('a')}</div>`;
+    if (volley) {
+      h += `<div class="mid"><span>SETS <b>${live.sets.h}</b></span><span>SET ${live.setNo}</span><span><b>${live.sets.a}</b> SETS</span></div>`;
+      if (live.history.length) h += `<p class="muted" style="text-align:center;margin-top:-6px">${live.history.map(x => x.h + '-' + x.a).join(' · ')}</p>`;
+      if (live.finished) h += `<div class="final">PARTIDO TERMINADO</div>`;
+    } else {
+      h += `<div class="card" style="margin-top:14px"><div class="clock" id="clk">00:00</div>
+        <p class="muted" style="text-align:center;margin:4px 0 10px">${esc(live.clock.period)}${live.clock.dir === 'down' ? ' · cuenta atrás' : ''}</p>
+        <div class="btns">
+          <button class="${live.clock.running ? '' : 'primary'}" data-act="clk">${live.clock.running ? 'Pausar' : 'Iniciar'}</button>
+          <button data-act="clkadj" data-v="-60000">−1 min</button>
+          <button data-act="clkadj" data-v="60000">+1 min</button>
+          <button data-act="clkadj" data-v="-1000">−1 s</button>
+          <button data-act="clkadj" data-v="1000">+1 s</button>
+          <button class="ghost" data-act="clkreset">Reiniciar</button>
+        </div>
+        <label>Periodo</label>
+        <div class="btns">${['1ª PARTE', '2ª PARTE', 'PRÓRROGA', 'PENALTIS'].map(p =>
+          `<button class="${live.clock.period === p ? 'on' : ''}" data-act="period" data-v="${p}">${p}</button>`).join('')}</div>
+      </div>`;
+    }
+    h += `<div class="btns" style="margin-top:12px">
+        <button data-act="undo">↶ Deshacer</button>
+        ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO">Tiempo muerto</button>`
+                 : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO">Descanso</button>`}
+        <button class="${live.banner.show ? 'on' : ''}" data-act="bannerToggle">Rótulo</button>
+      </div>`;
+    return h;
+  }
+
+  function viewGraphics() {
+    const presets = ['TIEMPO MUERTO', 'DESCANSO', 'FIN DEL SET', 'FIN DEL PARTIDO', 'EMPEZAMOS EN BREVE'];
+    const sp = Object.entries(sponsors);
+    return `
+      <div class="card"><h2>Rótulo inferior</h2>
+        <input id="bannerText" value="${esc(live.banner.text)}" placeholder="Ej: Jornada 5 · Liga Provincial">
+        <div class="row" style="margin-top:10px">
+          <button data-act="bannerSave">Guardar texto</button>
+          <button class="${live.banner.show ? 'on' : ''}" data-act="bannerToggle">${live.banner.show ? 'Ocultar' : 'Mostrar'}</button>
+        </div></div>
+      <div class="card"><h2>Pantalla completa</h2>
+        <div class="btns">${presets.map(p => `<button class="${live.brk.show && live.brk.text === p ? 'on' : ''}" data-act="brkq" data-v="${p}">${p}</button>`).join('')}</div>
+        <label>Texto personalizado</label>
+        <div class="row"><input id="brkText" placeholder="Texto"><button style="flex:0 0 auto" data-act="brkCustom">Mostrar</button></div>
+        ${live.brk.show ? `<p><button class="danger" style="width:100%" data-act="brkHide">Quitar pantalla completa</button></p>` : ''}
+      </div>
+      <div class="card"><h2>Patrocinadores</h2>
+        <div class="row"><span>Mostrar en emisión</span>
+          <button style="flex:0 0 auto" class="${live.spons.show ? 'on' : ''}" data-act="sponsToggle">${live.spons.show ? 'Sí' : 'No'}</button></div>
+        <label>Cambiar cada (segundos)</label>
+        <input type="number" min="3" max="120" id="sponsSec" value="${live.spons.sec}">
+        <div style="margin-top:10px">${sp.length ? sp.map(([id, s]) => `
+          <div class="item"><div class="preview-logo" style="background-image:url('${s.logo}')"></div>
+            <div class="grow">${esc(s.name || 'Patrocinador')}</div>
+            <button class="danger" data-act="sponsDel" data-id="${id}">Borrar</button></div>`).join('')
+          : '<p class="muted">Sin patrocinadores.</p>'}</div>
+        <label>Nuevo patrocinador</label>
+        <div class="row"><input id="sponsName" placeholder="Nombre (opcional)"><button style="flex:0 0 auto" class="primary" data-act="sponsAdd">Elegir logo</button></div>
+      </div>`;
+  }
+
+  function viewTeams() {
+    if (editing) {
+      const t = editing === 'new' ? { name: '', short: '', color: '#1e6bff', logo: '' } : (teams[editing] || {});
+      const logo = draftLogo != null ? draftLogo : (t.logo || '');
+      return `<div class="card"><h2>${editing === 'new' ? 'Nuevo equipo' : 'Editar equipo'}</h2>
+        <div class="row" style="align-items:flex-end">
+          <div class="preview-logo" id="logoPrev" style="${logo ? `background-image:url('${logo}')` : ''}"></div>
+          <div class="grid2" style="flex:1"><button data-act="logoPick">Elegir logo</button><button class="ghost" data-act="logoClear">Quitar</button></div>
+        </div>
+        <label>Nombre</label><input id="tName" value="${esc(t.name)}" placeholder="CV Tomares">
+        <div class="grid2">
+          <div><label>Abreviatura</label><input id="tShort" maxlength="4" value="${esc(t.short)}" placeholder="TOM" style="text-transform:uppercase"></div>
+          <div><label>Color</label><input id="tColor" type="color" value="${esc(t.color || '#1e6bff')}"></div>
+        </div>
+        <div class="row" style="margin-top:14px"><button class="ghost" data-act="teamCancel">Cancelar</button><button class="primary" data-act="teamSave">Guardar</button></div>
+        ${editing !== 'new' ? `<p><button class="danger" style="width:100%" data-act="teamDel">Borrar equipo</button></p>` : ''}
+      </div>`;
+    }
+    const list = Object.entries(teams).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
+    return `<div class="card"><h2>Equipos guardados</h2>
+      ${list.length ? list.map(([id, t]) => `<div class="item">
+        <div class="logo" style="${t.logo ? `background-image:url('${t.logo}')` : ''}"></div>
+        <div class="grow"><b>${esc(t.name)}</b><br><span class="muted"><span class="sw" style="background:${esc(t.color)}"></span>${esc(t.short)}</span></div>
+        <button data-act="teamEdit" data-id="${id}">Editar</button></div>`).join('') : '<p class="muted">Aún no hay equipos.</p>'}
+      <p><button class="primary" style="width:100%" data-act="teamNew">+ Añadir equipo</button></p></div>`;
+  }
+
+  function teamOptions(sel) {
+    const list = Object.entries(teams).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
+    return `<option value="">— Sin equipo —</option>` + list.map(([id, t]) => `<option value="${id}" ${id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+  }
+
+  function viewMatch() {
+    const volley = live.sport === 'volley';
+    const remote = location.origin + location.pathname.replace(/index\.html$/, '');
+    return `
+      <div class="card"><h2>Deporte</h2>
+        <div class="grid2">
+          <button class="${volley ? 'on' : ''}" data-act="sport" data-v="volley">Voleibol</button>
+          <button class="${!volley ? 'on' : ''}" data-act="sport" data-v="football">Fútbol</button>
+        </div>
+        <label>Local</label><select id="selHome">${teamOptions(live.homeId)}</select>
+        <label>Visitante</label><select id="selAway">${teamOptions(live.awayId)}</select>
+      </div>
+      ${volley ? `<div class="card"><h2>Reglas voleibol</h2>
+        <div class="grid2">
+          <button class="${live.rules.bestOf === 5 ? 'on' : ''}" data-act="bestOf" data-v="5">Al mejor de 5</button>
+          <button class="${live.rules.bestOf === 3 ? 'on' : ''}" data-act="bestOf" data-v="3">Al mejor de 3</button>
+        </div>
+        <div class="grid2">
+          <div><label>Puntos por set</label><input type="number" id="setPts" value="${live.rules.setPts}"></div>
+          <div><label>Set decisivo</label><input type="number" id="tiePts" value="${live.rules.tiePts}"></div>
+        </div>
+        <label>Ajustar sets</label>
+        <div class="grid2">
+          <div class="row"><button data-act="setAdj" data-s="h" data-v="-1">−</button><b style="text-align:center">Local ${live.sets.h}</b><button data-act="setAdj" data-s="h" data-v="1">+</button></div>
+          <div class="row"><button data-act="setAdj" data-s="a" data-v="-1">−</button><b style="text-align:center">Visit. ${live.sets.a}</b><button data-act="setAdj" data-s="a" data-v="1">+</button></div>
+        </div></div>`
+      : `<div class="card"><h2>Cronómetro</h2>
+        <div class="grid2">
+          <button class="${live.clock.dir === 'up' ? 'on' : ''}" data-act="dir" data-v="up">Ascendente</button>
+          <button class="${live.clock.dir === 'down' ? 'on' : ''}" data-act="dir" data-v="down">Cuenta atrás</button>
+        </div>
+        <label>Duración de cada parte (minutos)</label>
+        <input type="number" id="durMin" value="${Math.round(live.clock.durMs / 60000)}"></div>`}
+      <div class="card"><h2>Partido</h2>
+        <button class="danger" style="width:100%" data-act="newMatch">Nuevo partido (pone todo a cero)</button></div>
+      ${IS_NATIVE ? '' : `<div class="card"><h2>Canal</h2>
+        <p class="muted" style="margin-top:0">Clave: <code>${esc(KEY)}</code></p>
+        <button style="width:100%" data-act="copyLink" data-v="${esc(remote + '#k=' + encodeURIComponent(KEY))}">Copiar enlace del mando</button></div>`}`;
+  }
+
+  function tickClock() {
+    const el = document.getElementById('clk');
+    if (el) el.textContent = SC.fmtClock(SC.clockDisplayMs(live.clock, now()));
+  }
+  setInterval(tickClock, 250);
+
+  /* ---------- Eventos ---------- */
+  function val(id) { const e = document.getElementById(id); return e ? e.value : ''; }
+
+  function bind(m) {
+    m.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => { e.stopPropagation(); handle(el.dataset); }));
+    const on = (id, ev, fn) => { const e = document.getElementById(id); if (e) e.addEventListener(ev, fn); };
+    on('selHome', 'change', e => setField('homeId', e.target.value));
+    on('selAway', 'change', e => setField('awayId', e.target.value));
+    on('setPts', 'change', e => setField('rules/setPts', Math.max(1, +e.target.value || 25)));
+    on('tiePts', 'change', e => setField('rules/tiePts', Math.max(1, +e.target.value || 15)));
+    on('durMin', 'change', e => setField('clock/durMs', Math.max(1, +e.target.value || 40) * 60000));
+    on('sponsSec', 'change', e => setField('spons/sec', Math.min(120, Math.max(3, +e.target.value || 10))));
+  }
+
+  async function handle(d) {
+    const s = d.s, v = d.v;
+    switch (d.act) {
+      case 'point': return act(L => SC.volleyPoint(L, s));
+      case 'goal': return act(L => SC.goal(L, s));
+      case 'minus': return act(L => SC.scoreMinus(L, s));
+      case 'serve': return act(L => SC.setServe(L, s));
+      case 'setAdj': return act(L => SC.adjustSets(L, s, +v));
+      case 'undo': return doUndo();
+      case 'clk': return act((L, t) => L.clock.running ? SC.clockPause(L, t) : SC.clockStart(L, t));
+      case 'clkadj': return act((L, t) => SC.clockAdjust(L, +v, t));
+      case 'clkreset': return act(L => SC.clockReset(L));
+      case 'period': return setField('clock/period', v);
+      case 'dir': return setField('clock/dir', v);
+      case 'sport': return setField('sport', v);
+      case 'bestOf': return setField('rules/bestOf', +v);
+      case 'newMatch':
+        if (confirm('¿Empezar un partido nuevo? Se pone el marcador a cero.')) act(L => SC.newMatch(L));
+        return;
+      case 'brkq':
+        return liveRef.child('brk').set({ show: !(live.brk.show && live.brk.text === v), text: v });
+      case 'brkCustom': {
+        const t = val('brkText').trim(); if (!t) return toast('Escribe un texto');
+        return liveRef.child('brk').set({ show: true, text: t.toUpperCase() });
+      }
+      case 'brkHide': return setField('brk/show', false);
+      case 'bannerSave': return setField('banner/text', val('bannerText').trim()), toast('Guardado');
+      case 'bannerToggle': {
+        const t = document.getElementById('bannerText');
+        if (t) setField('banner/text', t.value.trim());
+        return setField('banner/show', !live.banner.show);
+      }
+      case 'sponsToggle': return setField('spons/show', !live.spons.show);
+      case 'sponsAdd': {
+        const logo = await pickImage(); if (!logo) return;
+        await sponsRef.push({ name: val('sponsName').trim(), logo }); return toast('Patrocinador añadido');
+      }
+      case 'sponsDel': if (confirm('¿Borrar patrocinador?')) sponsRef.child(d.id).remove(); return;
+      case 'teamNew': editing = 'new'; draftLogo = null; return render();
+      case 'teamEdit': editing = d.id; draftLogo = null; return render();
+      case 'teamCancel': editing = null; draftLogo = null; return render();
+      case 'logoPick': {
+        const keep = { name: val('tName'), short: val('tShort'), color: val('tColor') };
+        const logo = await pickImage(); if (logo == null) return;
+        draftLogo = logo; render();
+        document.getElementById('tName').value = keep.name;
+        document.getElementById('tShort').value = keep.short;
+        document.getElementById('tColor').value = keep.color;
+        return;
+      }
+      case 'logoClear': draftLogo = ''; document.getElementById('logoPrev').style.backgroundImage = ''; return;
+      case 'teamSave': {
+        const name = val('tName').trim();
+        if (!name) return toast('Pon un nombre');
+        const short = (val('tShort').trim() || name.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 3)).toUpperCase();
+        const prev = editing === 'new' ? {} : (teams[editing] || {});
+        const data = { name, short, color: val('tColor') || '#1e6bff', logo: draftLogo != null ? draftLogo : (prev.logo || '') };
+        if (editing === 'new') await teamsRef.push(data); else await teamsRef.child(editing).set(data);
+        editing = null; draftLogo = null; render(); return toast('Equipo guardado');
+      }
+      case 'teamDel':
+        if (confirm('¿Borrar este equipo?')) { await teamsRef.child(editing).remove(); editing = null; render(); }
+        return;
+      case 'copyLink':
+        try { await navigator.clipboard.writeText(v); toast('Enlace copiado'); } catch (e) { prompt('Copia el enlace:', v); }
+        return;
+    }
+  }
+}
+</script>
+</body>
+</html>
