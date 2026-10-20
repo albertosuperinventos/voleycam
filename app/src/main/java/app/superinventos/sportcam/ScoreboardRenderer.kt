@@ -75,7 +75,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     // Marcador
     var board: RectF? = null
     if (s.boardShow) {
-      val (bw, bh) = if (s.isVolley) volleySize() else footballSize()
+      val (bw, bh) = if (s.isVolley) volleySize(s) else footballSize(s)
       val left = if (s.boardPos.endsWith("r")) width - margin - bw else margin
       val top = if (s.boardPos.startsWith("b")) height - margin - bh else margin
       board = RectF(left, top, left + bw, top + bh)
@@ -145,17 +145,26 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
   private val vRowH get() = d(46f)
   private val vGap get() = d(2f)
   private val vTabH get() = d(26f)
-  private val vTotalW get() = d(8f + 46f + 130f + 20f + 40f + 58f)
+  /** Ancho de la columna de nombres según el nombre más largo de los dos equipos. */
+  private fun nameWidth(s: OverlayState, sizeDp: Float, minDp: Float, maxDp: Float): Float {
+    text.textSize = d(sizeDp)
+    val w = maxOf(text.measureText(s.home.short), text.measureText(s.away.short)) + d(18f)
+    return w.coerceIn(d(minDp), d(maxDp))
+  }
 
-  private fun volleySize() = vTotalW to (vRowH * 2 + vGap * 2 + vTabH)
+  private fun vNameW(s: OverlayState) = nameWidth(s, 30f, 130f, 300f)
+  private fun vTotalW(s: OverlayState) = d(8f + 46f + 20f + 40f + 58f) + vNameW(s)
+
+  private fun volleySize(s: OverlayState) = vTotalW(s) to (vRowH * 2 + vGap * 2 + vTabH)
 
   private fun drawVolley(c: Canvas, s: OverlayState, x: Float, y0: Float) {
     var y = y0
-    val wBar = d(8f); val wLogo = d(46f); val wName = d(130f); val wServe = d(20f); val wSets = d(40f); val wPts = d(58f)
+    val wBar = d(8f); val wLogo = d(46f); val wName = vNameW(s); val wServe = d(20f); val wSets = d(40f); val wPts = d(58f)
+    val totalW = vTotalW(s)
     val rowH = vRowH
     for ((team, side) in listOf(s.home to "h", s.away to "a")) {
       var cx = x
-      rect(c, cx, y, cx + vTotalW, y + rowH, dark)
+      rect(c, cx, y, cx + totalW, y + rowH, dark)
       rect(c, cx, y, cx + wBar, y + rowH, team.color); cx += wBar
       if (team.logo.isNotBlank()) drawLogoFit(c, team.logo, RectF(cx + d(5f), y + d(5f), cx + wLogo - d(5f), y + rowH - d(5f)))
       else { fill.color = team.color; c.drawCircle(cx + wLogo / 2, y + rowH / 2, d(14f), fill) }
@@ -178,14 +187,15 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   private val fH get() = d(50f)
   private val fTabH get() = d(30f)
-  private val fTotalW get() = d((6f + 50f + 84f) * 2 + 112f)
+  private fun fNameW(s: OverlayState) = nameWidth(s, 30f, 84f, 230f)
+  private fun fTotalW(s: OverlayState) = d((6f + 50f) * 2 + 112f) + fNameW(s) * 2
 
-  private fun footballSize() = fTotalW to (fH + fTabH)
+  private fun footballSize(s: OverlayState) = fTotalW(s) to (fH + fTabH)
 
   private fun drawFootball(c: Canvas, s: OverlayState, now: Long, x: Float, y: Float) {
     val h = fH
-    val wBar = d(6f); val wLogo = d(50f); val wName = d(84f); val wScore = d(112f)
-    val total = fTotalW
+    val wBar = d(6f); val wLogo = d(50f); val wName = fNameW(s); val wScore = d(112f)
+    val total = fTotalW(s)
     rect(c, x, y, x + total, y + h, dark)
     var cx = x
     rect(c, cx, y, cx + wBar, y + h, s.home.color); cx += wBar

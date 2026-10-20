@@ -54,7 +54,7 @@ data class OverlayState(
 
     private fun team(o: JSONObject?, defName: String, defColor: Int) = TeamInfo(
       name = o?.optString("name").orEmpty().ifBlank { defName },
-      short = o?.optString("short").orEmpty().ifBlank { defName.take(3) }.uppercase(),
+      short = o?.optString("short").orEmpty().ifBlank { defName }.uppercase(),
       color = color(o?.optString("color"), defColor),
       logo = o?.optString("logo").orEmpty()
     )

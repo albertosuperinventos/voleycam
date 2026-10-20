@@ -81,6 +81,7 @@ body.native nav{position:sticky}
 <div id="app"></div>
 <script src="config.js"></script>
 <script src="logic.js"></script>
+<script src="presets.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
@@ -172,7 +173,7 @@ function start() {
   let nativeTimer = null;
   function teamView(id, fallback) {
     const t = teams[id] || {};
-    return { name: t.name || fallback, short: t.short || fallback.slice(0, 3).toUpperCase(),
+    return { name: t.name || fallback, short: t.short || fallback,
              color: t.color || (fallback === 'LOCAL' ? '#1e6bff' : '#ff3b3b'), logo: t.logo || '' };
   }
   function pushNative() {
@@ -361,7 +362,7 @@ function start() {
         </div>
         <label>Nombre</label><input id="tName" value="${esc(t.name)}" placeholder="CV Tomares">
         <div class="grid2">
-          <div><label>Abreviatura</label><input id="tShort" maxlength="4" value="${esc(t.short)}" placeholder="TOM" style="text-transform:uppercase"></div>
+          <div><label>Nombre en el marcador</label><input id="tShort" maxlength="14" value="${esc(t.short)}" placeholder="TOMARES" style="text-transform:uppercase"></div>
           <div><label>Color</label><input id="tColor" type="color" value="${esc(t.color || '#1e6bff')}"></div>
         </div>
         <div class="row" style="margin-top:14px"><button class="ghost" data-act="teamCancel">Cancelar</button><button class="primary" data-act="teamSave">Guardar</button></div>
@@ -374,7 +375,10 @@ function start() {
         <div class="logo" style="${t.logo ? `background-image:url('${t.logo}')` : ''}"></div>
         <div class="grow"><b>${esc(t.name)}</b><br><span class="muted"><span class="sw" style="background:${esc(t.color)}"></span>${esc(t.short)}</span></div>
         <button data-act="teamEdit" data-id="${id}">Editar</button></div>`).join('') : '<p class="muted">Aún no hay equipos.</p>'}
-      <p><button class="primary" style="width:100%" data-act="teamNew">+ Añadir equipo</button></p></div>`;
+      <p><button class="primary" style="width:100%" data-act="teamNew">+ Añadir equipo</button></p></div>
+      ${Object.keys(window.SPORTCAM_PRESETS || {}).map(k => `<div class="card"><h2>Equipos de liga</h2>
+        <button style="width:100%" data-act="loadPreset" data-v="${esc(k)}">Cargar equipos ${esc(k)}</button>
+        <p class="muted" style="font-size:13px;margin-bottom:0">Crea los equipos que falten y actualiza los que ya existan con el mismo nombre.</p></div>`).join('')}`;
   }
 
   function teamOptions(sel) {
@@ -493,6 +497,20 @@ function start() {
         }
         return;
       case 'teamNew': editing = 'new'; draftLogo = null; return render();
+      case 'loadPreset': {
+        const list = (window.SPORTCAM_PRESETS || {})[v] || [];
+        toast('Cargando ' + list.length + ' equipos…');
+        let n = 0;
+        for (const p of list) {
+          let logo = '';
+          try { logo = await fileToLogo(await (await fetch(p.logo)).blob(), 300); } catch (e) {}
+          const data = { name: p.name, short: p.short, color: p.color, logo };
+          const found = Object.entries(teams).find(([, t]) => (t.name || '').toLowerCase() === p.name.toLowerCase());
+          if (found) await teamsRef.child(found[0]).set(data); else await teamsRef.push(data);
+          n++;
+        }
+        return toast(n + ' equipos cargados');
+      }
       case 'teamEdit': editing = d.id; draftLogo = null; return render();
       case 'teamCancel': editing = null; draftLogo = null; return render();
       case 'logoPick': {
@@ -508,7 +526,7 @@ function start() {
       case 'teamSave': {
         const name = val('tName').trim();
         if (!name) return toast('Pon un nombre');
-        const short = (val('tShort').trim() || name.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 3)).toUpperCase();
+        const short = (val('tShort').trim() || name.slice(0, 14)).toUpperCase();
         const prev = editing === 'new' ? {} : (teams[editing] || {});
         const data = { name, short, color: val('tColor') || '#1e6bff', logo: draftLogo != null ? draftLogo : (prev.logo || '') };
         if (editing === 'new') await teamsRef.push(data); else await teamsRef.child(editing).set(data);
