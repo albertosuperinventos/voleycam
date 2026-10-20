@@ -10,12 +10,12 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent" />
 
-  <!-- Estado: arriba al centro (el marcador va arriba a la izquierda) -->
+  <!-- Estado: abajo al centro (solo se ve en el móvil, no sale en la emisión) -->
   <LinearLayout
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:layout_gravity="top|center_horizontal"
-    android:layout_marginTop="10dp"
+    android:layout_gravity="bottom|center_horizontal"
+    android:layout_marginBottom="10dp"
     android:background="@drawable/bg_pill"
     android:gravity="center_vertical"
     android:orientation="horizontal"

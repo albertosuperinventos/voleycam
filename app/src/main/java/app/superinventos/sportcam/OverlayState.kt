@@ -5,6 +5,8 @@ import org.json.JSONObject
 
 data class TeamInfo(val name: String, val short: String, val color: Int, val logo: String)
 
+data class Sponsor(val logo: String, val text: String)
+
 /** Estado que la web de control envía a la app para pintar el marcador. */
 data class OverlayState(
   val sport: String,
@@ -28,7 +30,12 @@ data class OverlayState(
   val breakText: String,
   val sponsShow: Boolean,
   val sponsSec: Int,
-  val sponsorLogos: List<String>,
+  val sponsors: List<Sponsor>,
+  val sponsCarousel: Boolean,
+  val fullSponsor: Sponsor?,
+  val boardShow: Boolean,
+  /** tl, tr, bl, br */
+  val boardPos: String,
   val serverOffset: Long,
 ) {
   val isVolley get() = sport != "football"
@@ -64,8 +71,16 @@ data class OverlayState(
       o.optJSONArray("history")?.let { arr ->
         for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { hist += it.optInt("h") to it.optInt("a") }
       }
-      val logos = mutableListOf<String>()
-      o.optJSONArray("sponsorLogos")?.let { arr -> for (i in 0 until arr.length()) arr.optString(i).takeIf { it.isNotBlank() }?.let { logos += it } }
+      val board = o.optJSONObject("board") ?: JSONObject()
+      val sponsors = mutableListOf<Sponsor>()
+      o.optJSONArray("sponsorList")?.let { arr ->
+        for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { sp ->
+          val logo = sp.optString("logo")
+          if (logo.isNotBlank()) sponsors += Sponsor(logo, sp.optString("text"))
+        }
+      }
+      val full = o.optJSONObject("spFullItem")?.let { Sponsor(it.optString("logo"), it.optString("text")) }?.takeIf { it.logo.isNotBlank() }
+      val pos = board.optString("pos", "tl").takeIf { it in setOf("tl", "tr", "bl", "br") } ?: "tl"
       return OverlayState(
         sport = o.optString("sport", "volley"),
         home = team(o.optJSONObject("home"), "LOCAL", Color.rgb(30, 107, 255)),
@@ -88,7 +103,11 @@ data class OverlayState(
         breakText = brk.optString("text", ""),
         sponsShow = spons.optBoolean("show", true),
         sponsSec = spons.optInt("sec", 10).coerceIn(3, 120),
-        sponsorLogos = logos,
+        sponsors = sponsors,
+        sponsCarousel = spons.optBoolean("carousel"),
+        fullSponsor = full,
+        boardShow = board.optBoolean("show", true),
+        boardPos = pos,
         serverOffset = o.optLong("serverOffset"),
       )
     }

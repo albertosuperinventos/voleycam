@@ -12,7 +12,7 @@ import android.util.LruCache
 import kotlin.math.min
 
 /**
- * Pinta el marcador, rótulos, patrocinadores y pantalla de descanso en un Bitmap
+ * Pinta el marcador, rótulos, patrocinadores y pantallas completas en un Bitmap
  * transparente del tamaño del vídeo. La app lo superpone sobre la cámara.
  * Todas las medidas están pensadas para 1280x720 y se escalan.
  */
@@ -20,8 +20,10 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   private val k = width / 1280f
   private fun d(v: Float) = v * k
+  private val margin get() = d(24f)
 
   private val accent = Color.rgb(198, 244, 50)
+  private val ink = Color.rgb(11, 18, 32)
   private val dark = Color.argb(235, 11, 18, 32)
   private val dark2 = Color.argb(235, 27, 38, 60)
   private val serveColor = Color.rgb(255, 176, 32)
@@ -31,14 +33,32 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
   private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = condensed; color = Color.WHITE }
   private val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-  private val logoCache = object : LruCache<String, Bitmap>(24) {}
+  private val logoCache = object : LruCache<String, Bitmap>(32) {}
+
+  /** Qué ocupa la pantalla completa en este instante. */
+  private sealed class Screen {
+    object None : Screen()
+    object Break : Screen()
+    data class Spons(val sp: Sponsor) : Screen()
+  }
+
+  private fun screen(s: OverlayState, now: Long): Screen {
+    s.fullSponsor?.let { return Screen.Spons(it) }
+    if (!s.breakShow) return Screen.None
+    if (s.sponsCarousel && s.sponsors.isNotEmpty()) {
+      // Ciclo: pantalla de descanso, patrocinador 1, patrocinador 2…
+      val slot = ((now / 1000 / s.sponsSec) % (s.sponsors.size + 1)).toInt()
+      return if (slot == 0) Screen.Break else Screen.Spons(s.sponsors[slot - 1])
+    }
+    return Screen.Break
+  }
 
   /** Clave que cambia cuando hay que volver a pintar. */
   fun signature(s: OverlayState?, version: Int, now: Long): String {
     if (s == null) return "none"
     val clockSec = if (!s.isVolley) s.clockMs(now) / 1000 else 0
-    val spIdx = if (s.sponsShow && s.sponsorLogos.size > 1) (now / 1000 / s.sponsSec) % s.sponsorLogos.size else 0
-    return "$version|$clockSec|$spIdx"
+    val tick = if (s.sponsors.size > 1 || (s.breakShow && s.sponsCarousel)) now / 1000 / s.sponsSec else 0
+    return "$version|$clockSec|$tick"
   }
 
   /** Pinta sobre [bmp] (se borra antes). */
@@ -46,13 +66,38 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     bmp.eraseColor(Color.TRANSPARENT)
     if (s == null) return bmp
     val c = Canvas(bmp)
-    var sponsorLeft = width.toFloat()
-    if (s.sponsShow && s.sponsorLogos.isNotEmpty()) sponsorLeft = drawSponsor(c, s, now)
-    if (s.breakShow) {
-      drawBreak(c, s)
-    } else {
-      if (s.isVolley) drawVolley(c, s) else drawFootball(c, s, now)
-      if (s.bannerShow && s.bannerText.isNotBlank()) drawBanner(c, s.bannerText, sponsorLeft)
+    when (val sc = screen(s, now)) {
+      is Screen.Spons -> { drawFullSponsor(c, sc.sp); return bmp }
+      Screen.Break -> { drawBreak(c, s); return bmp }
+      Screen.None -> {}
+    }
+
+    // Marcador
+    var board: RectF? = null
+    if (s.boardShow) {
+      val (bw, bh) = if (s.isVolley) volleySize() else footballSize()
+      val left = if (s.boardPos.endsWith("r")) width - margin - bw else margin
+      val top = if (s.boardPos.startsWith("b")) height - margin - bh else margin
+      board = RectF(left, top, left + bw, top + bh)
+      if (s.isVolley) drawVolley(c, s, left, top) else drawFootball(c, s, now, left, top)
+    }
+    val boardBottom = board != null && s.boardPos.startsWith("b")
+
+    // Patrocinador en esquina: abajo a la derecha, o arriba a la derecha si ahí está el marcador
+    var sponsorBox: RectF? = null
+    if (s.sponsShow && s.sponsors.isNotEmpty()) {
+      val atTop = board != null && s.boardPos == "br"
+      sponsorBox = drawSponsorCorner(c, s, now, atTop)
+    }
+
+    // Rótulo inferior entre lo que haya abajo
+    if (s.bannerShow && s.bannerText.isNotBlank()) {
+      var left = d(40f)
+      var right = width - d(40f)
+      if (boardBottom && s.boardPos == "bl") left = board!!.right + margin
+      if (boardBottom && s.boardPos == "br") right = board!!.left - margin
+      sponsorBox?.let { if (it.bottom > height / 2f) right = min(right, it.left - margin) }
+      if (right - left > d(160f)) drawBanner(c, s.bannerText, left, right)
     }
     return bmp
   }
@@ -97,14 +142,20 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   /* ---------------- Voleibol ---------------- */
 
-  private fun drawVolley(c: Canvas, s: OverlayState) {
-    val x = d(24f); var y = d(24f)
-    val rowH = d(46f); val gap = d(2f)
+  private val vRowH get() = d(46f)
+  private val vGap get() = d(2f)
+  private val vTabH get() = d(26f)
+  private val vTotalW get() = d(8f + 46f + 130f + 20f + 40f + 58f)
+
+  private fun volleySize() = vTotalW to (vRowH * 2 + vGap * 2 + vTabH)
+
+  private fun drawVolley(c: Canvas, s: OverlayState, x: Float, y0: Float) {
+    var y = y0
     val wBar = d(8f); val wLogo = d(46f); val wName = d(130f); val wServe = d(20f); val wSets = d(40f); val wPts = d(58f)
-    val total = wBar + wLogo + wName + wServe + wSets + wPts
+    val rowH = vRowH
     for ((team, side) in listOf(s.home to "h", s.away to "a")) {
       var cx = x
-      rect(c, cx, y, cx + total, y + rowH, dark)
+      rect(c, cx, y, cx + vTotalW, y + rowH, dark)
       rect(c, cx, y, cx + wBar, y + rowH, team.color); cx += wBar
       if (team.logo.isNotBlank()) drawLogoFit(c, team.logo, RectF(cx + d(5f), y + d(5f), cx + wLogo - d(5f), y + rowH - d(5f)))
       else { fill.color = team.color; c.drawCircle(cx + wLogo / 2, y + rowH / 2, d(14f), fill) }
@@ -115,40 +166,45 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
       rect(c, cx, y, cx + wSets, y + rowH, dark2)
       label(c, (if (side == "h") s.setsH else s.setsA).toString(), cx + wSets / 2, y, y + rowH, d(28f), Color.WHITE, 0); cx += wSets
       rect(c, cx, y, cx + wPts, y + rowH, Color.WHITE)
-      label(c, (if (side == "h") s.scoreH else s.scoreA).toString(), cx + wPts / 2, y, y + rowH, d(34f), Color.rgb(11, 18, 32), 0)
-      y += rowH + gap
+      label(c, (if (side == "h") s.scoreH else s.scoreA).toString(), cx + wPts / 2, y, y + rowH, d(34f), ink, 0)
+      y += rowH + vGap
     }
     val tab = if (s.finished) "FINAL" else "SET ${s.setNo}"
-    rect(c, x, y, x + d(110f), y + d(26f), accent)
-    label(c, tab, x + d(55f), y, y + d(26f), d(20f), Color.rgb(11, 18, 32), 0)
+    rect(c, x, y, x + d(110f), y + vTabH, accent)
+    label(c, tab, x + d(55f), y, y + vTabH, d(20f), ink, 0)
   }
 
   /* ---------------- Fútbol ---------------- */
 
-  private fun drawFootball(c: Canvas, s: OverlayState, now: Long) {
-    val x = d(24f); val y = d(24f); val h = d(50f)
+  private val fH get() = d(50f)
+  private val fTabH get() = d(30f)
+  private val fTotalW get() = d((6f + 50f + 84f) * 2 + 112f)
+
+  private fun footballSize() = fTotalW to (fH + fTabH)
+
+  private fun drawFootball(c: Canvas, s: OverlayState, now: Long, x: Float, y: Float) {
+    val h = fH
     val wBar = d(6f); val wLogo = d(50f); val wName = d(84f); val wScore = d(112f)
-    val total = (wBar + wLogo + wName) * 2 + wScore
+    val total = fTotalW
     rect(c, x, y, x + total, y + h, dark)
     var cx = x
     rect(c, cx, y, cx + wBar, y + h, s.home.color); cx += wBar
     teamLogo(c, s.home, cx, y, wLogo, h); cx += wLogo
     label(c, s.home.short, cx + wName / 2, y, y + h, d(30f), Color.WHITE, 0, wName - d(8f)); cx += wName
     rect(c, cx, y, cx + wScore, y + h, Color.WHITE)
-    label(c, "${s.scoreH} - ${s.scoreA}", cx + wScore / 2, y, y + h, d(36f), Color.rgb(11, 18, 32), 0); cx += wScore
+    label(c, "${s.scoreH} - ${s.scoreA}", cx + wScore / 2, y, y + h, d(36f), ink, 0); cx += wScore
     label(c, s.away.short, cx + wName / 2, y, y + h, d(30f), Color.WHITE, 0, wName - d(8f)); cx += wName
     teamLogo(c, s.away, cx, y, wLogo, h); cx += wLogo
     rect(c, cx, y, cx + wBar, y + h, s.away.color)
 
-    val ms = s.clockMs(now)
-    val t = ms / 1000
+    val t = s.clockMs(now) / 1000
     val clock = "%02d:%02d".format(t / 60, t % 60)
     val tabY = y + h
     val tabW = d(210f); val tabX = x + (total - tabW) / 2
-    rect(c, tabX, tabY, tabX + tabW, tabY + d(30f), dark2)
-    rect(c, tabX, tabY, tabX + d(80f), tabY + d(30f), accent)
-    label(c, clock, tabX + d(40f), tabY, tabY + d(30f), d(24f), Color.rgb(11, 18, 32), 0)
-    label(c, s.period, tabX + d(80f) + (tabW - d(80f)) / 2, tabY, tabY + d(30f), d(18f), Color.WHITE, 0, tabW - d(90f))
+    rect(c, tabX, tabY, tabX + tabW, tabY + fTabH, dark2)
+    rect(c, tabX, tabY, tabX + d(80f), tabY + fTabH, accent)
+    label(c, clock, tabX + d(40f), tabY, tabY + fTabH, d(24f), ink, 0)
+    label(c, s.period, tabX + d(80f) + (tabW - d(80f)) / 2, tabY, tabY + fTabH, d(18f), Color.WHITE, 0, tabW - d(90f))
   }
 
   private fun teamLogo(c: Canvas, t: TeamInfo, x: Float, y: Float, w: Float, h: Float) {
@@ -158,9 +214,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   /* ---------------- Rótulo inferior ---------------- */
 
-  private fun drawBanner(c: Canvas, str: String, rightLimit: Float) {
-    val left = d(40f)
-    val maxRight = rightLimit - d(24f)
+  private fun drawBanner(c: Canvas, str: String, left: Float, maxRight: Float) {
     val h = d(58f); val bottom = height - d(40f); val top = bottom - h
     text.textSize = d(32f)
     val w = min(text.measureText(str) + d(52f), maxRight - left)
@@ -171,19 +225,32 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   /* ---------------- Patrocinadores ---------------- */
 
-  /** Devuelve la X izquierda de la caja para no solapar el rótulo. */
-  private fun drawSponsor(c: Canvas, s: OverlayState, now: Long): Float {
-    val n = s.sponsorLogos.size
+  private fun drawSponsorCorner(c: Canvas, s: OverlayState, now: Long, atTop: Boolean): RectF {
+    val n = s.sponsors.size
     val idx = ((now / 1000 / s.sponsSec) % n).toInt()
     val bw = d(170f); val bh = d(86f)
-    val r = width - d(32f); val b = height - d(32f)
-    val box = RectF(r - bw, b - bh, r, b)
+    val r = width - d(32f)
+    val t = if (atTop) d(32f) else height - d(32f) - bh
+    val box = RectF(r - bw, t, r, t + bh)
     rect(c, box.left, box.top, box.right, box.bottom, Color.argb(225, 255, 255, 255), d(10f))
-    drawLogoFit(c, s.sponsorLogos[idx], RectF(box.left + d(10f), box.top + d(8f), box.right - d(10f), box.bottom - d(8f)))
-    return box.left
+    drawLogoFit(c, s.sponsors[idx].logo, RectF(box.left + d(10f), box.top + d(8f), box.right - d(10f), box.bottom - d(8f)))
+    return box
   }
 
-  /* ---------------- Pantalla completa ---------------- */
+  private fun drawFullSponsor(c: Canvas, sp: Sponsor) {
+    rect(c, 0f, 0f, width.toFloat(), height.toFloat(), Color.argb(235, 8, 12, 22))
+    val hasText = sp.text.isNotBlank()
+    // Tarjeta blanca para que se vean bien logos oscuros o con transparencia
+    val cardW = d(760f); val cardH = d(if (hasText) 400f else 460f)
+    val cx = width / 2f
+    val top = (height - cardH - (if (hasText) d(90f) else 0f)) / 2f
+    val card = RectF(cx - cardW / 2, top, cx + cardW / 2, top + cardH)
+    rect(c, card.left, card.top, card.right, card.bottom, Color.WHITE, d(18f))
+    drawLogoFit(c, sp.logo, RectF(card.left + d(40f), card.top + d(36f), card.right - d(40f), card.bottom - d(36f)))
+    if (hasText) label(c, sp.text, cx, card.bottom + d(24f), card.bottom + d(84f), d(40f), Color.WHITE, 0, width - d(160f))
+  }
+
+  /* ---------------- Pantalla de descanso ---------------- */
 
   private fun drawBreak(c: Canvas, s: OverlayState) {
     rect(c, 0f, 0f, width.toFloat(), height.toFloat(), Color.argb(215, 8, 12, 22))

@@ -182,7 +182,8 @@ function start() {
       const model = Object.assign({}, live, {
         home: teamView(live.homeId, 'LOCAL'),
         away: teamView(live.awayId, 'VISITANTE'),
-        sponsorLogos: Object.values(sponsors).map(s => s.logo).filter(Boolean),
+        sponsorList: Object.values(sponsors).filter(s => s.logo).map(s => ({ logo: s.logo, text: s.text || '' })),
+        spFullItem: (live.spFull.show && sponsors[live.spFull.id]) ? { logo: sponsors[live.spFull.id].logo, text: sponsors[live.spFull.id].text || '' } : null,
         serverOffset: offset
       });
       try { window.SportCamNative.onState(JSON.stringify(model)); } catch (e) {}
@@ -211,11 +212,11 @@ function start() {
       fr.readAsDataURL(file);
     });
   }
-  function pickImage() {
+  function pickImage(max) {
     return new Promise(res => {
       const inp = document.createElement('input');
       inp.type = 'file'; inp.accept = 'image/*';
-      inp.onchange = async () => { const f = inp.files[0]; if (!f) return res(null); res(await fileToLogo(f)); };
+      inp.onchange = async () => { const f = inp.files[0]; if (!f) return res(null); res(await fileToLogo(f, max || 300)); };
       inp.click();
     });
   }
@@ -306,7 +307,14 @@ function start() {
   function viewGraphics() {
     const presets = ['TIEMPO MUERTO', 'DESCANSO', 'FIN DEL SET', 'FIN DEL PARTIDO', 'EMPEZAMOS EN BREVE'];
     const sp = Object.entries(sponsors);
+    const posBtn = (v, t) => `<button class="${live.board.pos === v ? 'on' : ''}" data-act="boardPos" data-v="${v}">${t}</button>`;
     return `
+      <div class="card"><h2>Marcador en el vídeo</h2>
+        <div class="row"><span>Mostrar marcador</span>
+          <button style="flex:0 0 auto" class="${live.board.show ? 'on' : ''}" data-act="boardToggle">${live.board.show ? 'Sí' : 'No'}</button></div>
+        <label>Posición</label>
+        <div class="grid2">${posBtn('tl', '↖ Arriba izq.')}${posBtn('tr', 'Arriba der. ↗')}${posBtn('bl', '↙ Abajo izq.')}${posBtn('br', 'Abajo der. ↘')}</div>
+      </div>
       <div class="card"><h2>Rótulo inferior</h2>
         <input id="bannerText" value="${esc(live.banner.text)}" placeholder="Ej: Jornada 5 · Liga Provincial">
         <div class="row" style="margin-top:10px">
@@ -322,15 +330,23 @@ function start() {
       <div class="card"><h2>Patrocinadores</h2>
         <div class="row"><span>Mostrar en emisión</span>
           <button style="flex:0 0 auto" class="${live.spons.show ? 'on' : ''}" data-act="sponsToggle">${live.spons.show ? 'Sí' : 'No'}</button></div>
+        <div class="row" style="margin-top:8px"><span>Carrusel a pantalla completa en el descanso</span>
+          <button style="flex:0 0 auto" class="${live.spons.carousel ? 'on' : ''}" data-act="carouselToggle">${live.spons.carousel ? 'Sí' : 'No'}</button></div>
         <label>Cambiar cada (segundos)</label>
         <input type="number" min="3" max="120" id="sponsSec" value="${live.spons.sec}">
+        ${live.spFull.show ? `<p><button class="danger" style="width:100%" data-act="spFullHide">Quitar patrocinador de pantalla completa</button></p>` : ''}
         <div style="margin-top:10px">${sp.length ? sp.map(([id, s]) => `
           <div class="item"><div class="preview-logo" style="background-image:url('${s.logo}')"></div>
-            <div class="grow">${esc(s.name || 'Patrocinador')}</div>
-            <button class="danger" data-act="sponsDel" data-id="${id}">Borrar</button></div>`).join('')
+            <div class="grow"><b>${esc(s.name || 'Patrocinador')}</b>${s.text ? `<br><span class="muted">${esc(s.text)}</span>` : ''}</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="${live.spFull.show && live.spFull.id === id ? 'on' : ''}" data-act="spFull" data-id="${id}">Pantalla completa</button>
+              <button class="danger" data-act="sponsDel" data-id="${id}">Borrar</button></div></div>`).join('')
           : '<p class="muted">Sin patrocinadores.</p>'}</div>
         <label>Nuevo patrocinador</label>
-        <div class="row"><input id="sponsName" placeholder="Nombre (opcional)"><button style="flex:0 0 auto" class="primary" data-act="sponsAdd">Elegir logo</button></div>
+        <input id="sponsName" placeholder="Nombre (opcional, solo para la lista)">
+        <input id="sponsText" placeholder="Texto bajo el logo a pantalla completa (opcional)" style="margin-top:8px">
+        <p class="muted" style="font-size:13px">Logo en PNG con fondo transparente, mínimo 600 px de ancho.</p>
+        <button class="primary" style="width:100%" data-act="sponsAdd">Elegir logo y guardar</button>
       </div>`;
   }
 
@@ -459,11 +475,23 @@ function start() {
         return setField('banner/show', !live.banner.show);
       }
       case 'sponsToggle': return setField('spons/show', !live.spons.show);
+      case 'carouselToggle': return setField('spons/carousel', !live.spons.carousel);
+      case 'boardToggle': return setField('board/show', !live.board.show);
+      case 'boardPos': return setField('board/pos', v);
+      case 'spFull':
+        return liveRef.child('spFull').set({ show: !(live.spFull.show && live.spFull.id === d.id), id: d.id });
+      case 'spFullHide': return setField('spFull/show', false);
       case 'sponsAdd': {
-        const logo = await pickImage(); if (!logo) return;
-        await sponsRef.push({ name: val('sponsName').trim(), logo }); return toast('Patrocinador añadido');
+        const name = val('sponsName').trim(), text = val('sponsText').trim();
+        const logo = await pickImage(600); if (!logo) return;
+        await sponsRef.push({ name, text, logo }); return toast('Patrocinador añadido');
       }
-      case 'sponsDel': if (confirm('¿Borrar patrocinador?')) sponsRef.child(d.id).remove(); return;
+      case 'sponsDel':
+        if (confirm('¿Borrar patrocinador?')) {
+          if (live.spFull.id === d.id) setField('spFull/show', false);
+          sponsRef.child(d.id).remove();
+        }
+        return;
       case 'teamNew': editing = 'new'; draftLogo = null; return render();
       case 'teamEdit': editing = d.id; draftLogo = null; return render();
       case 'teamCancel': editing = null; draftLogo = null; return render();

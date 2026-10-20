@@ -18,7 +18,9 @@
       clock: { running: false, baseMs: 0, startedAt: 0, dir: 'up', durMs: 40 * 60000, period: '1ª PARTE' },
       banner: { show: false, text: '' },
       brk: { show: false, text: 'TIEMPO MUERTO' },
-      spons: { show: true, sec: 10 }
+      spons: { show: true, sec: 10, carousel: false },
+      board: { show: true, pos: 'tl' },   // tl | tr | bl | br
+      spFull: { show: false, id: '' }      // patrocinador a pantalla completa
     };
   }
 
@@ -27,7 +29,7 @@
     const d = defaultLive();
     if (!L || typeof L !== 'object') return d;
     const out = Object.assign({}, d, L);
-    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons']) {
+    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons', 'board', 'spFull']) {
       out[k] = Object.assign({}, d[k], L[k] || {});
     }
     out.history = Array.isArray(L.history) ? L.history.slice()
