@@ -56,7 +56,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
   /** Clave que cambia cuando hay que volver a pintar. */
   fun signature(s: OverlayState?, version: Int, now: Long): String {
     if (s == null) return "none"
-    val clockSec = if (!s.isVolley) s.clockMs(now) / 1000 else 0
+    val clockSec = if (!s.isVolley || s.timerShow) s.clockMs(now) / 1000 else 0
     val tick = if (s.sponsors.size > 1 || (s.breakShow && s.sponsCarousel)) now / 1000 / s.sponsSec else 0
     return "$version|$clockSec|$tick"
   }
@@ -79,7 +79,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
       val left = if (s.boardPos.endsWith("r")) width - margin - bw else margin
       val top = if (s.boardPos.startsWith("b")) height - margin - bh else margin
       board = RectF(left, top, left + bw, top + bh)
-      if (s.isVolley) drawVolley(c, s, left, top) else drawFootball(c, s, now, left, top)
+      if (s.isVolley) drawVolley(c, s, now, left, top) else drawFootball(c, s, now, left, top)
     }
     val boardBottom = board != null && s.boardPos.startsWith("b")
 
@@ -157,7 +157,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   private fun volleySize(s: OverlayState) = vTotalW(s) to (vRowH * 2 + vGap * 2 + vTabH)
 
-  private fun drawVolley(c: Canvas, s: OverlayState, x: Float, y0: Float) {
+  private fun drawVolley(c: Canvas, s: OverlayState, now: Long, x: Float, y0: Float) {
     var y = y0
     val wBar = d(8f); val wLogo = d(46f); val wName = vNameW(s); val wServe = d(20f); val wSets = d(40f); val wPts = d(58f)
     val totalW = vTotalW(s)
@@ -181,6 +181,12 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     val tab = if (s.finished) "FINAL" else "SET ${s.setNo}"
     rect(c, x, y, x + d(110f), y + vTabH, accent)
     label(c, tab, x + d(55f), y, y + vTabH, d(20f), ink, 0)
+    if (s.timerShow) {
+      val t = s.clockMs(now) / 1000
+      val tx = x + d(110f)
+      rect(c, tx, y, tx + d(92f), y + vTabH, dark2)
+      label(c, "%02d:%02d".format(t / 60, t % 60), tx + d(46f), y, y + vTabH, d(22f), Color.WHITE, 0)
+    }
   }
 
   /* ---------------- Fútbol ---------------- */

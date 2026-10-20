@@ -58,4 +58,20 @@ assert.strictEqual(SC.fmtClock(SC.clockDisplayMs(L.clock, 0)), '45:00');
 L = SC.clockStart(L, 0); L = SC.clockAdjust(L, 30000, 10000);
 assert.strictEqual(SC.clockElapsed(L.clock, 10000), 40000, 'ajuste en marcha');
 
+// Edición de sets
+L = SC.newMatch(SC.defaultLive());
+L = SC.addSet(L, 25, 20); L = SC.addSet(L, 22, 25);
+assert.deepStrictEqual(L.sets, { h: 1, a: 1 }); assert.strictEqual(L.setNo, 3);
+L = SC.editSet(L, 1, 25, 22);
+assert.deepStrictEqual(L.sets, { h: 2, a: 0 }); assert.strictEqual(L.setNo, 3);
+L = SC.addSet(L, 25, 10);
+assert.strictEqual(L.finished, true); assert.strictEqual(L.setNo, 3);
+L = SC.deleteSet(L, 0);
+assert.deepStrictEqual(L.sets, { h: 2, a: 0 }); assert.strictEqual(L.finished, false); assert.strictEqual(L.setNo, 3);
+L = SC.adjustSets(L, 'a', 1);
+assert.strictEqual(L.setNo, 4);
+L = SC.adjustSets(L, 'h', -5);
+assert.deepStrictEqual(L.sets, { h: 0, a: 1 }); assert.strictEqual(L.setNo, 2);
+assert.strictEqual(SC.defaultLive().timer.show, false);
+
 console.log('OK: todos los tests de lógica pasan');

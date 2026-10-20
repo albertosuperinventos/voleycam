@@ -36,6 +36,7 @@ data class OverlayState(
   val boardShow: Boolean,
   /** tl, tr, bl, br */
   val boardPos: String,
+  val timerShow: Boolean,
   val serverOffset: Long,
 ) {
   val isVolley get() = sport != "football"
@@ -108,6 +109,7 @@ data class OverlayState(
         fullSponsor = full,
         boardShow = board.optBoolean("show", true),
         boardPos = pos,
+        timerShow = o.optJSONObject("timer")?.optBoolean("show") ?: false,
         serverOffset = o.optLong("serverOffset"),
       )
     }

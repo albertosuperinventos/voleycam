@@ -75,6 +75,31 @@ nav button.act{color:var(--accent)}
 code{background:var(--panel2);padding:2px 6px;border-radius:6px;word-break:break-all}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--accent);color:#0b1220;padding:10px 16px;border-radius:10px;font-weight:700;z-index:20}
 body.native nav{position:sticky}
+.hbtn{padding:6px 10px;font-size:18px;line-height:1;background:var(--panel2)}
+body.compact{padding-bottom:0}
+body.compact nav{display:none}
+body.compact header{padding:6px 10px}
+body.compact header h1{font-size:18px}
+body.compact main{padding:8px 10px}
+.crow{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:6px;padding-right:6px;min-height:58px}
+.cbar{width:6px;align-self:stretch}
+.clogo{width:30px;height:30px;border-radius:50%;background:#0006 center/contain no-repeat;flex:0 0 30px}
+.cname{flex:1;min-width:0;font:700 18px 'Barlow Condensed',sans-serif;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cserve{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);background:transparent;padding:0;flex:0 0 20px}
+.cserve.on{background:var(--warn);border-color:var(--warn)}
+.csets{display:flex;align-items:center;gap:2px}
+.csets button{padding:4px 8px}
+.csets b{min-width:18px;text-align:center;color:var(--accent);font:800 20px 'Barlow Condensed',sans-serif}
+.cpts{min-width:64px;padding:4px 8px;font:800 38px/1 'Barlow Condensed',sans-serif;background:#fff;color:#0b1220}
+.cmin{padding:8px 8px}
+.cstrip{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
+.cstrip button{padding:8px 10px;font-size:14px}
+.cstrip .cinfo{font:700 16px 'Barlow Condensed',sans-serif;color:var(--muted);letter-spacing:.04em}
+.cclock{font:800 26px/1 'Barlow Condensed',sans-serif;min-width:62px;text-align:center}
+.setrow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.setrow input{width:64px;text-align:center;padding:8px}
+.setrow span{min-width:48px;color:var(--muted);font-weight:600}
+.midbtn{padding:4px 10px}
 </style>
 </head>
 <body>
@@ -140,6 +165,7 @@ function start() {
   let connected = false;
   let loaded = false;
   let tab = 'score';
+  let compact = IS_NATIVE ? hash.get('mini') === '1' : (() => { try { return localStorage.getItem('sc_compact') === '1'; } catch (e) { return false; } })();
   const undo = [];
   let editing = null;   // id de equipo en edición o 'new'
   let draftLogo = null; // logo pendiente en el formulario de equipo
@@ -225,7 +251,8 @@ function start() {
   /* ---------- Render ---------- */
   function shell() {
     $app.innerHTML = `
-      <header><div class="dot" id="dot"></div><h1>Sport<span>Cam</span></h1><span class="chip" id="sportChip"></span></header>
+      <header><div class="dot" id="dot"></div><h1>Sport<span>Cam</span></h1><span class="chip" id="sportChip"></span>
+        <button class="hbtn" id="cmpBtn" title="Cambiar tamaño"></button></header>
       <main id="main"></main>
       <nav>
         <button data-tab="score">Marcador</button>
@@ -234,10 +261,19 @@ function start() {
         <button data-tab="match">Partido</button>
       </nav>`;
     $app.querySelectorAll('nav button').forEach(b => b.onclick = () => { tab = b.dataset.tab; editing = null; render(); window.scrollTo(0, 0); });
+    document.getElementById('cmpBtn').onclick = () => setCompact(!compact);
+  }
+  function setCompact(v) {
+    compact = v;
+    if (IS_NATIVE) { try { window.SportCamNative.setMini(v); } catch (e) {} }
+    else { try { localStorage.setItem('sc_compact', v ? '1' : '0'); } catch (e) {} }
+    render(); window.scrollTo(0, 0);
   }
   shell();
 
   function renderHeader() {
+    document.body.classList.toggle('compact', compact);
+    const b = document.getElementById('cmpBtn'); if (b) b.textContent = compact ? '⤢' : '⤡';
     const d = document.getElementById('dot'); if (d) d.className = 'dot' + (connected ? ' ok' : '');
     const c = document.getElementById('sportChip'); if (c) c.textContent = live.sport === 'football' ? 'Fútbol' : 'Voleibol';
   }
@@ -253,7 +289,7 @@ function start() {
       ae.addEventListener('blur', () => setTimeout(render, 0), { once: true });
       return;
     }
-    m.innerHTML = tab === 'score' ? viewScore() : tab === 'graphics' ? viewGraphics() : tab === 'teams' ? viewTeams() : viewMatch();
+    m.innerHTML = compact ? viewCompact() : tab === 'score' ? viewScore() : tab === 'graphics' ? viewGraphics() : tab === 'teams' ? viewTeams() : viewMatch();
     bind(m);
     tickClock();
   }
@@ -273,28 +309,85 @@ function start() {
     </div>`;
   }
 
+  function compactRow(side) {
+    const t = teamView(side === 'h' ? live.homeId : live.awayId, side === 'h' ? 'LOCAL' : 'VISITANTE');
+    const volley = live.sport === 'volley';
+    return `<div class="crow">
+      <div class="cbar" style="background:${esc(t.color)}"></div>
+      <div class="clogo" style="${t.logo ? `background-image:url('${t.logo}')` : ''}"></div>
+      <div class="cname">${esc(t.short)}</div>
+      ${volley ? `<button class="cserve ${live.serve === side ? 'on' : ''}" data-act="serve" data-s="${side}" title="Saque"></button>
+        <div class="csets"><button data-act="setAdj" data-s="${side}" data-v="-1">−</button><b>${live.sets[side]}</b><button data-act="setAdj" data-s="${side}" data-v="1">+</button></div>` : ''}
+      <button class="cpts" data-act="${volley ? 'point' : 'goal'}" data-s="${side}">${live.score[side]}</button>
+      <button class="cmin ghost" data-act="minus" data-s="${side}">−1</button>
+    </div>`;
+  }
+
+  function viewCompact() {
+    const volley = live.sport === 'volley';
+    const showClock = !volley || live.timer.show;
+    return `${compactRow('h')}${compactRow('a')}
+      <div class="cstrip">
+        ${volley ? `<span class="cinfo">${live.finished ? 'FINAL' : 'SET ' + live.setNo}${live.history.length ? ' · ' + live.history.map(x => x.h + '-' + x.a).join(' ') : ''}</span>` : `<span class="cinfo">${esc(live.clock.period)}</span>`}
+      </div>
+      <div class="cstrip">
+        <button data-act="undo">↶</button>
+        ${volley ? `<button class="${live.timer.show ? 'on' : ''}" data-act="timerToggle">⏱ ${live.timer.show ? 'Visible' : 'Oculto'}</button>` : ''}
+        ${showClock ? `<span class="cclock" id="clk">00:00</span><button class="${live.clock.running ? '' : 'primary'}" data-act="clk">${live.clock.running ? '❚❚' : '▶'}</button>` : ''}
+        ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO">T. muerto</button>`
+                 : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO">Descanso</button>`}
+      </div>`;
+  }
+
+  function timerCard(volley) {
+    return `<div class="card" style="margin-top:14px">
+      ${volley ? `<div class="row" style="margin-bottom:8px"><h2 style="margin:0">Temporizador</h2>
+        <button style="flex:0 0 auto" class="${live.timer.show ? 'on' : ''}" data-act="timerToggle">${live.timer.show ? 'Visible en vídeo' : 'Oculto'}</button></div>` : ''}
+      <div class="clock" id="clk">00:00</div>
+      <p class="muted" style="text-align:center;margin:4px 0 10px">${volley ? '' : esc(live.clock.period) + ' · '}${live.clock.dir === 'down' ? 'cuenta atrás' : 'ascendente'}</p>
+      <div class="btns">
+        <button class="${live.clock.running ? '' : 'primary'}" data-act="clk">${live.clock.running ? 'Pausar' : 'Iniciar'}</button>
+        <button data-act="clkadj" data-v="-60000">−1 min</button>
+        <button data-act="clkadj" data-v="60000">+1 min</button>
+        <button data-act="clkadj" data-v="-1000">−1 s</button>
+        <button data-act="clkadj" data-v="1000">+1 s</button>
+        <button class="ghost" data-act="clkreset">Reiniciar</button>
+      </div>
+      ${volley ? `<div class="grid2" style="margin-top:10px">
+          <button class="${live.clock.dir === 'up' ? 'on' : ''}" data-act="dir" data-v="up">Ascendente</button>
+          <button class="${live.clock.dir === 'down' ? 'on' : ''}" data-act="dir" data-v="down">Cuenta atrás</button></div>
+        ${live.clock.dir === 'down' ? `<label>Minutos de la cuenta atrás</label><input type="number" id="durMin" value="${Math.round(live.clock.durMs / 60000)}">` : ''}`
+      : `<label>Periodo</label>
+        <div class="btns">${['1ª PARTE', '2ª PARTE', 'PRÓRROGA', 'PENALTIS'].map(p =>
+          `<button class="${live.clock.period === p ? 'on' : ''}" data-act="period" data-v="${p}">${p}</button>`).join('')}</div>`}
+    </div>`;
+  }
+
+  function setsCard() {
+    const rows = live.history.map((x, i) => `<div class="setrow"><span>Set ${i + 1}</span>
+      <input type="number" min="0" id="sh${i}" value="${x.h}"> – <input type="number" min="0" id="sa${i}" value="${x.a}">
+      <button data-act="setEdit" data-i="${i}">Guardar</button><button class="danger" data-act="setDel" data-i="${i}">✕</button></div>`).join('');
+    return `<div class="card"><h2>Sets jugados</h2>
+      ${rows || '<p class="muted" style="margin:0">Aún no hay sets terminados.</p>'}
+      <label>Añadir set terminado</label>
+      <div class="setrow" style="margin-top:0"><span>Set ${live.history.length + 1}</span>
+        <input type="number" min="0" id="nsH" placeholder="L"> – <input type="number" min="0" id="nsA" placeholder="V">
+        <button data-act="setAdd">Añadir</button></div>
+      <p class="muted" style="font-size:13px;margin-bottom:0">Los sets ganados se recalculan con estos resultados.</p></div>`;
+  }
+
   function viewScore() {
     const volley = live.sport === 'volley';
     let h = `<div class="teams">${teamPanel('h')}${teamPanel('a')}</div>`;
     if (volley) {
-      h += `<div class="mid"><span>SETS <b>${live.sets.h}</b></span><span>SET ${live.setNo}</span><span><b>${live.sets.a}</b> SETS</span></div>`;
+      h += `<div class="mid">
+        <span><button class="midbtn" data-act="setAdj" data-s="h" data-v="-1">−</button> <b>${live.sets.h}</b> <button class="midbtn" data-act="setAdj" data-s="h" data-v="1">+</button></span>
+        <span>${live.finished ? 'FINAL' : 'SET ' + live.setNo}</span>
+        <span><button class="midbtn" data-act="setAdj" data-s="a" data-v="-1">−</button> <b>${live.sets.a}</b> <button class="midbtn" data-act="setAdj" data-s="a" data-v="1">+</button></span></div>`;
       if (live.history.length) h += `<p class="muted" style="text-align:center;margin-top:-6px">${live.history.map(x => x.h + '-' + x.a).join(' · ')}</p>`;
       if (live.finished) h += `<div class="final">PARTIDO TERMINADO</div>`;
     } else {
-      h += `<div class="card" style="margin-top:14px"><div class="clock" id="clk">00:00</div>
-        <p class="muted" style="text-align:center;margin:4px 0 10px">${esc(live.clock.period)}${live.clock.dir === 'down' ? ' · cuenta atrás' : ''}</p>
-        <div class="btns">
-          <button class="${live.clock.running ? '' : 'primary'}" data-act="clk">${live.clock.running ? 'Pausar' : 'Iniciar'}</button>
-          <button data-act="clkadj" data-v="-60000">−1 min</button>
-          <button data-act="clkadj" data-v="60000">+1 min</button>
-          <button data-act="clkadj" data-v="-1000">−1 s</button>
-          <button data-act="clkadj" data-v="1000">+1 s</button>
-          <button class="ghost" data-act="clkreset">Reiniciar</button>
-        </div>
-        <label>Periodo</label>
-        <div class="btns">${['1ª PARTE', '2ª PARTE', 'PRÓRROGA', 'PENALTIS'].map(p =>
-          `<button class="${live.clock.period === p ? 'on' : ''}" data-act="period" data-v="${p}">${p}</button>`).join('')}</div>
-      </div>`;
+      h += timerCard(false);
     }
     h += `<div class="btns" style="margin-top:12px">
         <button data-act="undo">↶ Deshacer</button>
@@ -302,6 +395,7 @@ function start() {
                  : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO">Descanso</button>`}
         <button class="${live.banner.show ? 'on' : ''}" data-act="bannerToggle">Rótulo</button>
       </div>`;
+    if (volley) h += timerCard(true) + setsCard();
     return h;
   }
 
@@ -454,6 +548,20 @@ function start() {
       case 'minus': return act(L => SC.scoreMinus(L, s));
       case 'serve': return act(L => SC.setServe(L, s));
       case 'setAdj': return act(L => SC.adjustSets(L, s, +v));
+      case 'setEdit': {
+        const i = +d.i, hv = val('sh' + i), av = val('sa' + i);
+        if (hv === '' || av === '') return toast('Pon los dos resultados');
+        act(L => SC.editSet(L, i, +hv, +av)); return toast('Set ' + (i + 1) + ' corregido');
+      }
+      case 'setDel':
+        if (confirm('¿Borrar el set ' + (+d.i + 1) + '?')) act(L => SC.deleteSet(L, +d.i));
+        return;
+      case 'setAdd': {
+        const hv = val('nsH'), av = val('nsA');
+        if (hv === '' || av === '') return toast('Pon los dos resultados');
+        return act(L => SC.addSet(L, +hv, +av));
+      }
+      case 'timerToggle': return setField('timer/show', !live.timer.show);
       case 'undo': return doUndo();
       case 'clk': return act((L, t) => L.clock.running ? SC.clockPause(L, t) : SC.clockStart(L, t));
       case 'clkadj': return act((L, t) => SC.clockAdjust(L, +v, t));

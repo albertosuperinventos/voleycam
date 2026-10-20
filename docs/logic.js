@@ -20,7 +20,8 @@
       brk: { show: false, text: 'TIEMPO MUERTO' },
       spons: { show: true, sec: 10, carousel: false },
       board: { show: true, pos: 'tl' },   // tl | tr | bl | br
-      spFull: { show: false, id: '' }      // patrocinador a pantalla completa
+      spFull: { show: false, id: '' },     // patrocinador a pantalla completa
+      timer: { show: false }               // temporizador visible en voleibol
     };
   }
 
@@ -29,7 +30,7 @@
     const d = defaultLive();
     if (!L || typeof L !== 'object') return d;
     const out = Object.assign({}, d, L);
-    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons', 'board', 'spFull']) {
+    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons', 'board', 'spFull', 'timer']) {
       out[k] = Object.assign({}, d[k], L[k] || {});
     }
     out.history = Array.isArray(L.history) ? L.history.slice()
@@ -80,11 +81,46 @@
     return L;
   }
 
+  function syncSetNo(L) {
+    L.finished = L.sets.h >= setsToWin(L) || L.sets.a >= setsToWin(L);
+    L.setNo = L.sets.h + L.sets.a + (L.finished ? 0 : 1);
+    if (L.setNo < 1) L.setNo = 1;
+    return L;
+  }
+
   function adjustSets(L0, s, delta) {
     const L = normalize(clone(L0));
     L.sets[s] = Math.max(0, L.sets[s] + delta);
-    L.finished = L.sets.h >= setsToWin(L) || L.sets.a >= setsToWin(L);
-    return L;
+    return syncSetNo(L);
+  }
+
+  /** Recalcula sets ganados a partir del historial de sets terminados. */
+  function setsFromHistory(L) {
+    L.sets = { h: 0, a: 0 };
+    for (const x of L.history) { if (x.h > x.a) L.sets.h++; else if (x.a > x.h) L.sets.a++; }
+    return syncSetNo(L);
+  }
+
+  /** Corrige el resultado de un set ya jugado (i empieza en 0). */
+  function editSet(L0, i, h, a) {
+    const L = normalize(clone(L0));
+    if (i < 0 || i >= L.history.length) return L;
+    L.history[i] = { h: Math.max(0, h | 0), a: Math.max(0, a | 0) };
+    return setsFromHistory(L);
+  }
+
+  function deleteSet(L0, i) {
+    const L = normalize(clone(L0));
+    if (i < 0 || i >= L.history.length) return L;
+    L.history.splice(i, 1);
+    return setsFromHistory(L);
+  }
+
+  /** Añade a mano un set terminado (por si se empezó a usar la app con el partido avanzado). */
+  function addSet(L0, h, a) {
+    const L = normalize(clone(L0));
+    L.history.push({ h: Math.max(0, h | 0), a: Math.max(0, a | 0) });
+    return setsFromHistory(L);
   }
 
   /* ---------- Fútbol ---------- */
@@ -153,7 +189,7 @@
   }
 
   const api = {
-    defaultLive, normalize, volleyPoint, scoreMinus, setServe, adjustSets,
+    defaultLive, normalize, volleyPoint, scoreMinus, setServe, adjustSets, editSet, deleteSet, addSet,
     goal, clockElapsed, clockDisplayMs, fmtClock, clockStart, clockPause, clockReset, clockAdjust,
     newMatch, targetFor, setsToWin
   };

@@ -11,6 +11,7 @@ import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
 import android.view.ScaleGestureDetector
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -23,6 +24,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -84,6 +86,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private var recordSince = 0L
   private var bitrateAdapter: QueueAwareBitrateAdapter? = null
   private var panelOpen = false
+  private var panelMini = true
 
   private val ui = Handler(Looper.getMainLooper())
   private val ticker = object : Runnable {
@@ -131,12 +134,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       startActivity(Intent(this, SettingsActivity::class.java))
     }
 
-    // Panel del mando oculto a la izquierda; ocupa ~42% del ancho
-    root.post {
-      panel.layoutParams = panel.layoutParams.apply { width = (root.width * 0.42f).toInt().coerceAtLeast(320) }
-      panel.requestLayout()
-      panel.post { panel.translationX = -panel.width.toFloat() - 40f }
-    }
+    // Panel del mando oculto a la izquierda: mini (abajo a la izquierda) o completo
+    root.post { applyPanelSize() }
 
     preview.holder.addCallback(object : SurfaceHolder.Callback {
       override fun surfaceCreated(holder: SurfaceHolder) {
@@ -508,17 +507,43 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private fun loadWeb() {
     loadedKey = prefs.channelKey
     overlayState = null; stateVersion++
-    web.loadUrl("https://appassets.androidplatform.net/assets/index.html#k=$loadedKey&native=1")
+    web.loadUrl("https://appassets.androidplatform.net/assets/index.html#k=$loadedKey&native=1&mini=${if (panelMini) 1 else 0}")
+  }
+
+  private fun panelWidth(): Int = (panel.layoutParams as FrameLayout.LayoutParams).width
+
+  /** Mini: esquina inferior izquierda, pequeño. Completo: todo el alto, ~42% del ancho. */
+  private fun applyPanelSize() {
+    val dp = resources.displayMetrics.density
+    val lp = panel.layoutParams as FrameLayout.LayoutParams
+    if (panelMini) {
+      lp.width = maxOf((root.width * 0.36f).toInt(), (340 * dp).toInt()).coerceAtMost(root.width)
+      lp.height = minOf((root.height * 0.9f).toInt(), (320 * dp).toInt())
+      lp.gravity = Gravity.BOTTOM or Gravity.START
+      lp.setMargins((8 * dp).toInt(), 0, 0, (8 * dp).toInt())
+    } else {
+      lp.width = maxOf((root.width * 0.42f).toInt(), (320 * dp).toInt()).coerceAtMost(root.width)
+      lp.height = FrameLayout.LayoutParams.MATCH_PARENT
+      lp.gravity = Gravity.START
+      lp.setMargins(0, 0, 0, 0)
+    }
+    panel.layoutParams = lp
+    panel.translationX = if (panelOpen) 0f else -lp.width.toFloat() - 40f
   }
 
   private fun togglePanel() {
     panelOpen = !panelOpen
-    panel.animate().translationX(if (panelOpen) 0f else -panel.width.toFloat() - 40f).setDuration(200).start()
+    panel.animate().translationX(if (panelOpen) 0f else -panelWidth().toFloat() - 40f).setDuration(200).start()
     btnRemote.setBackgroundResource(if (panelOpen) R.drawable.bg_btn_on else R.drawable.bg_btn)
     btnRemote.setTextColor(ContextCompat.getColor(this, if (panelOpen) R.color.bg else R.color.text))
   }
 
   inner class Bridge {
+    @JavascriptInterface
+    fun setMini(mini: Boolean) {
+      ui.post { panelMini = mini; applyPanelSize() }
+    }
+
     @JavascriptInterface
     fun onState(json: String) {
       try {
