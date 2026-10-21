@@ -23,7 +23,8 @@
       spFull: { show: false, id: '' },     // patrocinador a pantalla completa
       timer: { show: false },              // temporizador visible en voleibol
       to: { h: 0, a: 0 },                  // tiempos muertos usados en el set (máx. 2)
-      muted: false                         // micrófono silenciado
+      muted: false,                        // micrófono silenciado
+      hl: { before: 10, after: 3, auto: true } // resumen: segundos antes/después de cada marca, marca automática fin de set
     };
   }
 
@@ -32,7 +33,7 @@
     const d = defaultLive();
     if (!L || typeof L !== 'object') return d;
     const out = Object.assign({}, d, L);
-    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons', 'board', 'spFull', 'timer', 'to']) {
+    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons', 'board', 'spFull', 'timer', 'to', 'hl']) {
       out[k] = Object.assign({}, d[k], L[k] || {});
     }
     out.history = Array.isArray(L.history) ? L.history.slice()

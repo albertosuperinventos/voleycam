@@ -42,6 +42,9 @@ data class OverlayState(
   val timeoutsH: Int,
   val timeoutsA: Int,
   val muted: Boolean,
+  val marks: List<Highlights.Mark>,
+  val hlBefore: Int,
+  val hlAfter: Int,
   val serverOffset: Long,
 ) {
   val isVolley get() = sport != "football"
@@ -119,6 +122,11 @@ data class OverlayState(
         timeoutsH = o.optJSONObject("to")?.optInt("h") ?: 0,
         timeoutsA = o.optJSONObject("to")?.optInt("a") ?: 0,
         muted = o.optBoolean("muted"),
+        marks = o.optJSONArray("marks")?.let { arr ->
+          (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { Highlights.Mark(it.optLong("ts"), it.optString("label")) } }
+        } ?: emptyList(),
+        hlBefore = o.optJSONObject("hl")?.optInt("before", 10) ?: 10,
+        hlAfter = o.optJSONObject("hl")?.optInt("after", 3) ?: 3,
         serverOffset = o.optLong("serverOffset"),
       )
     }

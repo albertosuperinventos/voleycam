@@ -2,6 +2,8 @@ package app.superinventos.sportcam
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -46,6 +48,7 @@ import com.pedro.common.Throughput
 import com.pedro.encoder.input.sources.audio.MicrophoneSource
 import com.pedro.encoder.input.gl.render.filters.`object`.ImageFilterRender
 import com.pedro.encoder.input.sources.video.Camera2Source
+import com.pedro.library.base.recording.RecordController
 import com.pedro.library.generic.GenericStream
 import com.pedro.library.util.QueueAwareBitrateAdapter
 import java.io.File
@@ -73,6 +76,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   @Volatile private var weakNetAt = 0L
   private var lastWeakWarn = 0L
   private var batteryWarned = 101
+
+  // Resumen de jugadas
+  private var recStartTs = 0L          // hora de servidor en que empezó a escribirse la grabación
+  private var liveStartTs = 0L         // hora de servidor en que empezó el directo
+  @Volatile private var lastRecording: Highlights.Recording? = null
+  @Volatile private var makingHighlights = false
+
+  private fun serverNow() = System.currentTimeMillis() + (overlayState?.serverOffset ?: 0L)
 
   private var stream: GenericStream? = null
   private var surfaceReady = false
@@ -141,6 +152,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     tvDim = findViewById(R.id.tvDim)
     btnMute.setOnClickListener { setMuted(!muted, fromUser = true) }
     findViewById<View>(R.id.btnDim).setOnClickListener { setDim(true) }
+    findViewById<View>(R.id.btnMark).setOnClickListener {
+      web.evaluateJavascript("window.scCmd && scCmd('mark')", null)
+      vibrate()
+    }
+    findViewById<View>(R.id.btnMark).setOnLongClickListener { showHighlightsMenu(); true }
     dimOverlay.setOnClickListener { setDim(false) }
 
     btnLive.setOnClickListener { toggleLive() }
@@ -304,7 +320,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       startActivity(Intent(this, SettingsActivity::class.java))
       return
     }
-    wantLive = true; connected = false; reconnecting = false; liveSince = 0L
+    wantLive = true; connected = false; reconnecting = false; liveSince = 0L; liveStartTs = 0L
     try {
       s.startStream(url)
     } catch (e: Exception) {
@@ -334,7 +350,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val name = "SportCam_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".mp4"
     val f = RecordingSaver.tempFile(this, name)
     try {
-      s.startRecord(f.absolutePath) { _ -> runOnUiThread { updateButtons() } }
+      recStartTs = serverNow()
+      s.startRecord(f.absolutePath) { status ->
+        // La grabación empieza de verdad en el primer fotograma clave
+        if (status == RecordController.Status.RECORDING) recStartTs = serverNow()
+        runOnUiThread { updateButtons() }
+      }
       recordFile = f; recordAuto = auto; recordSince = System.currentTimeMillis()
     } catch (e: Exception) {
       toast("No se pudo grabar: ${e.message}")
@@ -349,10 +370,17 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     recordAuto = false
     val f = recordFile ?: return
     recordFile = null
+    val start = recStartTs
+    val end = serverNow()
     Thread {
       Thread.sleep(600)
-      val ok = RecordingSaver.moveToGallery(applicationContext, f)
-      runOnUiThread { toast(if (ok) "Vídeo guardado en Películas/SportCam" else "El vídeo se guardará al volver a abrir la app") }
+      val uri = RecordingSaver.moveToGallery(applicationContext, f)
+      if (uri != null) lastRecording = Highlights.Recording(uri, start, end)
+      runOnUiThread {
+        toast(if (uri != null) "Vídeo guardado en Películas/SportCam" else "El vídeo se guardará al volver a abrir la app")
+        val n = overlayState?.marks?.count { it.ts in start..end } ?: 0
+        if (uri != null && n > 0) showHighlightsMenu()
+      }
     }.start()
     updateButtons()
   }
@@ -396,7 +424,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   override fun onConnectionSuccess() {
     connected = true; reconnecting = false
-    if (liveSince == 0L) liveSince = System.currentTimeMillis()
+    if (liveSince == 0L) { liveSince = System.currentTimeMillis(); liveStartTs = serverNow() }
     runOnUiThread { updateButtons() }
   }
 
@@ -517,6 +545,59 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     else String.format(Locale.US, "%02d:%02d", t / 60, t % 60)
   }
 
+  /* ======================= Resumen de jugadas ======================= */
+
+  private fun showHighlightsMenu() {
+    val rec = lastRecording
+    val marks = overlayState?.marks.orEmpty()
+    if (rec == null) {
+      toast(if (stream?.isRecording == true) "Para la grabación para crear el resumen" else "Aún no hay ninguna grabación terminada en esta sesión")
+      return
+    }
+    val n = marks.count { it.ts in rec.startTs..rec.endTs }
+    AlertDialog.Builder(this)
+      .setTitle("Resumen de jugadas")
+      .setMessage("La última grabación tiene $n jugadas marcadas.")
+      .setPositiveButton("Crear resumen") { _, _ -> makeHighlights() }
+      .setNeutralButton("Copiar capítulos YouTube") { _, _ -> copyChapters() }
+      .setNegativeButton("Ahora no", null)
+      .show()
+  }
+
+  private fun makeHighlights() {
+    val rec = lastRecording ?: return
+    if (makingHighlights) return toast("Ya se está creando el resumen…")
+    val st = overlayState
+    val ranges = Highlights.ranges(rec, st?.marks.orEmpty(), st?.hlBefore ?: 10, st?.hlAfter ?: 3)
+    if (ranges.isEmpty()) return toast("No hay jugadas marcadas en la última grabación")
+    makingHighlights = true
+    toast("Creando resumen de ${ranges.size} jugadas…")
+    Thread {
+      var msg: String
+      try {
+        val out = File(cacheDir, "resumen.mp4").apply { delete() }
+        val n = Highlights.cut(applicationContext, rec.uri, ranges, out)
+        val name = "SportCam_resumen_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".mp4"
+        msg = if (n > 0 && RecordingSaver.moveToGallery(applicationContext, out, name) != null)
+          "Resumen guardado en Películas/SportCam ($n jugadas)" else "No se pudo crear el resumen"
+      } catch (e: Exception) {
+        msg = "No se pudo crear el resumen: ${e.message}"
+      }
+      makingHighlights = false
+      runOnUiThread { toast(msg) }
+    }.start()
+  }
+
+  private fun copyChapters() {
+    val marks = overlayState?.marks.orEmpty()
+    val rec = lastRecording
+    // Los capítulos van referidos al inicio del directo (el vídeo de YouTube empieza ahí)
+    val start = if (liveStartTs > 0) liveStartTs else rec?.startTs ?: return toast("No hay directo ni grabación de referencia")
+    val text = Highlights.chapters(start, marks)
+    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Capítulos", text))
+    toast("Capítulos copiados: pégalos en la descripción del vídeo en YouTube Studio")
+  }
+
   /* ======================= Micrófono y ahorro ======================= */
 
   private fun setMuted(v: Boolean, fromUser: Boolean) {
@@ -621,6 +702,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
           updateOverlay()
         }
       } catch (_: Exception) {}
+    }
+
+    @JavascriptInterface
+    fun makeHighlights() {
+      ui.post { showHighlightsMenu() }
     }
 
     @JavascriptInterface

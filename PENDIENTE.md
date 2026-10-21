@@ -15,6 +15,7 @@
 - Silenciar micrófono (app y mando), modo ahorro de batería, avisos de batería baja y red débil.
 - Tiempos muertos por equipo en el marcador.
 - Compartir resultado como imagen e historial de partidos.
+- Resumen de jugadas: botón ⭐, marca automática de fin de set, vídeo resumen cortado de la grabación y capítulos para YouTube.
 
 ## Por decidir
 - Programar emisiones: desde YouTube Studio (ya posible) o dentro de la app (requiere login Google + API de YouTube).
