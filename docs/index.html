@@ -22,7 +22,7 @@ button.primary{background:var(--accent);color:#0b1220}
 button.danger{background:transparent;color:var(--danger);border:1px solid #5a2a2a}
 button.ghost{background:transparent;border:1px solid var(--line)}
 button.on{background:var(--accent);color:#0b1220}
-input,select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
 input[type=color]{padding:2px;height:42px}
 label{display:block;color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
 header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
@@ -172,6 +172,7 @@ function start() {
   let compact = IS_NATIVE ? hash.get('mini') === '1' : (() => { try { return localStorage.getItem('sc_compact') === '1'; } catch (e) { return false; } })();
   const undo = [];
   let editing = null;   // id de equipo en edición o 'new'
+  let editingSp = null; // id de patrocinador en edición
   let draftLogo = null; // logo pendiente en el formulario de equipo
 
   const now = () => Date.now() + offset;
@@ -218,10 +219,27 @@ function start() {
         sponsorList: Object.values(sponsors).filter(s => s.logo).map(s => ({ logo: s.logo, text: s.text || '' })),
         spFullItem: (live.spFull.show && sponsors[live.spFull.id]) ? { logo: sponsors[live.spFull.id].logo, text: sponsors[live.spFull.id].text || '' } : null,
         marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '' })).sort((a, b) => a.ts - b.ts),
+        ytDesc: ytTexts().desc,
         serverOffset: offset
       });
       try { window.SportCamNative.onState(JSON.stringify(model)); } catch (e) {}
     }, 40);
+  }
+
+  function namesForYt() {
+    return [live.homeId, live.awayId].map((id, i) => (teams[id] || {}).name || (i ? 'VISITANTE' : 'LOCAL'));
+  }
+  function sponsorsForYt() {
+    return Object.values(sponsors).map(s => ({ name: s.name || '', desc: s.desc || '', link: s.link || '' }));
+  }
+  function ytTexts() {
+    const [h, a] = namesForYt();
+    return { title: SC.ytTitle(live, h, a), desc: SC.ytDescription(live, h, a, sponsorsForYt()) };
+  }
+  async function copyText(t, okMsg) {
+    if (IS_NATIVE && window.SportCamNative.copyText) { try { window.SportCamNative.copyText(t); return toast(okMsg); } catch (e) {} }
+    try { await navigator.clipboard.writeText(t); toast(okMsg); }
+    catch (e) { prompt('Copia el texto:', t); }
   }
 
   window.scCmd = (cmd, v) => {
@@ -309,7 +327,7 @@ function start() {
     if (!loaded) { m.innerHTML = '<p class="muted">Conectando…</p>'; return; }
     // No pisar lo que el usuario está escribiendo: se repinta al salir del campo
     const ae = document.activeElement;
-    if (ae && m.contains(ae) && /INPUT|SELECT/.test(ae.tagName) && ae.type !== 'file') {
+    if (ae && m.contains(ae) && /INPUT|SELECT|TEXTAREA/.test(ae.tagName) && ae.type !== 'file') {
       ae.addEventListener('blur', () => setTimeout(render, 0), { once: true });
       return;
     }
@@ -463,16 +481,26 @@ function start() {
         <label>Cambiar cada (segundos)</label>
         <input type="number" min="3" max="120" id="sponsSec" value="${live.spons.sec}">
         ${live.spFull.show ? `<p><button class="danger" style="width:100%" data-act="spFullHide">Quitar patrocinador de pantalla completa</button></p>` : ''}
-        <div style="margin-top:10px">${sp.length ? sp.map(([id, s]) => `
+        <div style="margin-top:10px">${sp.length ? sp.map(([id, s]) => editingSp === id ? `
+          <div class="item" style="flex-direction:column;align-items:stretch">
+            <label style="margin-top:0">Nombre</label><input id="esName" value="${esc(s.name)}">
+            <label>Texto bajo el logo a pantalla completa</label><input id="esText" value="${esc(s.text)}">
+            <label>Descripción para YouTube (una línea por servicio)</label><textarea id="esDesc" rows="4">${esc(s.desc)}</textarea>
+            <label>Web / Instagram (una por línea)</label><textarea id="esLink" rows="2">${esc(s.link)}</textarea>
+            <div class="row" style="margin-top:10px"><button class="ghost" data-act="spEditCancel">Cancelar</button><button class="primary" data-act="spEditSave" data-id="${id}">Guardar</button></div>
+          </div>` : `
           <div class="item"><div class="preview-logo" style="background-image:url('${s.logo}')"></div>
             <div class="grow"><b>${esc(s.name || 'Patrocinador')}</b>${s.text ? `<br><span class="muted">${esc(s.text)}</span>` : ''}</div>
             <div style="display:flex;flex-direction:column;gap:6px">
               <button class="${live.spFull.show && live.spFull.id === id ? 'on' : ''}" data-act="spFull" data-id="${id}">Pantalla completa</button>
+              <button data-act="spEdit" data-id="${id}">Editar</button>
               <button class="danger" data-act="sponsDel" data-id="${id}">Borrar</button></div></div>`).join('')
           : '<p class="muted">Sin patrocinadores.</p>'}</div>
         <label>Nuevo patrocinador</label>
         <input id="sponsName" placeholder="Nombre (opcional, solo para la lista)">
         <input id="sponsText" placeholder="Texto bajo el logo a pantalla completa (opcional)" style="margin-top:8px">
+        <textarea id="sponsDesc" rows="3" placeholder="Descripción para YouTube, una línea por servicio (opcional)" style="margin-top:8px"></textarea>
+        <textarea id="sponsLink" rows="2" placeholder="Web / Instagram, una por línea (opcional)" style="margin-top:8px"></textarea>
         <p class="muted" style="font-size:13px">Logo en PNG con fondo transparente, mínimo 600 px de ancho.</p>
         <button class="primary" style="width:100%" data-act="sponsAdd">Elegir logo y guardar</button>
       </div>`;
@@ -514,6 +542,29 @@ function start() {
   }
 
   const histOf = m => Array.isArray(m.history) ? m.history : Object.values(m.history || {});
+  function youtubeCard() {
+    const i = live.info, t = ytTexts();
+    const inp = (id, v, ph, type = 'text') => `<input id="${id}" type="${type}" value="${esc(v)}" placeholder="${esc(ph)}">`;
+    return `<div class="card"><h2>Título y descripción para YouTube</h2>
+      <label style="margin-top:0">Fecha y hora</label>${inp('yiWhen', i.when, '', 'datetime-local')}
+      <label>Pabellón</label>${inp('yiVenue', i.venue, 'Pabellón Vistalegre')}
+      <label>Competición</label>${inp('yiComp', i.comp, 'Liga Oro Provincial Sevilla - Grupo B')}
+      <div class="grid2">
+        <div><label>Categoría</label>${inp('yiCat', i.cat, 'Juvenil Femenino')}</div>
+        <div><label>Temporada</label>${inp('yiSeason', i.season, SC.defaultSeason(new Date()))}</div>
+      </div>
+      <p class="muted" style="font-size:13px">Los equipos salen del local y visitante elegidos; los patrocinadores, de Rótulos (nombre, descripción y web).</p>
+      <div class="grid2">
+        <button data-act="copyTitle">📋 Copiar título</button>
+        <button class="primary" data-act="copyDesc">📋 Copiar descripción</button>
+      </div>
+      <details style="margin-top:10px"><summary class="muted">Ver cómo queda</summary>
+        <p style="font-weight:700;margin:8px 0 4px">${esc(t.title)}</p>
+        <pre style="white-space:pre-wrap;font:13px/1.4 Inter,sans-serif;background:var(--panel2);padding:10px;border-radius:10px;margin:0">${esc(t.desc)}</pre>
+      </details>
+    </div>`;
+  }
+
   function highlightsCard() {
     const list = Object.entries(marks).sort((a, b) => a[1].ts - b[1].ts);
     const time = ts => new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -661,6 +712,7 @@ function start() {
           <button data-act="saveMatch">💾 Guardar en historial</button>
         </div>
         <p><button class="danger" style="width:100%" data-act="newMatch">Nuevo partido (pone todo a cero)</button></p></div>
+      ${youtubeCard()}
       ${highlightsCard()}
       <div class="card"><h2>Historial</h2>${historyList()}</div>
       ${IS_NATIVE ? '' : `<div class="card"><h2>Canal</h2>
@@ -685,6 +737,8 @@ function start() {
     on('setPts', 'change', e => setField('rules/setPts', Math.max(1, +e.target.value || 25)));
     on('tiePts', 'change', e => setField('rules/tiePts', Math.max(1, +e.target.value || 15)));
     on('durMin', 'change', e => setField('clock/durMs', Math.max(1, +e.target.value || 40) * 60000));
+    [['yiWhen', 'when'], ['yiVenue', 'venue'], ['yiComp', 'comp'], ['yiCat', 'cat'], ['yiSeason', 'season']]
+      .forEach(([id, k]) => on(id, 'change', e => setField('info/' + k, e.target.value.trim())));
     on('hlBefore', 'change', e => setField('hl/before', Math.min(60, Math.max(2, +e.target.value || 10))));
     on('hlAfter', 'change', e => setField('hl/after', Math.min(30, Math.max(0, +e.target.value || 0))));
     on('sponsSec', 'change', e => setField('spons/sec', Math.min(120, Math.max(3, +e.target.value || 10))));
@@ -735,6 +789,8 @@ function start() {
         if (Object.keys(marks).length && confirm('¿Borrar también las jugadas marcadas?')) marksRef.remove();
         return;
       case 'mark': return addMark();
+      case 'copyTitle': return copyText(ytTexts().title, 'Título copiado');
+      case 'copyDesc': return copyText(ytTexts().desc, 'Descripción copiada');
       case 'markDel': return marksRef.child(d.id).remove();
       case 'marksClear': if (confirm('¿Borrar todas las jugadas marcadas?')) marksRef.remove(); return;
       case 'hlAuto': return setField('hl/auto', !live.hl.auto);
@@ -768,9 +824,15 @@ function start() {
         return liveRef.child('spFull').set({ show: !(live.spFull.show && live.spFull.id === d.id), id: d.id });
       case 'spFullHide': return setField('spFull/show', false);
       case 'sponsAdd': {
-        const name = val('sponsName').trim(), text = val('sponsText').trim();
+        const name = val('sponsName').trim(), text = val('sponsText').trim(), desc = val('sponsDesc').trim(), link = val('sponsLink').trim();
         const logo = await pickImage(600); if (!logo) return;
-        await sponsRef.push({ name, text, logo }); return toast('Patrocinador añadido');
+        await sponsRef.push({ name, text, desc, link, logo }); return toast('Patrocinador añadido');
+      }
+      case 'spEdit': editingSp = d.id; return render();
+      case 'spEditCancel': editingSp = null; return render();
+      case 'spEditSave': {
+        await sponsRef.child(d.id).update({ name: val('esName').trim(), text: val('esText').trim(), desc: val('esDesc').trim(), link: val('esLink').trim() });
+        editingSp = null; render(); return toast('Patrocinador guardado');
       }
       case 'sponsDel':
         if (confirm('¿Borrar patrocinador?')) {

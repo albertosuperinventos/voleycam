@@ -45,6 +45,7 @@ data class OverlayState(
   val marks: List<Highlights.Mark>,
   val hlBefore: Int,
   val hlAfter: Int,
+  val ytDesc: String,
   val serverOffset: Long,
 ) {
   val isVolley get() = sport != "football"
@@ -127,6 +128,7 @@ data class OverlayState(
         } ?: emptyList(),
         hlBefore = o.optJSONObject("hl")?.optInt("before", 10) ?: 10,
         hlAfter = o.optJSONObject("hl")?.optInt("after", 3) ?: 3,
+        ytDesc = o.optString("ytDesc", ""),
         serverOffset = o.optLong("serverOffset"),
       )
     }

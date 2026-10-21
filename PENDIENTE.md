@@ -5,7 +5,7 @@
 - Recuadro de estado de la app abajo al centro.
 - Patrocinadores: texto opcional, botón "Pantalla completa" por patrocinador, carrusel a pantalla completa en el descanso, logos a 600 px.
 
-## En curso (sin compilar todavía)
+## Versión 1.3.0
 - Mini mando flotante en la app (abajo izq.) con botón para ampliar al mando completo.
 - Modo compacto en el mando del segundo móvil (todo en una pantalla).
 - Sets: −/+ en el marcador y edición/borrado/alta de resultados de sets jugados.
@@ -15,7 +15,8 @@
 - Silenciar micrófono (app y mando), modo ahorro de batería, avisos de batería baja y red débil.
 - Tiempos muertos por equipo en el marcador.
 - Compartir resultado como imagen e historial de partidos.
+- Título y descripción de YouTube generados con el partido y los patrocinadores.
 - Resumen de jugadas: botón ⭐, marca automática de fin de set, vídeo resumen cortado de la grabación y capítulos para YouTube.
 
-## Por decidir
-- Programar emisiones: desde YouTube Studio (ya posible) o dentro de la app (requiere login Google + API de YouTube).
+## Siguiente versión
+- Conectar con YouTube (login Google + API): crear/programar la emisión desde el mando y actualizar la descripción al terminar.

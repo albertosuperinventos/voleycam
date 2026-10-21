@@ -84,4 +84,19 @@ for (let i = 0; i < 25; i++) L = SC.volleyPoint(L, 'h');
 assert.deepStrictEqual(L.to, { h: 0, a: 0 }, 'se reinician al cambiar de set');
 assert.strictEqual(SC.defaultLive().muted, false);
 
+// Título y descripción de YouTube
+L = SC.newMatch(SC.defaultLive());
+L.info = { when: '2026-10-18T12:00', venue: 'Pabellón Vistalegre', comp: 'Liga Oro Provincial Sevilla - Grupo B', cat: 'Juvenil Femenino', season: '' };
+L = SC.addSet(L, 25, 20);
+const desc = SC.ytDescription(L, 'Club Voleibol UTRERA', 'EDM Voleibol TOMARES',
+  [{ name: 'INSTITUTO TU IMPULSO', desc: 'Técnicas de Estudio\nCoaching', link: 'https://tuimpulso.eu' }, { name: '', desc: '', link: '' }]);
+assert.ok(desc.startsWith('Domingo 18/OCT/2026 · 12:00 h ;'), desc);
+assert.ok(desc.includes('LIGA ORO PROVINCIAL SEVILLA - GRUPO B ;'));
+assert.ok(desc.includes('Temporada 26-27 ;'));
+assert.ok(desc.includes('Resultado: Club Voleibol UTRERA 1 - 0 EDM Voleibol TOMARES (25-20)'));
+assert.ok(desc.includes('• Técnicas de Estudio\n• Coaching\nhttps://tuimpulso.eu\n****'));
+assert.strictEqual((desc.match(/^\*+$/gm) || []).length, 1, 'patrocinador vacío no aparece');
+assert.strictEqual(SC.ytTitle(L, 'A', 'B'), 'A - B | Liga Oro Provincial Sevilla - Grupo B · Juvenil Femenino');
+assert.strictEqual(SC.defaultSeason(new Date(2027, 2, 1)), '26-27');
+
 console.log('OK: todos los tests de lógica pasan');

@@ -24,7 +24,8 @@
       timer: { show: false },              // temporizador visible en voleibol
       to: { h: 0, a: 0 },                  // tiempos muertos usados en el set (máx. 2)
       muted: false,                        // micrófono silenciado
-      hl: { before: 10, after: 3, auto: true } // resumen: segundos antes/después de cada marca, marca automática fin de set
+      hl: { before: 10, after: 3, auto: true }, // resumen: segundos antes/después de cada marca, marca automática fin de set
+      info: { when: '', venue: '', comp: '', cat: '', season: '' } // datos del partido para YouTube
     };
   }
 
@@ -33,7 +34,7 @@
     const d = defaultLive();
     if (!L || typeof L !== 'object') return d;
     const out = Object.assign({}, d, L);
-    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons', 'board', 'spFull', 'timer', 'to', 'hl']) {
+    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons', 'board', 'spFull', 'timer', 'to', 'hl', 'info']) {
       out[k] = Object.assign({}, d[k], L[k] || {});
     }
     out.history = Array.isArray(L.history) ? L.history.slice()
@@ -199,10 +200,59 @@
     return L;
   }
 
+  const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const MESES = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+
+  function defaultSeason(d) {
+    const y = d.getFullYear() % 100, m = d.getMonth();
+    const a = m >= 7 ? y : y - 1;   // la temporada empieza en agosto
+    return String(a).padStart(2, '0') + '-' + String((a + 1) % 100).padStart(2, '0');
+  }
+
+  /** Título para YouTube (máx. 100 caracteres). */
+  function ytTitle(L, home, away) {
+    const extra = [L.info.comp, L.info.cat].filter(Boolean).join(' · ');
+    let t = `${home} - ${away}` + (extra ? ` | ${extra}` : '');
+    return t.length > 100 ? t.slice(0, 99) + '…' : t;
+  }
+
+  /** Descripción para YouTube con el formato del canal. sponsors: [{name, desc, link}] */
+  function ytDescription(L, home, away, sponsors, dateObj) {
+    const d = L.info.when ? new Date(L.info.when) : (dateObj || new Date());
+    const out = [];
+    out.push(`${DIAS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${MESES[d.getMonth()]}/${d.getFullYear()}` +
+             (L.info.when ? ` · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} h` : '') + ' ;');
+    out.push(`${home} - ${away} ;`);
+    if (L.info.comp) out.push(`${L.info.comp.toUpperCase()} ;`);
+    if (L.info.cat) out.push(`${L.info.cat.toUpperCase()} ;`);
+    out.push(`Temporada ${L.info.season || defaultSeason(d)} ;`);
+    if (L.info.venue) out.push(`${L.info.venue} ;`);
+    const played = L.history.length || L.score.h || L.score.a;
+    if (played) {
+      if (L.sport === 'volley') {
+        const parts = L.history.map(x => `${x.h}-${x.a}`);
+        out.push('', `${L.finished ? 'Resultado final' : 'Resultado'}: ${home} ${L.sets.h} - ${L.sets.a} ${away}` + (parts.length ? ` (${parts.join(', ')})` : ''));
+      } else {
+        out.push('', `Resultado: ${home} ${L.score.h} - ${L.score.a} ${away}`);
+      }
+    }
+    const sp = (sponsors || []).filter(s => s.name || s.desc || s.link);
+    if (sp.length) {
+      out.push('', 'Retransmisión ofrecida por:');
+      for (const s of sp) {
+        if (s.name) out.push(s.name);
+        for (const line of String(s.desc || '').split('\n').map(x => x.trim()).filter(Boolean)) out.push('• ' + line);
+        for (const line of String(s.link || '').split('\n').map(x => x.trim()).filter(Boolean)) out.push(line);
+        out.push('******************************');
+      }
+    }
+    return out.join('\n');
+  }
+
   const api = {
     defaultLive, normalize, volleyPoint, scoreMinus, setServe, adjustSets, editSet, deleteSet, addSet, cycleTimeout,
     goal, clockElapsed, clockDisplayMs, fmtClock, clockStart, clockPause, clockReset, clockAdjust,
-    newMatch, targetFor, setsToWin
+    newMatch, targetFor, setsToWin, ytTitle, ytDescription, defaultSeason
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SC = api;

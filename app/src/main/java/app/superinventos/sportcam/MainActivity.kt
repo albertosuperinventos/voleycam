@@ -550,18 +550,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private fun showHighlightsMenu() {
     val rec = lastRecording
     val marks = overlayState?.marks.orEmpty()
-    if (rec == null) {
-      toast(if (stream?.isRecording == true) "Para la grabación para crear el resumen" else "Aún no hay ninguna grabación terminada en esta sesión")
-      return
+    val b = AlertDialog.Builder(this).setTitle("Resumen y YouTube")
+    if (rec != null) {
+      val n = marks.count { it.ts in rec.startTs..rec.endTs }
+      b.setMessage("La última grabación tiene $n jugadas marcadas.")
+      b.setPositiveButton("Crear resumen") { _, _ -> makeHighlights() }
+    } else {
+      b.setMessage(if (stream?.isRecording == true) "Para la grabación para poder crear el vídeo resumen."
+                   else "Aún no hay grabación terminada; puedes copiar la descripción con los capítulos del directo.")
     }
-    val n = marks.count { it.ts in rec.startTs..rec.endTs }
-    AlertDialog.Builder(this)
-      .setTitle("Resumen de jugadas")
-      .setMessage("La última grabación tiene $n jugadas marcadas.")
-      .setPositiveButton("Crear resumen") { _, _ -> makeHighlights() }
-      .setNeutralButton("Copiar capítulos YouTube") { _, _ -> copyChapters() }
-      .setNegativeButton("Ahora no", null)
-      .show()
+    b.setNeutralButton("Copiar descripción + capítulos") { _, _ -> copyChapters() }
+    b.setNegativeButton("Cerrar", null)
+    b.show()
   }
 
   private fun makeHighlights() {
@@ -593,9 +593,15 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val rec = lastRecording
     // Los capítulos van referidos al inicio del directo (el vídeo de YouTube empieza ahí)
     val start = if (liveStartTs > 0) liveStartTs else rec?.startTs ?: return toast("No hay directo ni grabación de referencia")
-    val text = Highlights.chapters(start, marks)
-    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Capítulos", text))
-    toast("Capítulos copiados: pégalos en la descripción del vídeo en YouTube Studio")
+    val chapters = Highlights.chapters(start, marks)
+    val desc = overlayState?.ytDesc.orEmpty()
+    val text = if (desc.isBlank()) chapters else "$desc\n\nMOMENTOS DEL PARTIDO\n$chapters"
+    copyToClipboard(text)
+    toast("Copiado: pégalo en la descripción del vídeo en YouTube Studio")
+  }
+
+  private fun copyToClipboard(text: String) {
+    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("SportCam", text))
   }
 
   /* ======================= Micrófono y ahorro ======================= */
@@ -702,6 +708,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
           updateOverlay()
         }
       } catch (_: Exception) {}
+    }
+
+    @JavascriptInterface
+    fun copyText(text: String) {
+      ui.post { copyToClipboard(text) }
     }
 
     @JavascriptInterface
