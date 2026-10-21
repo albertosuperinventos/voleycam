@@ -132,6 +132,8 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
   private fun label(c: Canvas, str: String, x: Float, top: Float, bottom: Float, sizePx: Float, color: Int, align: Int = -1, maxW: Float = Float.MAX_VALUE) {
     text.color = color
     text.textSize = sizePx
+    // Sombra solo en textos claros sobre la imagen (no en números oscuros sobre casillas blancas)
+    if (shadowOn && color != ink) text.setShadowLayer(d(6f), 0f, d(2f), Color.argb(220, 0, 0, 0)) else text.clearShadowLayer()
     var w = text.measureText(str)
     if (w > maxW) { text.textSize = sizePx * maxW / w; w = text.measureText(str) }
     val fm = text.fontMetrics
@@ -253,8 +255,18 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     return box
   }
 
-  private fun drawFullSponsor(c: Canvas, sp: Sponsor) {
-    rect(c, 0f, 0f, width.toFloat(), height.toFloat(), Color.argb(235, 8, 12, 22))
+  /** Fondo semitransparente de las pantallas completas: se ve la pista detrás. */
+  private val fullBg = Color.argb(130, 8, 12, 22)
+
+  private var shadowOn = false
+
+  private fun withShadow(block: () -> Unit) {
+    shadowOn = true
+    try { block() } finally { shadowOn = false; text.clearShadowLayer() }
+  }
+
+  private fun drawFullSponsor(c: Canvas, sp: Sponsor) = withShadow {
+    rect(c, 0f, 0f, width.toFloat(), height.toFloat(), fullBg)
     val hasText = sp.text.isNotBlank()
     // Tarjeta blanca para que se vean bien logos oscuros o con transparencia
     val cardW = d(760f); val cardH = d(if (hasText) 400f else 460f)
@@ -268,8 +280,8 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   /* ---------------- Pantallas completas ---------------- */
 
-  private fun drawBreak(c: Canvas, s: OverlayState) {
-    rect(c, 0f, 0f, width.toFloat(), height.toFloat(), Color.argb(225, 8, 12, 22))
+  private fun drawBreak(c: Canvas, s: OverlayState) = withShadow {
+    rect(c, 0f, 0f, width.toFloat(), height.toFloat(), fullBg)
     label(c, s.breakText, width / 2f, d(60f), d(140f), d(68f), accent, 0, width - d(120f))
     when {
       s.breakKind == "pre" -> drawPreMatch(c, s)
