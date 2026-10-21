@@ -157,10 +157,12 @@ function start() {
   const liveRef = base.child('live');
   const teamsRef = base.child('teams');
   const sponsRef = base.child('sponsors');
+  const matchesRef = base.child('matches');
 
   let live = SC.defaultLive();
   let teams = {};
   let sponsors = {};
+  let matches = {};
   let offset = 0;
   let connected = false;
   let loaded = false;
@@ -181,6 +183,7 @@ function start() {
   });
   teamsRef.on('value', s => { teams = s.val() || {}; render(); pushNative(); });
   sponsRef.on('value', s => { sponsors = s.val() || {}; render(); pushNative(); });
+  matchesRef.on('value', s => { matches = s.val() || {}; if (tab === 'match') render(); });
 
   /* ---------- Acciones ---------- */
   function act(fn) {
@@ -216,6 +219,10 @@ function start() {
       try { window.SportCamNative.onState(JSON.stringify(model)); } catch (e) {}
     }, 40);
   }
+
+  window.scCmd = (cmd, v) => {
+    if (cmd === 'mute') setField('muted', !!v);
+  };
 
   /* ---------- Imágenes ---------- */
   function fileToLogo(file, max = 160) {
@@ -305,7 +312,8 @@ function start() {
         <div class="tname">${esc(t.short)}</div>
         <div class="pts">${live.score[side]}</div>
       </div>
-      <div class="tfoot"><button class="ghost" data-act="minus" data-s="${side}">−1</button></div>
+      <div class="tfoot"><button class="ghost" data-act="minus" data-s="${side}">−1</button>
+        ${volley ? `<button data-act="tmCycle" data-s="${side}" title="Tiempos muertos usados">TM ${'●'.repeat(live.to[side])}${'○'.repeat(2 - live.to[side])}</button>` : ''}</div>
     </div>`;
   }
 
@@ -332,6 +340,9 @@ function start() {
       </div>
       <div class="cstrip">
         <button data-act="undo">↶</button>
+        <button class="${live.muted ? 'danger' : ''}" data-act="muteToggle">${live.muted ? '🔇' : '🎙'}</button>
+        ${volley ? `<button data-act="tmCycle" data-s="h">TM L ${'●'.repeat(live.to.h)}${'○'.repeat(2 - live.to.h)}</button>
+          <button data-act="tmCycle" data-s="a">TM V ${'●'.repeat(live.to.a)}${'○'.repeat(2 - live.to.a)}</button>` : ''}
         ${volley ? `<button class="${live.timer.show ? 'on' : ''}" data-act="timerToggle">⏱ ${live.timer.show ? 'Visible' : 'Oculto'}</button>` : ''}
         ${showClock ? `<span class="cclock" id="clk">00:00</span><button class="${live.clock.running ? '' : 'primary'}" data-act="clk">${live.clock.running ? '❚❚' : '▶'}</button>` : ''}
         ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO" data-k="tm">T. muerto</button>`
@@ -391,6 +402,7 @@ function start() {
     }
     h += `<div class="btns" style="margin-top:12px">
         <button data-act="undo">↶ Deshacer</button>
+        <button class="${live.muted ? 'danger' : ''}" data-act="muteToggle">${live.muted ? '🔇 Silenciado' : '🎙 Micro'}</button>
         ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO" data-k="tm">Tiempo muerto</button>`
                  : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO" data-k="half">Descanso</button>`}
         <button class="${live.banner.show ? 'on' : ''}" data-act="bannerToggle">Rótulo</button>
@@ -482,6 +494,95 @@ function start() {
     return `<option value="">— Sin equipo —</option>` + list.map(([id, t]) => `<option value="${id}" ${id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
   }
 
+  const histOf = m => Array.isArray(m.history) ? m.history : Object.values(m.history || {});
+  function historyList() {
+    const list = Object.entries(matches).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+    if (!list.length) return '<p class="muted" style="margin:0">Aún no hay partidos guardados.</p>';
+    return list.map(([id, m]) => {
+      const date = new Date(m.ts).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const res = m.sport === 'volley' ? `${m.sets.h}-${m.sets.a}` : `${m.score.h}-${m.score.a}`;
+      const det = m.sport === 'volley' ? histOf(m).map(x => x.h + '-' + x.a).join(' · ') : '';
+      return `<div class="item"><div class="grow"><b>${esc(m.home.short)} ${res} ${esc(m.away.short)}</b><br>
+        <span class="muted" style="font-size:13px">${date}${det ? ' · ' + det : ''}</span></div>
+        <button data-act="shareMatch" data-id="${id}">📤</button>
+        <button class="danger" data-act="delMatch" data-id="${id}">✕</button></div>`;
+    }).join('');
+  }
+
+  /** Foto del partido actual para guardar o compartir. */
+  function matchRecord() {
+    const tv = (id, f) => { const t = teamView(id, f); return { id: id || '', name: (teams[id] || {}).name || f, short: t.short, color: t.color }; };
+    return { ts: Date.now(), sport: live.sport, home: tv(live.homeId, 'LOCAL'), away: tv(live.awayId, 'VISITANTE'),
+             score: live.score, sets: live.sets, history: live.history, finished: live.finished };
+  }
+  function hasData(L) { return L.score.h || L.score.a || L.sets.h || L.sets.a || L.history.length; }
+
+  function loadImg(src) {
+    return new Promise(res => { if (!src) return res(null); const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  }
+
+  /** Genera una imagen cuadrada tipo cartel con el resultado. */
+  async function resultImage(m) {
+    const S = 1080, c = document.createElement('canvas'); c.width = c.height = S;
+    const g = c.getContext('2d');
+    await (document.fonts && document.fonts.ready);
+    g.fillStyle = '#0b1220'; g.fillRect(0, 0, S, S);
+    const grad = g.createLinearGradient(0, 0, 0, S); grad.addColorStop(0, 'rgba(198,244,50,.10)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, S, S);
+    const font = (w, px) => `${w} ${px}px 'Barlow Condensed', sans-serif`;
+    const text = (t, x, y, px, col, w = 800, align = 'center', maxW) => {
+      g.font = font(w, px); g.fillStyle = col; g.textAlign = align; g.textBaseline = 'middle';
+      if (maxW) { const mw = g.measureText(t).width; if (mw > maxW) g.font = font(w, px * maxW / mw); }
+      g.fillText(t, x, y);
+    };
+    const volley = m.sport === 'volley';
+    text(m.finished || !volley ? 'RESULTADO FINAL' : 'RESULTADO', S / 2, 110, 64, '#c6f432');
+    text(new Date(m.ts).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase(), S / 2, 170, 30, '#8c9ab3', 600);
+    const logos = await Promise.all([m.home, m.away].map(t => loadImg((teams[t.id] || {}).logo)));
+    [[m.home, 230, logos[0]], [m.away, 850, logos[1]]].forEach(([t, x, img]) => {
+      const box = 230, top = 250;
+      if (img) { const k = Math.min(box / img.width, box / img.height); g.drawImage(img, x - img.width * k / 2, top + (box - img.height * k) / 2, img.width * k, img.height * k); }
+      else { g.fillStyle = t.color; g.beginPath(); g.arc(x, top + box / 2, box / 2.4, 0, 7); g.fill(); }
+      text(t.name.toUpperCase(), x, top + box + 50, 40, '#eef2f8', 700, 'center', 400);
+    });
+    const main = volley ? `${m.sets.h} - ${m.sets.a}` : `${m.score.h} - ${m.score.a}`;
+    text(main, S / 2, 370, 140, '#ffffff');
+    if (volley) text('SETS', S / 2, 270, 32, '#8c9ab3', 700);
+    const hist = histOf(m);
+    if (volley && hist.length) {
+      const colW = 120, top = 680, rowH = 90, n = hist.length;
+      const nameW = 260, tW = nameW + n * colW, left = (S - tW) / 2;
+      hist.forEach((x, i) => text('SET ' + (i + 1), left + nameW + i * colW + colW / 2, top, 28, '#8c9ab3', 700));
+      [[m.home, 'h'], [m.away, 'a']].forEach(([t, sd], r) => {
+        const y = top + 40 + r * rowH;
+        g.fillStyle = 'rgba(27,38,60,.9)'; g.fillRect(left, y, tW, rowH - 10);
+        g.fillStyle = t.color; g.fillRect(left, y, 10, rowH - 10);
+        text(t.short, left + 26, y + (rowH - 10) / 2, 40, '#eef2f8', 700, 'left', nameW - 40);
+        hist.forEach((x, i) => {
+          const mine = sd === 'h' ? x.h : x.a, other = sd === 'h' ? x.a : x.h;
+          text(String(mine), left + nameW + i * colW + colW / 2, y + (rowH - 10) / 2, 52, mine > other ? '#ffffff' : 'rgba(255,255,255,.45)');
+        });
+      });
+    }
+    text('SportCam', S / 2, S - 50, 30, '#26334d', 800);
+    return c;
+  }
+
+  async function shareRecord(m) {
+    const c = await resultImage(m);
+    const name = `resultado_${m.home.short}_${m.away.short}.png`.replace(/\s+/g, '_');
+    if (IS_NATIVE && window.SportCamNative.shareImage) {
+      try { window.SportCamNative.shareImage(c.toDataURL('image/png')); return; } catch (e) {}
+    }
+    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+    const file = new File([blob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Resultado' }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    toast('Imagen descargada');
+  }
+
   function viewMatch() {
     const volley = live.sport === 'volley';
     const remote = location.origin + location.pathname.replace(/index\.html$/, '');
@@ -516,7 +617,12 @@ function start() {
         <label>Duración de cada parte (minutos)</label>
         <input type="number" id="durMin" value="${Math.round(live.clock.durMs / 60000)}"></div>`}
       <div class="card"><h2>Partido</h2>
-        <button class="danger" style="width:100%" data-act="newMatch">Nuevo partido (pone todo a cero)</button></div>
+        <div class="grid2">
+          <button data-act="shareCurrent">📤 Compartir resultado</button>
+          <button data-act="saveMatch">💾 Guardar en historial</button>
+        </div>
+        <p><button class="danger" style="width:100%" data-act="newMatch">Nuevo partido (pone todo a cero)</button></p></div>
+      <div class="card"><h2>Historial</h2>${historyList()}</div>
       ${IS_NATIVE ? '' : `<div class="card"><h2>Canal</h2>
         <p class="muted" style="margin-top:0">Clave: <code>${esc(KEY)}</code></p>
         <button style="width:100%" data-act="copyLink" data-v="${esc(remote + '#k=' + encodeURIComponent(KEY))}">Copiar enlace del mando</button></div>`}`;
@@ -573,8 +679,18 @@ function start() {
       case 'sport': return setField('sport', v);
       case 'bestOf': return setField('rules/bestOf', +v);
       case 'newMatch':
-        if (confirm('¿Empezar un partido nuevo? Se pone el marcador a cero.')) act(L => SC.newMatch(L));
+        if (!confirm('¿Empezar un partido nuevo? Se pone el marcador a cero.')) return;
+        if (hasData(live) && confirm('¿Guardar el partido actual en el historial antes de borrarlo?')) await matchesRef.push(matchRecord());
+        act(L => SC.newMatch(L));
         return;
+      case 'saveMatch':
+        if (!hasData(live)) return toast('No hay resultado que guardar');
+        await matchesRef.push(matchRecord()); return toast('Guardado en el historial');
+      case 'shareCurrent': return shareRecord(matchRecord());
+      case 'shareMatch': return matches[d.id] && shareRecord(matches[d.id]);
+      case 'delMatch': if (confirm('¿Borrar este partido del historial?')) matchesRef.child(d.id).remove(); return;
+      case 'tmCycle': return act(L => SC.cycleTimeout(L, s));
+      case 'muteToggle': return setField('muted', !live.muted);
       case 'brkq':
         return liveRef.child('brk').set({ show: !(live.brk.show && live.brk.text === v), text: v, kind: d.k || 'custom' });
       case 'brkCustom': {

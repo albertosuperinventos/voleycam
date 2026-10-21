@@ -10,6 +10,9 @@ import android.net.Uri
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.util.Base64
 import android.os.Looper
 import android.view.Gravity
 import android.view.ScaleGestureDetector
@@ -32,12 +35,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
 import com.pedro.common.ConnectChecker
 import com.pedro.common.StreamingStatsReport
+import com.pedro.common.Throughput
+import com.pedro.encoder.input.sources.audio.MicrophoneSource
 import com.pedro.encoder.input.gl.render.filters.`object`.ImageFilterRender
 import com.pedro.encoder.input.sources.video.Camera2Source
 import com.pedro.library.generic.GenericStream
@@ -60,6 +66,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private lateinit var btnLive: TextView
   private lateinit var btnRec: TextView
   private lateinit var btnRemote: TextView
+  private lateinit var btnMute: TextView
+  private lateinit var dimOverlay: View
+  private lateinit var tvDim: TextView
+  private var muted = false
+  @Volatile private var weakNetAt = 0L
+  private var lastWeakWarn = 0L
+  private var batteryWarned = 101
 
   private var stream: GenericStream? = null
   private var surfaceReady = false
@@ -123,6 +136,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     btnLive = findViewById(R.id.btnLive)
     btnRec = findViewById(R.id.btnRec)
     btnRemote = findViewById(R.id.btnRemote)
+    btnMute = findViewById(R.id.btnMute)
+    dimOverlay = findViewById(R.id.dimOverlay)
+    tvDim = findViewById(R.id.tvDim)
+    btnMute.setOnClickListener { setMuted(!muted, fromUser = true) }
+    findViewById<View>(R.id.btnDim).setOnClickListener { setDim(true) }
+    dimOverlay.setOnClickListener { setDim(false) }
 
     btnLive.setOnClickListener { toggleLive() }
     btnRec.setOnClickListener { toggleRecord() }
@@ -156,6 +175,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
       override fun handleOnBackPressed() {
         when {
+          dimOverlay.visibility == View.VISIBLE -> setDim(false)
           panelOpen -> togglePanel()
           wantLive || stream?.isRecording == true -> AlertDialog.Builder(this@MainActivity)
             .setTitle("¿Salir?")
@@ -222,6 +242,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     stream = s
     if (!prepare()) toast("Esta cámara no admite esa calidad. Prueba otra en Ajustes.")
     if (surfaceReady) startPreview()
+    if (muted) setMuted(true, fromUser = false)
   }
 
   private fun prepare(): Boolean {
@@ -415,6 +436,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   override fun onStreamingStats(report: StreamingStatsReport) {
     currentBitrate = report.smoothedBitrate
+    if (report.throughput == Throughput.INSUFFICIENT || report.queueCongestionPercent > 50f) weakNetAt = System.currentTimeMillis()
     runOnUiThread { bitrateAdapter?.onStreamingStats(report) }
   }
 
@@ -453,7 +475,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private fun updateStatus() {
     val now = System.currentTimeMillis()
     val rec = stream?.isRecording == true
+    val weakNet = wantLive && connected && now - weakNetAt < 4000
+    if (weakNet && now - lastWeakWarn > 30_000) { lastWeakWarn = now; vibrate() }
     val (txt, color) = when {
+      weakNet -> "● RED DÉBIL" to Color.rgb(255, 176, 32)
       wantLive && connected -> "● EN DIRECTO" to ContextCompat.getColor(this, R.color.live)
       wantLive && reconnecting -> "● RECONECTANDO…" to Color.rgb(255, 176, 32)
       wantLive -> "● CONECTANDO…" to Color.rgb(255, 176, 32)
@@ -468,15 +493,56 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     else if (rec && recordSince > 0) parts += duration(now - recordSince)
     if (wantLive && connected && currentBitrate > 0) parts += String.format(Locale.US, "%.1f Mb/s", currentBitrate / 1_000_000f)
     if (wantLive && rec) parts += "REC"
-    val battery = (getSystemService(BATTERY_SERVICE) as? BatteryManager)?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
-    if (battery in 0..100) parts += "Bat. $battery%"
+    if (muted) parts += "MICRO OFF"
+    val bm = getSystemService(BATTERY_SERVICE) as? BatteryManager
+    val battery = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+    val charging = bm?.isCharging ?: false
+    val lowBat = battery in 0..20 && !charging
+    if (battery in 0..100) parts += if (lowBat) "⚠ Bat. $battery%" else "Bat. $battery%"
     tvInfo.text = parts.joinToString("  ·  ")
+    tvInfo.setTextColor(ContextCompat.getColor(this, if (lowBat) R.color.live else R.color.text))
+    if (lowBat) {
+      val step = if (battery <= 10) 10 else 20
+      if (batteryWarned > step) { batteryWarned = step; vibrate(); toast("Batería baja ($battery %). Enchufa el móvil.") }
+    } else if (charging) batteryWarned = 101
+    if (dimOverlay.visibility == View.VISIBLE) {
+      tvDim.text = "$txt  ${tvInfo.text}\n\nToca para encender la pantalla"
+      tvDim.setTextColor(if (lowBat || weakNet) Color.argb(200, 255, 120, 90) else Color.argb(90, 255, 255, 255))
+    }
   }
 
   private fun duration(ms: Long): String {
     val t = ms / 1000
     return if (t >= 3600) String.format(Locale.US, "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60)
     else String.format(Locale.US, "%02d:%02d", t / 60, t % 60)
+  }
+
+  /* ======================= Micrófono y ahorro ======================= */
+
+  private fun setMuted(v: Boolean, fromUser: Boolean) {
+    muted = v
+    (stream?.audioSource as? MicrophoneSource)?.let { if (v) it.mute() else it.unMute() }
+    btnMute.text = if (v) "🔇" else "🎙"
+    btnMute.setBackgroundResource(if (v) R.drawable.bg_btn_live else R.drawable.bg_btn)
+    if (fromUser) {
+      web.evaluateJavascript("window.scCmd && scCmd('mute', $v)", null)
+      toast(if (v) "Micrófono silenciado" else "Micrófono activado")
+    }
+    updateStatus()
+  }
+
+  private fun setDim(on: Boolean) {
+    dimOverlay.visibility = if (on) View.VISIBLE else View.GONE
+    window.attributes = window.attributes.apply {
+      screenBrightness = if (on) 0.01f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+    }
+    if (on && panelOpen) togglePanel()
+    updateStatus()
+  }
+
+  @Suppress("DEPRECATION")
+  private fun vibrate() {
+    try { (getSystemService(VIBRATOR_SERVICE) as? Vibrator)?.vibrate(VibrationEffect.createOneShot(350, VibrationEffect.DEFAULT_AMPLITUDE)) } catch (_: Exception) {}
   }
 
   /* ======================= Mando (web de control) ======================= */
@@ -547,10 +613,30 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     @JavascriptInterface
     fun onState(json: String) {
       try {
-        overlayState = OverlayState.parse(json)
+        val st = OverlayState.parse(json)
+        overlayState = st
         stateVersion++
-        ui.post { updateOverlay() }
+        ui.post {
+          if (st.muted != muted) setMuted(st.muted, fromUser = false)
+          updateOverlay()
+        }
       } catch (_: Exception) {}
+    }
+
+    @JavascriptInterface
+    fun shareImage(dataUrl: String) {
+      try {
+        val bytes = Base64.decode(dataUrl.substringAfter("base64,"), Base64.DEFAULT)
+        val dir = File(cacheDir, "share").apply { mkdirs() }
+        val f = File(dir, "resultado.png").apply { writeBytes(bytes) }
+        val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.files", f)
+        val send = Intent(Intent.ACTION_SEND).setType("image/png")
+          .putExtra(Intent.EXTRA_STREAM, uri)
+          .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        ui.post { startActivity(Intent.createChooser(send, "Compartir resultado")) }
+      } catch (_: Exception) {
+        toast("No se pudo compartir la imagen")
+      }
     }
   }
 

@@ -79,9 +79,38 @@
       <TextView android:id="@+id/btnZoomIn" style="@style/CamBtn" android:layout_width="36dp" android:layout_marginStart="4dp" android:text="+" android:textSize="18sp" />
     </LinearLayout>
 
+    <LinearLayout
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal">
+      <TextView android:id="@+id/btnMute" style="@style/CamBtn" android:layout_width="36dp" android:text="🎙" android:textSize="16sp" />
+      <TextView android:id="@+id/btnDim" style="@style/CamBtn" android:layout_width="36dp" android:layout_marginStart="4dp" android:text="🌙" android:textSize="16sp" />
+    </LinearLayout>
+
     <TextView android:id="@+id/btnSwitch" style="@style/CamBtn" android:text="⟲" android:textSize="20sp" />
     <TextView android:id="@+id/btnSettings" style="@style/CamBtn" android:text="⚙" android:textSize="20sp" />
   </LinearLayout>
+
+  <!-- Ahorro de batería: pantalla negra encima de todo; toca para volver -->
+  <FrameLayout
+    android:id="@+id/dimOverlay"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F2000000"
+    android:clickable="true"
+    android:elevation="20dp"
+    android:focusable="true"
+    android:visibility="gone">
+
+    <TextView
+      android:id="@+id/tvDim"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_gravity="center"
+      android:gravity="center"
+      android:textColor="#55FFFFFF"
+      android:textSize="14sp" />
+  </FrameLayout>
 
   <!-- Panel del mando (web de control) a la izquierda -->
   <FrameLayout

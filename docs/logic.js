@@ -21,7 +21,9 @@
       spons: { show: true, sec: 10, carousel: false },
       board: { show: true, pos: 'tl' },   // tl | tr | bl | br
       spFull: { show: false, id: '' },     // patrocinador a pantalla completa
-      timer: { show: false }               // temporizador visible en voleibol
+      timer: { show: false },              // temporizador visible en voleibol
+      to: { h: 0, a: 0 },                  // tiempos muertos usados en el set (máx. 2)
+      muted: false                         // micrófono silenciado
     };
   }
 
@@ -30,7 +32,7 @@
     const d = defaultLive();
     if (!L || typeof L !== 'object') return d;
     const out = Object.assign({}, d, L);
-    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons', 'board', 'spFull', 'timer']) {
+    for (const k of ['score', 'sets', 'rules', 'clock', 'banner', 'brk', 'spons', 'board', 'spFull', 'timer', 'to']) {
       out[k] = Object.assign({}, d[k], L[k] || {});
     }
     out.history = Array.isArray(L.history) ? L.history.slice()
@@ -63,6 +65,7 @@
         L.setNo += 1;
         L.score = { h: 0, a: 0 };
         L.serve = '';
+        L.to = { h: 0, a: 0 };
       }
     }
     return L;
@@ -121,6 +124,13 @@
     const L = normalize(clone(L0));
     L.history.push({ h: Math.max(0, h | 0), a: Math.max(0, a | 0) });
     return setsFromHistory(L);
+  }
+
+  /** Tiempos muertos: cada toque gasta uno; tras el segundo vuelve a 0 (para corregir errores). */
+  function cycleTimeout(L0, s) {
+    const L = normalize(clone(L0));
+    L.to[s] = (L.to[s] + 1) % 3;
+    return L;
   }
 
   /* ---------- Fútbol ---------- */
@@ -182,14 +192,14 @@
     const L = normalize(clone(L0));
     const d = defaultLive();
     L.score = d.score; L.sets = d.sets; L.setNo = 1; L.serve = '';
-    L.history = []; L.finished = false;
+    L.history = []; L.finished = false; L.to = { h: 0, a: 0 };
     L.clock = Object.assign({}, d.clock, { dir: L.clock.dir, durMs: L.clock.durMs });
     L.brk.show = false;
     return L;
   }
 
   const api = {
-    defaultLive, normalize, volleyPoint, scoreMinus, setServe, adjustSets, editSet, deleteSet, addSet,
+    defaultLive, normalize, volleyPoint, scoreMinus, setServe, adjustSets, editSet, deleteSet, addSet, cycleTimeout,
     goal, clockElapsed, clockDisplayMs, fmtClock, clockStart, clockPause, clockReset, clockAdjust,
     newMatch, targetFor, setsToWin
   };

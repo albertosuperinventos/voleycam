@@ -171,7 +171,14 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
       if (team.logo.isNotBlank()) drawLogoFit(c, team.logo, RectF(cx + d(5f), y + d(5f), cx + wLogo - d(5f), y + rowH - d(5f)))
       else { fill.color = team.color; c.drawCircle(cx + wLogo / 2, y + rowH / 2, d(14f), fill) }
       cx += wLogo
-      label(c, team.short, cx + d(6f), y, y + rowH, d(30f), Color.WHITE, -1, wName - d(10f)); cx += wName
+      label(c, team.short, cx + d(6f), y - d(3f), y + rowH - d(3f), d(30f), Color.WHITE, -1, wName - d(10f))
+      // Tiempos muertos: dos rayitas; las gastadas se apagan
+      val used = if (side == "h") s.timeoutsH else s.timeoutsA
+      for (i in 0 until 2) {
+        val bx = cx + d(6f) + i * d(18f)
+        rect(c, bx, y + rowH - d(8f), bx + d(14f), y + rowH - d(4f), if (i < used) Color.argb(70, 255, 255, 255) else accent)
+      }
+      cx += wName
       if (s.serve == side) { fill.color = serveColor; c.drawCircle(cx + wServe / 2, y + rowH / 2, d(6f), fill) }
       cx += wServe
       rect(c, cx, y, cx + wSets, y + rowH, dark2)

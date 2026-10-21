@@ -74,4 +74,14 @@ L = SC.adjustSets(L, 'h', -5);
 assert.deepStrictEqual(L.sets, { h: 0, a: 1 }); assert.strictEqual(L.setNo, 2);
 assert.strictEqual(SC.defaultLive().timer.show, false);
 
+// Tiempos muertos
+L = SC.newMatch(SC.defaultLive());
+L = SC.cycleTimeout(L, 'h'); L = SC.cycleTimeout(L, 'h');
+assert.strictEqual(L.to.h, 2);
+L = SC.cycleTimeout(L, 'h'); assert.strictEqual(L.to.h, 0);
+L = SC.cycleTimeout(L, 'a');
+for (let i = 0; i < 25; i++) L = SC.volleyPoint(L, 'h');
+assert.deepStrictEqual(L.to, { h: 0, a: 0 }, 'se reinician al cambiar de set');
+assert.strictEqual(SC.defaultLive().muted, false);
+
 console.log('OK: todos los tests de lógica pasan');
