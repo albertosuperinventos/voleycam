@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#0b1220">
-<title>SportCam · Mando</title>
+<title>VoleyCam · Mando</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
@@ -139,10 +139,10 @@ function toast(msg) {
 }
 
 if (!cfg.databaseURL) {
-  $app.innerHTML = `<div class="gate"><h1>Sport<span>Cam</span></h1>
+  $app.innerHTML = `<div class="gate"><h1>Voley<span>Cam</span></h1>
     <p class="muted">Falta configurar Firebase en <code>docs/config.js</code>. Sigue los pasos del README.</p></div>`;
 } else if (!KEY || KEY.length < 16) {
-  $app.innerHTML = `<div class="gate"><h1>Sport<span>Cam</span></h1>
+  $app.innerHTML = `<div class="gate"><h1>Voley<span>Cam</span></h1>
     <p class="muted">Escanea el código QR que aparece en Ajustes de la app, o pega aquí la clave del canal.</p>
     <input id="kin" placeholder="Clave del canal" autocomplete="off">
     <p><button class="primary" id="kok" style="width:100%">Entrar</button></p></div>`;
@@ -341,7 +341,7 @@ function start() {
   /* ---------- Render ---------- */
   function shell() {
     $app.innerHTML = `
-      <header><div class="dot" id="dot"></div><h1>Sport<span>Cam</span></h1><span class="chip" id="sportChip"></span>
+      <header><div class="dot" id="dot"></div><h1>Voley<span>Cam</span></h1><span class="chip" id="sportChip"></span>
         ${IS_NATIVE ? '' : '<button class="hbtn" id="remBtn" title="Cámara a distancia">📡</button>'}
         <button class="hbtn" id="cmpBtn" title="Cambiar tamaño"></button></header>
       <div id="warn"></div>
@@ -807,7 +807,7 @@ function start() {
         });
       });
     }
-    text('SportCam', S / 2, S - 50, 30, '#26334d', 800);
+    text('VoleyCam', S / 2, S - 50, 30, '#26334d', 800);
     return c;
   }
 

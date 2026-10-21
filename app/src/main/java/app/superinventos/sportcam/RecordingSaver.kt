@@ -7,7 +7,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
 
-/** Mueve la grabación terminada a la galería (Películas/SportCam). */
+/** Mueve la grabación terminada a la galería (Películas/VoleyCam). */
 object RecordingSaver {
 
   fun tempFile(context: Context, name: String): File {
@@ -22,7 +22,7 @@ object RecordingSaver {
     val values = ContentValues().apply {
       put(MediaStore.Video.Media.DISPLAY_NAME, displayName)
       put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-      put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/SportCam")
+      put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/VoleyCam")
       put(MediaStore.Video.Media.IS_PENDING, 1)
     }
     val uri = resolver.insert(MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values) ?: return null

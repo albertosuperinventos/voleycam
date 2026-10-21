@@ -1,4 +1,4 @@
-# SportCam
+# VoleyCam
 
 Emite partidos de voleibol y fútbol desde un móvil Android a YouTube, Facebook o cualquier servidor RTMP, con marcador superpuesto, logos, patrocinadores, rótulos y pantalla de descanso. El marcador se lleva desde la propia app o desde otro móvil.
 
@@ -21,10 +21,10 @@ Emite partidos de voleibol y fútbol desde un móvil Android a YouTube, Facebook
 ### 2. GitHub
 1. Sube este proyecto a un repositorio (p. ej. "sportcam").
 2. Settings → Pages → Source: "Deploy from a branch" → rama main, carpeta /docs → Save. La web quedará en https://albertosuperinventos.github.io/voleycam/
-3. Pestaña Actions: se compila solo. Al terminar, el APK está en Releases → "SportCam (última versión)" → SportCam.apk.
+3. Pestaña Actions: se compila solo. Al terminar, el APK está en Releases → "VoleyCam (última versión)" → VoleyCam.apk.
 
 ### 3. Móvil cámara (Android 10 o superior)
-1. Descarga SportCam.apk desde Releases en el propio móvil e instálalo (permite "instalar apps desconocidas" si lo pide).
+1. Descarga VoleyCam.apk desde Releases en el propio móvil e instálalo (permite "instalar apps desconocidas" si lo pide).
 2. Abre la app, acepta cámara y micrófono.
 3. Ajustes (⚙): elige plataforma y pega la clave de emisión. Escribe la dirección de la web de GitHub Pages: aparecerá un QR.
 
@@ -38,7 +38,7 @@ La primera vez hay que activar las emisiones en directo en YouTube Studio; puede
 
 1. En la web: pestaña Equipos → crea los equipos con nombre, abreviatura (3-4 letras), color y logo. Se guardan para siempre.
 2. Pestaña Partido → deporte, local y visitante, reglas. "Nuevo partido" pone todo a cero.
-3. En la app: EN DIRECTO. Si "Grabar también en el móvil" está activo, a la vez se graba el partido completo (queda en Galería → Películas/SportCam).
+3. En la app: EN DIRECTO. Si "Grabar también en el móvil" está activo, a la vez se graba el partido completo (queda en Galería → Películas/VoleyCam).
 4. Marcador: toca el panel del equipo para sumar. En voleibol el set se cierra solo (25 / 15 en el decisivo, con 2 de diferencia) y la pelota naranja marca el saque.
 5. MANDO en la app abre el mismo marcador en un lateral, por si llevas tú solo la cámara.
 6. Rótulos: texto inferior, pantalla completa (tiempo muerto, descanso, fin del set…) y patrocinadores que rotan en la esquina.

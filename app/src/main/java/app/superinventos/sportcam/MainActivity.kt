@@ -152,7 +152,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   }
   private val askPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
     if (hasPerms()) setupStream()
-    else toast("SportCam necesita la cámara y el micrófono para funcionar")
+    else toast("VoleyCam necesita la cámara y el micrófono para funcionar")
   }
 
   /* ======================= Ciclo de vida ======================= */
@@ -382,7 +382,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   private fun startRecord(auto: Boolean) {
     val s = stream ?: return
-    val name = "SportCam_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".mp4"
+    val name = "VoleyCam_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".mp4"
     val f = RecordingSaver.tempFile(this, name)
     try {
       recStartTs = serverNow()
@@ -412,7 +412,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       val uri = RecordingSaver.moveToGallery(applicationContext, f)
       if (uri != null) lastRecording = Highlights.Recording(uri, start, end)
       runOnUiThread {
-        toast(if (uri != null) "Vídeo guardado en Películas/SportCam" else "El vídeo se guardará al volver a abrir la app")
+        toast(if (uri != null) "Vídeo guardado en Películas/VoleyCam" else "El vídeo se guardará al volver a abrir la app")
         val n = overlayState?.marks?.count { it.ts in start..end } ?: 0
         if (uri != null && n > 0) showHighlightsMenu()
       }
@@ -729,9 +729,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       try {
         val out = File(cacheDir, "resumen.mp4").apply { delete() }
         val n = Highlights.cut(applicationContext, rec.uri, ranges, out)
-        val name = "SportCam_resumen_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".mp4"
+        val name = "VoleyCam_resumen_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".mp4"
         msg = if (n > 0 && RecordingSaver.moveToGallery(applicationContext, out, name) != null)
-          "Resumen guardado en Películas/SportCam ($n jugadas)" else "No se pudo crear el resumen"
+          "Resumen guardado en Películas/VoleyCam ($n jugadas)" else "No se pudo crear el resumen"
       } catch (e: Exception) {
         msg = "No se pudo crear el resumen: ${e.message}"
       }
@@ -753,7 +753,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   }
 
   private fun copyToClipboard(text: String) {
-    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("SportCam", text))
+    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("VoleyCam", text))
   }
 
   /* ======================= Micrófono y ahorro ======================= */

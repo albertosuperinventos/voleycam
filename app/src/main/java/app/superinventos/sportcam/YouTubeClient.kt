@@ -11,7 +11,7 @@ object YouTubeClient {
 
   const val SCOPE = "https://www.googleapis.com/auth/youtube"
   private const val BASE = "https://www.googleapis.com/youtube/v3/"
-  private const val STREAM_TITLE = "SportCam"
+  private const val STREAM_TITLE = "VoleyCam"
 
   data class Broadcast(val id: String, val title: String, val start: String, val privacy: String, val status: String, val streamId: String)
   data class Stream(val id: String, val rtmpUrl: String, val key: String)

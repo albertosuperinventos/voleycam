@@ -234,8 +234,8 @@ class VideoHighlightsActivity : AppCompatActivity() {
       val msg = try {
         val out = File(cacheDir, "resumen_video.mp4").apply { delete() }
         val n = Highlights.cut(applicationContext, u, ranges, out)
-        val name = "SportCam_resumen_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".mp4"
-        if (n > 0 && RecordingSaver.moveToGallery(applicationContext, out, name) != null) "Resumen guardado en Películas/SportCam ($n tramos)"
+        val name = "VoleyCam_resumen_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".mp4"
+        if (n > 0 && RecordingSaver.moveToGallery(applicationContext, out, name) != null) "Resumen guardado en Películas/VoleyCam ($n tramos)"
         else "No se pudo crear el resumen con este vídeo"
       } catch (e: Exception) { "No se pudo crear el resumen: ${e.message}" }
       busy = false
