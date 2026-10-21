@@ -266,30 +266,92 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     if (hasText) label(c, sp.text, cx, card.bottom + d(24f), card.bottom + d(84f), d(40f), Color.WHITE, 0, width - d(160f))
   }
 
-  /* ---------------- Pantalla de descanso ---------------- */
+  /* ---------------- Pantallas completas ---------------- */
 
   private fun drawBreak(c: Canvas, s: OverlayState) {
-    rect(c, 0f, 0f, width.toFloat(), height.toFloat(), Color.argb(215, 8, 12, 22))
-    val cx = width / 2f
-    label(c, s.breakText, cx, d(90f), d(170f), d(72f), accent, 0, width - d(120f))
+    rect(c, 0f, 0f, width.toFloat(), height.toFloat(), Color.argb(225, 8, 12, 22))
+    label(c, s.breakText, width / 2f, d(60f), d(140f), d(68f), accent, 0, width - d(120f))
+    when {
+      s.breakKind == "pre" -> drawPreMatch(c, s)
+      s.isVolley && (s.breakKind == "set" || s.breakKind == "end") && s.history.isNotEmpty() -> drawSetTable(c, s, s.breakKind == "end")
+      else -> drawResult(c, s)
+    }
+  }
 
-    val logoSize = d(170f); val cy = d(250f)
-    val lx = cx - d(330f); val rx = cx + d(330f)
-    for ((t, x) in listOf(s.home to lx, s.away to rx)) {
-      val box = RectF(x - logoSize / 2, cy, x + logoSize / 2, cy + logoSize)
-      if (t.logo.isNotBlank()) drawLogoFit(c, t.logo, box)
-      else { fill.color = t.color; c.drawCircle(box.centerX(), box.centerY(), logoSize / 2.4f, fill) }
-      label(c, t.name.uppercase(), x, cy + logoSize + d(14f), cy + logoSize + d(64f), d(34f), Color.WHITE, 0, d(380f))
+  private fun bigLogo(c: Canvas, t: TeamInfo, box: RectF) {
+    if (t.logo.isNotBlank()) drawLogoFit(c, t.logo, box)
+    else { fill.color = t.color; c.drawCircle(box.centerX(), box.centerY(), min(box.width(), box.height()) / 2.4f, fill) }
+  }
+
+  /** Prepartido: escudos grandes, nombres y VS. */
+  private fun drawPreMatch(c: Canvas, s: OverlayState) {
+    val cx = width / 2f
+    val logoSize = d(240f); val top = d(190f)
+    for ((t, x) in listOf(s.home to cx - d(320f), s.away to cx + d(320f))) {
+      bigLogo(c, t, RectF(x - logoSize / 2, top, x + logoSize / 2, top + logoSize))
+      label(c, t.name.uppercase(), x, top + logoSize + d(20f), top + logoSize + d(76f), d(38f), Color.WHITE, 0, d(500f))
+    }
+    label(c, "VS", cx, top + d(60f), top + logoSize - d(60f), d(96f), Color.WHITE, 0)
+  }
+
+  /** Resultado: escudos, sets (o goles) y puntos del set en juego. */
+  private fun drawResult(c: Canvas, s: OverlayState) {
+    val cx = width / 2f
+    val logoSize = d(190f); val cy = d(220f)
+    for ((t, x) in listOf(s.home to cx - d(330f), s.away to cx + d(330f))) {
+      bigLogo(c, t, RectF(x - logoSize / 2, cy, x + logoSize / 2, cy + logoSize))
+      label(c, t.name.uppercase(), x, cy + logoSize + d(14f), cy + logoSize + d(64f), d(34f), Color.WHITE, 0, d(400f))
     }
     val main = if (s.isVolley) "${s.setsH} - ${s.setsA}" else "${s.scoreH} - ${s.scoreA}"
-    label(c, main, cx, cy + d(20f), cy + logoSize - d(20f), d(120f), Color.WHITE, 0)
+    label(c, main, cx, cy + d(30f), cy + logoSize - d(10f), d(120f), Color.WHITE, 0)
     if (s.isVolley) {
-      label(c, "SETS", cx, cy - d(12f), cy + d(24f), d(24f), Color.argb(200, 255, 255, 255), 0)
+      label(c, "SETS", cx, cy - d(10f), cy + d(26f), d(24f), Color.argb(200, 255, 255, 255), 0)
       val parts = s.history.map { "${it.first}-${it.second}" }.toMutableList()
-      if (!s.finished && (s.scoreH > 0 || s.scoreA > 0)) parts += "(${s.scoreH}-${s.scoreA})"
-      if (parts.isNotEmpty()) label(c, parts.joinToString("   "), cx, cy + logoSize + d(80f), cy + logoSize + d(124f), d(30f), Color.argb(220, 255, 255, 255), 0, width - d(160f))
+      if (!s.finished && (s.scoreH > 0 || s.scoreA > 0)) parts += "SET ${s.setNo}: ${s.scoreH}-${s.scoreA}"
+      if (parts.isNotEmpty()) label(c, parts.joinToString("   "), cx, cy + logoSize + d(84f), cy + logoSize + d(128f), d(32f), Color.argb(230, 255, 255, 255), 0, width - d(160f))
     } else if (s.period.isNotBlank()) {
-      label(c, s.period, cx, cy + logoSize + d(80f), cy + logoSize + d(124f), d(30f), Color.argb(220, 255, 255, 255), 0)
+      label(c, s.period, cx, cy + logoSize + d(84f), cy + logoSize + d(128f), d(32f), Color.argb(230, 255, 255, 255), 0)
+    }
+  }
+
+  /** Fin de set / fin de partido: tabla con el resultado de cada set. */
+  private fun drawSetTable(c: Canvas, s: OverlayState, isFinal: Boolean) {
+    val n = s.history.size
+    val colW = d(96f); val setsW = d(120f); val logoW = d(84f)
+    val nameW = (width - d(120f) - logoW - n * colW - setsW).coerceAtMost(d(420f))
+    val tableW = logoW + nameW + n * colW + setsW
+    val left = (width - tableW) / 2f
+    val headH = d(48f); val rowH = d(104f)
+    var y = d(200f)
+
+    // Cabecera
+    var x = left + logoW + nameW
+    for (i in 0 until n) { label(c, "SET ${i + 1}", x + colW / 2, y, y + headH, d(24f), Color.argb(200, 255, 255, 255), 0); x += colW }
+    label(c, "SETS", x + setsW / 2, y, y + headH, d(24f), accent, 0)
+    y += headH
+
+    val winner = when { !isFinal -> ""; s.setsH > s.setsA -> "h"; s.setsA > s.setsH -> "a"; else -> "" }
+    for ((t, side) in listOf(s.home to "h", s.away to "a")) {
+      val isWin = winner == side
+      rect(c, left, y, left + tableW, y + rowH - d(6f), if (isWin) Color.argb(235, 40, 52, 20) else dark, d(10f))
+      rect(c, left, y, left + d(8f), y + rowH - d(6f), t.color)
+      bigLogo(c, t, RectF(left + d(16f), y + d(12f), left + logoW - d(4f), y + rowH - d(18f)))
+      label(c, t.name.uppercase(), left + logoW + d(10f), y, y + rowH - d(6f), d(36f), if (isWin) accent else Color.WHITE, -1, nameW - d(20f))
+      x = left + logoW + nameW
+      for ((h, a) in s.history) {
+        val mine = if (side == "h") h else a
+        val theirs = if (side == "h") a else h
+        label(c, mine.toString(), x + colW / 2, y, y + rowH - d(6f), d(48f),
+          if (mine > theirs) Color.WHITE else Color.argb(140, 255, 255, 255), 0)
+        x += colW
+      }
+      rect(c, x + d(8f), y + d(10f), x + setsW - d(8f), y + rowH - d(16f), if (isWin) accent else Color.WHITE, d(8f))
+      label(c, (if (side == "h") s.setsH else s.setsA).toString(), x + setsW / 2, y, y + rowH - d(6f), d(56f), ink, 0)
+      y += rowH
+    }
+    if (isFinal && winner.isNotEmpty()) {
+      val w = if (winner == "h") s.home else s.away
+      label(c, "GANADOR: ${w.name.uppercase()}", width / 2f, y + d(20f), y + d(76f), d(34f), accent, 0, width - d(160f))
     }
   }
 }

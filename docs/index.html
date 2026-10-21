@@ -334,8 +334,8 @@ function start() {
         <button data-act="undo">↶</button>
         ${volley ? `<button class="${live.timer.show ? 'on' : ''}" data-act="timerToggle">⏱ ${live.timer.show ? 'Visible' : 'Oculto'}</button>` : ''}
         ${showClock ? `<span class="cclock" id="clk">00:00</span><button class="${live.clock.running ? '' : 'primary'}" data-act="clk">${live.clock.running ? '❚❚' : '▶'}</button>` : ''}
-        ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO">T. muerto</button>`
-                 : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO">Descanso</button>`}
+        ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO" data-k="tm">T. muerto</button>`
+                 : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO" data-k="half">Descanso</button>`}
       </div>`;
   }
 
@@ -391,8 +391,8 @@ function start() {
     }
     h += `<div class="btns" style="margin-top:12px">
         <button data-act="undo">↶ Deshacer</button>
-        ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO">Tiempo muerto</button>`
-                 : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO">Descanso</button>`}
+        ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO" data-k="tm">Tiempo muerto</button>`
+                 : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO" data-k="half">Descanso</button>`}
         <button class="${live.banner.show ? 'on' : ''}" data-act="bannerToggle">Rótulo</button>
       </div>`;
     if (volley) h += timerCard(true) + setsCard();
@@ -400,7 +400,9 @@ function start() {
   }
 
   function viewGraphics() {
-    const presets = ['TIEMPO MUERTO', 'DESCANSO', 'FIN DEL SET', 'FIN DEL PARTIDO', 'EMPEZAMOS EN BREVE'];
+    const presets = live.sport === 'volley'
+      ? [['PREPARTIDO', 'pre'], ['TIEMPO MUERTO', 'tm'], ['FIN DE SET', 'set'], ['FIN DE PARTIDO', 'end']]
+      : [['PREPARTIDO', 'pre'], ['DESCANSO', 'half'], ['FIN DEL PARTIDO', 'end']];
     const sp = Object.entries(sponsors);
     const posBtn = (v, t) => `<button class="${live.board.pos === v ? 'on' : ''}" data-act="boardPos" data-v="${v}">${t}</button>`;
     return `
@@ -417,7 +419,7 @@ function start() {
           <button class="${live.banner.show ? 'on' : ''}" data-act="bannerToggle">${live.banner.show ? 'Ocultar' : 'Mostrar'}</button>
         </div></div>
       <div class="card"><h2>Pantalla completa</h2>
-        <div class="btns">${presets.map(p => `<button class="${live.brk.show && live.brk.text === p ? 'on' : ''}" data-act="brkq" data-v="${p}">${p}</button>`).join('')}</div>
+        <div class="btns">${presets.map(([p, k]) => `<button class="${live.brk.show && live.brk.text === p ? 'on' : ''}" data-act="brkq" data-v="${p}" data-k="${k}">${p}</button>`).join('')}</div>
         <label>Texto personalizado</label>
         <div class="row"><input id="brkText" placeholder="Texto"><button style="flex:0 0 auto" data-act="brkCustom">Mostrar</button></div>
         ${live.brk.show ? `<p><button class="danger" style="width:100%" data-act="brkHide">Quitar pantalla completa</button></p>` : ''}
@@ -425,7 +427,7 @@ function start() {
       <div class="card"><h2>Patrocinadores</h2>
         <div class="row"><span>Mostrar en emisión</span>
           <button style="flex:0 0 auto" class="${live.spons.show ? 'on' : ''}" data-act="sponsToggle">${live.spons.show ? 'Sí' : 'No'}</button></div>
-        <div class="row" style="margin-top:8px"><span>Carrusel a pantalla completa en el descanso</span>
+        <div class="row" style="margin-top:8px"><span>Carrusel de patrocinadores en las pantallas completas</span>
           <button style="flex:0 0 auto" class="${live.spons.carousel ? 'on' : ''}" data-act="carouselToggle">${live.spons.carousel ? 'Sí' : 'No'}</button></div>
         <label>Cambiar cada (segundos)</label>
         <input type="number" min="3" max="120" id="sponsSec" value="${live.spons.sec}">
@@ -574,10 +576,10 @@ function start() {
         if (confirm('¿Empezar un partido nuevo? Se pone el marcador a cero.')) act(L => SC.newMatch(L));
         return;
       case 'brkq':
-        return liveRef.child('brk').set({ show: !(live.brk.show && live.brk.text === v), text: v });
+        return liveRef.child('brk').set({ show: !(live.brk.show && live.brk.text === v), text: v, kind: d.k || 'custom' });
       case 'brkCustom': {
         const t = val('brkText').trim(); if (!t) return toast('Escribe un texto');
-        return liveRef.child('brk').set({ show: true, text: t.toUpperCase() });
+        return liveRef.child('brk').set({ show: true, text: t.toUpperCase(), kind: 'custom' });
       }
       case 'brkHide': return setField('brk/show', false);
       case 'bannerSave': return setField('banner/text', val('bannerText').trim()), toast('Guardado');

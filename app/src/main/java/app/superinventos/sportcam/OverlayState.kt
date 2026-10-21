@@ -28,6 +28,8 @@ data class OverlayState(
   val bannerText: String,
   val breakShow: Boolean,
   val breakText: String,
+  /** pre | tm | set | end | half | custom */
+  val breakKind: String,
   val sponsShow: Boolean,
   val sponsSec: Int,
   val sponsors: List<Sponsor>,
@@ -102,6 +104,7 @@ data class OverlayState(
         bannerText = banner.optString("text", ""),
         breakShow = brk.optBoolean("show"),
         breakText = brk.optString("text", ""),
+        breakKind = brk.optString("kind", "custom"),
         sponsShow = spons.optBoolean("show", true),
         sponsSec = spons.optInt("sec", 10).coerceIn(3, 120),
         sponsors = sponsors,
