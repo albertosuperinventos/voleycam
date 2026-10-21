@@ -20,3 +20,6 @@
 
 ## Siguiente versión
 - Conectar con YouTube (login Google + API): crear/programar la emisión desde el mando y actualizar la descripción al terminar.
+- Resumen desde vídeo: elegir un vídeo de la galería (SportCam, otra app o directo descargado de YouTube Studio), reproducirlo en la app con ⭐ y ±10 s para marcar jugadas, y crear el resumen.
+- Aplicar automáticamente las marcas de un partido de SportCam al vídeo del directo descargado (guardar en el historial la hora de inicio del directo de cada partido).
+- Pendiente de confirmar: renombrar "Liga Oro Junior Sevilla" a "Juvenil Femenino" y categoría de la 2ª Andaluza 3B.
