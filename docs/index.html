@@ -100,6 +100,13 @@ body.compact main{padding:8px 10px}
 .setrow input{width:64px;text-align:center;padding:8px}
 .setrow span{min-width:48px;color:var(--muted);font-weight:600}
 .midbtn{padding:4px 10px}
+button.flash{background:#3ddc84!important;color:#0b1220!important}
+.warnbar{background:#5a1f1f;color:#ffd0c8;font-size:13px;font-weight:600;padding:6px 16px}
+#remoteModal{position:fixed;inset:0;background:var(--bg);z-index:30;overflow:auto;padding:12px 16px 24px}
+#remoteModal .prev{width:100%;aspect-ratio:16/9;border-radius:12px;background:#000 center/contain no-repeat;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
+.stgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:12px 0;font-size:14px}
+.stgrid b{color:var(--text)}
+.stgrid span{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -159,12 +166,20 @@ function start() {
   const sponsRef = base.child('sponsors');
   const matchesRef = base.child('matches');
   const marksRef = base.child('marks');
+  const statusRef = base.child('status');
+  const cmdRef = base.child('cmd');
+  const previewRef = base.child('preview');
+  const remoteRef = base.child('remote');
 
   let live = SC.defaultLive();
   let teams = {};
   let sponsors = {};
   let matches = {};
   let marks = {};
+  let status = null;          // estado que publica el móvil cámara
+  let markFlashUntil = 0;
+  let remoteOpen = false, remoteTimer = null;
+  let ytState = { connected: false, broadcasts: [], message: '' };
   let offset = 0;
   let connected = false;
   let loaded = false;
@@ -187,6 +202,18 @@ function start() {
   teamsRef.on('value', s => { teams = s.val() || {}; render(); pushNative(); });
   sponsRef.on('value', s => { sponsors = s.val() || {}; render(); pushNative(); });
   matchesRef.on('value', s => { matches = s.val() || {}; if (tab === 'match') render(); });
+  statusRef.on('value', s => { status = s.val(); if (!IS_NATIVE) { renderWarn(); if (remoteOpen) renderRemote(); } });
+  if (IS_NATIVE) {
+    // Órdenes del mando remoto hacia la cámara
+    let lastCmd = ''; try { lastCmd = localStorage.getItem('sc_lastcmd') || ''; } catch (e) {}
+    cmdRef.on('value', s => {
+      const c = s.val(); if (!c || !c.id || c.id === lastCmd) return;
+      lastCmd = c.id; try { localStorage.setItem('sc_lastcmd', c.id); } catch (e) {}
+      if (now() - (c.ts || 0) > 30000) return;
+      try { window.SportCamNative.command(c.action); } catch (e) {}
+    });
+    remoteRef.on('value', s => { try { window.SportCamNative.onRemote(s.val() || 0); } catch (e) {} });
+  }
   marksRef.on('value', s => { marks = s.val() || {}; if (tab === 'match' && !compact) render(); pushNative(); });
 
   /* ---------- Acciones ---------- */
@@ -216,8 +243,12 @@ function start() {
       const model = Object.assign({}, live, {
         home: teamView(live.homeId, 'LOCAL'),
         away: teamView(live.awayId, 'VISITANTE'),
-        sponsorList: Object.values(sponsors).filter(s => s.logo).map(s => ({ logo: s.logo, text: s.text || '' })),
-        spFullItem: (live.spFull.show && sponsors[live.spFull.id]) ? { logo: sponsors[live.spFull.id].logo, text: sponsors[live.spFull.id].text || '' } : null,
+        sponsorList: Object.values(sponsors).filter(s => s.logo || s.full).map(s => ({ logo: s.logo || '', text: s.text || '', full: s.full || '' })),
+        spFullItem: (live.spFull.show && sponsors[live.spFull.id]) ? { logo: sponsors[live.spFull.id].logo || '', text: sponsors[live.spFull.id].text || '', full: sponsors[live.spFull.id].full || '' } : null,
+        savedMatches: savedMatchesForNative(),
+        ytTitle: ytTexts().title,
+        ytPrivacy: live.info.privacy || 'unlisted',
+        ytWhen: live.info.when || '',
         marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '' })).sort((a, b) => a.ts - b.ts),
         ytDesc: ytTexts().desc,
         serverOffset: offset
@@ -242,6 +273,21 @@ function start() {
     catch (e) { prompt('Copia el texto:', t); }
   }
 
+  // La app publica su estado, la vista previa y el estado de YouTube a través de estas funciones
+  window.scStatus = o => statusRef.set(Object.assign({ ts: now() }, o));
+  window.scPreview = img => previewRef.set({ ts: now(), img });
+  window.scYt = o => { ytState = Object.assign({ connected: false, broadcasts: [], message: '' }, o); if (tab === 'match' && !compact) render(); };
+
+  function savedMatchesForNative() {
+    const cur = { title: 'Partido actual', liveStart: (status && status.liveStartTs) || 0,
+                  marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '' })) };
+    const old = Object.values(matches).filter(m => m.liveStart && m.marks).sort((a, b) => b.ts - a.ts).map(m => ({
+      title: `${m.home.short} - ${m.away.short} · ${new Date(m.ts).toLocaleDateString('es-ES')}`,
+      liveStart: m.liveStart, marks: (Array.isArray(m.marks) ? m.marks : Object.values(m.marks)).map(x => ({ ts: x.ts, label: x.label || '' }))
+    }));
+    return [cur].concat(old);
+  }
+
   window.scCmd = (cmd, v) => {
     if (cmd === 'mute') setField('muted', !!v);
     if (cmd === 'mark') addMark();
@@ -255,12 +301,14 @@ function start() {
   }
   function addMark(label) {
     marksRef.push({ ts: now(), label: label || markLabel(live) });
-    if (navigator.vibrate) navigator.vibrate(40);
-    toast('⭐ Jugada marcada');
+    if (navigator.vibrate) navigator.vibrate(60);
+    markFlashUntil = Date.now() + 1000;
+    document.querySelectorAll('[data-act=mark]').forEach(b => { b.classList.add('flash'); b.dataset.old = b.textContent; b.textContent = '✓'; });
+    setTimeout(() => document.querySelectorAll('[data-act=mark]').forEach(b => { b.classList.remove('flash'); if (b.dataset.old) b.textContent = b.dataset.old; }), 1000);
   }
 
   /* ---------- Imágenes ---------- */
-  function fileToLogo(file, max = 160) {
+  function fileToLogo(file, max = 160, jpeg = false) {
     return new Promise((res, rej) => {
       const fr = new FileReader();
       fr.onerror = rej;
@@ -272,8 +320,8 @@ function start() {
           const c = document.createElement('canvas');
           c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
           c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-          let url = c.toDataURL('image/webp', 0.9);
-          if (!url.startsWith('data:image/webp')) url = c.toDataURL('image/png');
+          let url = jpeg ? c.toDataURL('image/jpeg', 0.85) : c.toDataURL('image/webp', 0.9);
+          if (!jpeg && !url.startsWith('data:image/webp')) url = c.toDataURL('image/png');
           res(url);
         };
         img.src = fr.result;
@@ -281,11 +329,11 @@ function start() {
       fr.readAsDataURL(file);
     });
   }
-  function pickImage(max) {
+  function pickImage(max, jpeg) {
     return new Promise(res => {
       const inp = document.createElement('input');
       inp.type = 'file'; inp.accept = 'image/*';
-      inp.onchange = async () => { const f = inp.files[0]; if (!f) return res(null); res(await fileToLogo(f, max || 300)); };
+      inp.onchange = async () => { const f = inp.files[0]; if (!f) return res(null); res(await fileToLogo(f, max || 300, jpeg)); };
       inp.click();
     });
   }
@@ -294,7 +342,9 @@ function start() {
   function shell() {
     $app.innerHTML = `
       <header><div class="dot" id="dot"></div><h1>Sport<span>Cam</span></h1><span class="chip" id="sportChip"></span>
+        ${IS_NATIVE ? '' : '<button class="hbtn" id="remBtn" title="Cámara a distancia">📡</button>'}
         <button class="hbtn" id="cmpBtn" title="Cambiar tamaño"></button></header>
+      <div id="warn"></div>
       <main id="main"></main>
       <nav>
         <button data-tab="score">Marcador</button>
@@ -304,7 +354,82 @@ function start() {
       </nav>`;
     $app.querySelectorAll('nav button').forEach(b => b.onclick = () => { tab = b.dataset.tab; editing = null; render(); window.scrollTo(0, 0); });
     document.getElementById('cmpBtn').onclick = () => setCompact(!compact);
+    const rb = document.getElementById('remBtn'); if (rb) rb.onclick = openRemote;
   }
+  /* ---------- Cámara a distancia ---------- */
+  const statusFresh = () => status && now() - (status.ts || 0) < 15000;
+  function renderWarn() {
+    const w = document.getElementById('warn'); if (!w) return;
+    const msgs = [];
+    if (statusFresh()) {
+      if (status.battery >= 0 && status.battery <= 20 && !status.charging) msgs.push(`🔋 Batería de la cámara: ${status.battery} %`);
+      if (status.weakNet) msgs.push('📶 Red débil en la cámara');
+      if (status.wantLive && !status.connected) msgs.push(status.reconnecting ? '⚠ Reconectando el directo…' : '⚠ Conectando el directo…');
+    }
+    w.innerHTML = msgs.length ? `<div class="warnbar">${msgs.join(' · ')}</div>` : '';
+  }
+  function sendCmd(action) {
+    cmdRef.set({ id: Math.random().toString(36).slice(2) + Date.now(), action, ts: now() });
+    toast('Orden enviada');
+  }
+  function openRemote() {
+    remoteOpen = true;
+    let m = document.getElementById('remoteModal');
+    if (!m) { m = document.createElement('div'); m.id = 'remoteModal'; document.body.appendChild(m); }
+    remoteRef.set(now());
+    remoteTimer = setInterval(() => { remoteRef.set(now()); renderRemote(); }, 5000);
+    previewRef.on('value', onPreview);
+    renderRemote();
+  }
+  function closeRemote() {
+    remoteOpen = false; clearInterval(remoteTimer); previewRef.off && previewRef.off('value', onPreview);
+    const m = document.getElementById('remoteModal'); if (m) m.remove();
+  }
+  let lastPreview = null;
+  function onPreview(s) { lastPreview = s.val(); const p = document.getElementById('prevImg'); if (p) paintPreview(p); }
+  function paintPreview(p) {
+    if (lastPreview && lastPreview.img) {
+      p.style.backgroundImage = `url('${lastPreview.img}')`;
+      p.textContent = '';
+      const age = Math.round((now() - lastPreview.ts) / 1000);
+      const a = document.getElementById('prevAge'); if (a) a.textContent = age < 60 ? `Imagen de hace ${age} s` : 'Imagen antigua';
+    }
+  }
+  function fmtSecs(t) { t = Math.max(0, t | 0); const h = t / 3600 | 0, m = (t / 60 | 0) % 60, x = t % 60; return (h ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(x).padStart(2, '0'); }
+  function renderRemote() {
+    const m = document.getElementById('remoteModal'); if (!m || !remoteOpen) return;
+    const st = status || {}; const fresh = statusFresh();
+    const estado = !fresh ? 'SIN CONEXIÓN CON LA CÁMARA' : st.wantLive ? (st.connected ? (st.weakNet ? '● EN DIRECTO (red débil)' : '● EN DIRECTO') : st.reconnecting ? 'RECONECTANDO…' : 'CONECTANDO…') : st.rec ? '● GRABANDO' : 'SIN EMITIR';
+    m.innerHTML = `<div class="row" style="margin-bottom:10px"><h2 style="margin:0;font:800 22px 'Barlow Condensed',sans-serif">📡 Cámara a distancia</h2>
+        <button style="flex:0 0 auto" data-r="close">✕</button></div>
+      <div class="prev" id="prevImg">Esperando imagen de la cámara…</div>
+      <p class="muted" id="prevAge" style="font-size:12px;margin:4px 0 0"></p>
+      <div class="stgrid">
+        <span>Estado</span><b style="color:${st.wantLive && st.connected ? 'var(--danger)' : 'var(--text)'}">${estado}</b>
+        <span>Tiempo</span><b>${fresh && st.wantLive ? fmtSecs(st.liveSecs) : fresh && st.rec ? fmtSecs(st.recSecs) : '—'}</b>
+        <span>Batería</span><b>${fresh && st.battery >= 0 ? st.battery + ' %' + (st.charging ? ' ⚡' : '') : '—'}</b>
+        <span>Red</span><b>${fresh && st.connected ? (st.bitrateKbps / 1000).toFixed(1) + ' Mb/s' : '—'}</b>
+        <span>Micro</span><b>${fresh ? (st.muted ? '🔇 Silenciado' : '🎙 Activo') : '—'}</b>
+        <span>Grabación</span><b>${fresh ? (st.rec ? '● Grabando' : 'No') : '—'}</b>
+      </div>
+      <div class="btns">
+        ${st.wantLive ? '<button class="danger" data-r="live_stop">⏹ Parar directo</button>' : '<button class="primary" data-r="live_start">▶ Iniciar directo</button>'}
+        <button data-r="rec_toggle">${st.rec ? '⏹ Parar grabación' : '⏺ Grabar'}</button>
+        <button data-r="mute_toggle">${st.muted ? '🎙 Activar micro' : '🔇 Silenciar'}</button>
+        <button data-r="zoom_out">Zoom −</button><button data-r="zoom_in">Zoom +</button>
+        <button data-r="switch">⟲ Cambiar cámara</button>
+        <button data-r="${st.dim ? 'dim_off' : 'dim_on'}">${st.dim ? '☀ Encender pantalla' : '🌙 Ahorro de pantalla'}</button>
+      </div>`;
+    paintPreview(document.getElementById('prevImg'));
+    m.querySelectorAll('[data-r]').forEach(b => b.onclick = () => {
+      const a = b.dataset.r;
+      if (a === 'close') return closeRemote();
+      if (a === 'live_start' && !confirm('¿Iniciar el directo en la cámara?')) return;
+      if (a === 'live_stop' && !confirm('¿Parar el directo?')) return;
+      sendCmd(a);
+    });
+  }
+
   function setCompact(v) {
     compact = v;
     if (IS_NATIVE) { try { window.SportCamNative.setMini(v); } catch (e) {} }
@@ -487,10 +612,14 @@ function start() {
             <label>Texto bajo el logo a pantalla completa</label><input id="esText" value="${esc(s.text)}">
             <label>Descripción para YouTube (una línea por servicio)</label><textarea id="esDesc" rows="4">${esc(s.desc)}</textarea>
             <label>Web / Instagram (una por línea)</label><textarea id="esLink" rows="2">${esc(s.link)}</textarea>
+            <label>Imagen de pantalla completa (diapositiva 16:9, opcional)</label>
+            ${s.full ? `<div class="prev" style="width:100%;aspect-ratio:16/9;border-radius:10px;background:#000 url('${s.full}') center/contain no-repeat"></div>` : '<p class="muted" style="margin:4px 0">Sin imagen: a pantalla completa se ve el logo.</p>'}
+            <div class="grid2" style="margin-top:8px"><button data-act="spFullPick" data-id="${id}">🖼 Elegir imagen</button>
+              ${s.full ? `<button class="danger" data-act="spFullDel" data-id="${id}">Quitar imagen</button>` : '<span></span>'}</div>
             <div class="row" style="margin-top:10px"><button class="ghost" data-act="spEditCancel">Cancelar</button><button class="primary" data-act="spEditSave" data-id="${id}">Guardar</button></div>
           </div>` : `
           <div class="item"><div class="preview-logo" style="background-image:url('${s.logo}')"></div>
-            <div class="grow"><b>${esc(s.name || 'Patrocinador')}</b>${s.text ? `<br><span class="muted">${esc(s.text)}</span>` : ''}</div>
+            <div class="grow"><b>${esc(s.name || 'Patrocinador')}${s.full ? ' 🖼' : ''}</b>${s.text ? `<br><span class="muted">${esc(s.text)}</span>` : ''}</div>
             <div style="display:flex;flex-direction:column;gap:6px">
               <button class="${live.spFull.show && live.spFull.id === id ? 'on' : ''}" data-act="spFull" data-id="${id}">Pantalla completa</button>
               <button data-act="spEdit" data-id="${id}">Editar</button>
@@ -565,6 +694,27 @@ function start() {
     </div>`;
   }
 
+  function ytConnectCard() {
+    if (!IS_NATIVE) return `<div class="card"><h2>YouTube</h2><p class="muted" style="margin:0;font-size:13px">Crear y programar la emisión en YouTube se hace desde el mando de la app del móvil cámara.</p></div>`;
+    const pv = live.info.privacy || 'unlisted';
+    const pbtn = (v, t) => `<button class="${pv === v ? 'on' : ''}" data-act="ytPriv" data-v="${v}">${t}</button>`;
+    const list = (ytState.broadcasts || []).map(b => `<div class="item"><div class="grow"><b>${esc(b.title)}</b><br>
+        <span class="muted" style="font-size:13px">${esc(b.when || '')} · ${esc(b.privacy || '')} · ${esc(b.status || '')}${b.selected ? ' · ✔ en uso' : ''}</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button data-act="ytUse" data-id="${esc(b.id)}">${b.selected ? '✔ En uso' : 'Usar'}</button>
+          <button data-act="ytDesc" data-id="${esc(b.id)}">Act. descripción</button></div></div>`).join('');
+    return `<div class="card"><h2>YouTube</h2>
+      ${ytState.connected ? `<p class="muted" style="margin-top:0">Conectado${ytState.account ? ' como ' + esc(ytState.account) : ''}.</p>`
+        : `<p class="muted" style="margin-top:0;font-size:13px">Conecta tu cuenta para crear y programar la emisión sin pasar por YouTube Studio.</p>`}
+      <button style="width:100%" data-act="ytConnect">${ytState.connected ? '🔄 Actualizar lista' : '🔗 Conectar con YouTube'}</button>
+      ${ytState.message ? `<p style="font-size:13px;color:var(--warn)">${esc(ytState.message)}</p>` : ''}
+      ${ytState.connected ? `<label>Privacidad</label><div class="btns">${pbtn('public', 'Pública')}${pbtn('unlisted', 'Oculta')}${pbtn('private', 'Privada')}</div>
+        <p class="muted" style="font-size:13px">Título, descripción y fecha se toman de la tarjeta anterior.</p>
+        <button class="primary" style="width:100%" data-act="ytCreate">📅 Crear emisión programada</button>
+        <label>Emisiones próximas y recientes</label>${list || '<p class="muted">No hay emisiones.</p>'}` : ''}
+    </div>`;
+  }
+
   function highlightsCard() {
     const list = Object.entries(marks).sort((a, b) => a[1].ts - b[1].ts);
     const time = ts => new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -579,7 +729,8 @@ function start() {
       <div style="margin-top:8px">${list.map(([id, m]) => `<div class="item"><div class="grow">${esc(m.label || 'Jugada')}<br>
         <span class="muted" style="font-size:13px">${time(m.ts)}</span></div>
         <button class="danger" data-act="markDel" data-id="${id}">✕</button></div>`).join('') || '<p class="muted">Sin jugadas marcadas.</p>'}</div>
-      ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resumen y capítulos</button></p>`
+      ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resumen y capítulos</button></p>
+        <p><button style="width:100%" data-act="videoHl">🎞 Resumen desde un vídeo de la galería</button></p>`
                   : `<p class="muted" style="font-size:13px">El resumen se crea desde la app del móvil cámara (botón 🎬 o al parar la grabación).</p>`}
       ${list.length ? `<button class="danger" style="width:100%" data-act="marksClear">Borrar todas las marcas</button>` : ''}
     </div>`;
@@ -603,7 +754,9 @@ function start() {
   function matchRecord() {
     const tv = (id, f) => { const t = teamView(id, f); return { id: id || '', name: (teams[id] || {}).name || f, short: t.short, color: t.color }; };
     return { ts: Date.now(), sport: live.sport, home: tv(live.homeId, 'LOCAL'), away: tv(live.awayId, 'VISITANTE'),
-             score: live.score, sets: live.sets, history: live.history, finished: live.finished };
+             score: live.score, sets: live.sets, history: live.history, finished: live.finished,
+             liveStart: (status && status.liveStartTs) || 0,
+             marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '' })) };
   }
   function hasData(L) { return L.score.h || L.score.a || L.sets.h || L.sets.a || L.history.length; }
 
@@ -713,6 +866,7 @@ function start() {
         </div>
         <p><button class="danger" style="width:100%" data-act="newMatch">Nuevo partido (pone todo a cero)</button></p></div>
       ${youtubeCard()}
+      ${ytConnectCard()}
       ${highlightsCard()}
       <div class="card"><h2>Historial</h2>${historyList()}</div>
       ${IS_NATIVE ? '' : `<div class="card"><h2>Canal</h2>
@@ -789,6 +943,22 @@ function start() {
         if (Object.keys(marks).length && confirm('¿Borrar también las jugadas marcadas?')) marksRef.remove();
         return;
       case 'mark': return addMark();
+      case 'videoHl': try { window.SportCamNative.openVideoHighlights(); } catch (e) { toast('Solo desde la app'); } return;
+      case 'spFullPick': {
+        const img = await pickImage(1280, true); if (!img) return;
+        await sponsRef.child(d.id).update({ full: img }); return toast('Imagen guardada');
+      }
+      case 'spFullDel': await sponsRef.child(d.id).update({ full: '' }); return toast('Imagen quitada');
+      case 'ytPriv': return setField('info/privacy', v);
+      case 'ytConnect': try { window.SportCamNative.ytConnect(); } catch (e) {} return;
+      case 'ytCreate': {
+        if (!live.info.when) return toast('Pon la fecha y hora en la tarjeta de título y descripción');
+        const t = ytTexts();
+        try { window.SportCamNative.ytCreate(JSON.stringify({ title: t.title, desc: t.desc, when: new Date(live.info.when).toISOString(), privacy: live.info.privacy || 'unlisted' })); } catch (e) {}
+        return toast('Creando emisión…');
+      }
+      case 'ytUse': try { window.SportCamNative.ytUse(d.id); } catch (e) {} return;
+      case 'ytDesc': try { window.SportCamNative.ytUpdateDesc(d.id, ytTexts().desc); } catch (e) {} return;
       case 'copyTitle': return copyText(ytTexts().title, 'Título copiado');
       case 'copyDesc': return copyText(ytTexts().desc, 'Descripción copiada');
       case 'markDel': return marksRef.child(d.id).remove();

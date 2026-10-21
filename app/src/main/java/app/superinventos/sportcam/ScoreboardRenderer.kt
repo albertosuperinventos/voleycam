@@ -258,7 +258,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     val t = if (atTop) d(32f) else height - d(32f) - bh
     val box = RectF(r - bw, t, r, t + bh)
     rect(c, box.left, box.top, box.right, box.bottom, Color.argb(225, 255, 255, 255), d(10f))
-    drawLogoFit(c, s.sponsors[idx].logo, RectF(box.left + d(10f), box.top + d(8f), box.right - d(10f), box.bottom - d(8f)))
+    drawLogoFit(c, s.sponsors[idx].logo.ifBlank { s.sponsors[idx].full }, RectF(box.left + d(10f), box.top + d(8f), box.right - d(10f), box.bottom - d(8f)))
     return box
   }
 
@@ -274,6 +274,11 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   private fun drawFullSponsor(c: Canvas, sp: Sponsor) = withShadow {
     rect(c, 0f, 0f, width.toFloat(), height.toFloat(), fullBg)
+    if (sp.full.isNotBlank()) {
+      // Diapositiva del patrocinador a toda pantalla
+      drawLogoFit(c, sp.full, RectF(0f, 0f, width.toFloat(), height.toFloat()))
+      return@withShadow
+    }
     val hasText = sp.text.isNotBlank()
     // Tarjeta blanca para que se vean bien logos oscuros o con transparencia
     val cardW = d(760f); val cardH = d(if (hasText) 400f else 460f)

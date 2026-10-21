@@ -18,10 +18,9 @@
 - Título y descripción de YouTube generados con el partido y los patrocinadores.
 - Resumen de jugadas: botón ⭐, marca automática de fin de set, vídeo resumen cortado de la grabación y capítulos para YouTube.
 
-## Siguiente versión
-- Conectar con YouTube (login Google + API): crear/programar la emisión desde el mando y actualizar la descripción al terminar.
-- Resumen desde vídeo: elegir un vídeo de la galería (SportCam, otra app o directo descargado de YouTube Studio), reproducirlo en la app con ⭐ y ±10 s para marcar jugadas, y crear el resumen.
-- Botón ⭐ en verde con ✓ ~1 s al marcar (mando y app) y vibración.
-- Ventana "Remoto" (botón 📡 en la cabecera del mando, solo en el segundo móvil): vista previa de la cámara cada pocos segundos, estado (directo, tiempo, batería, red, micro, grabación) y botones Iniciar/Parar directo, Grabar, Zoom ±, Cambiar cámara, Ahorro. Avisos de batería/red también en el mando.
-- Patrocinadores con segunda imagen opcional "pantalla completa" (diapositiva 16:9 a toda pantalla, sin tarjeta blanca); el logo se sigue usando en la esquina.
-- Aplicar automáticamente las marcas de un partido de SportCam al vídeo del directo descargado (guardar en el historial la hora de inicio del directo de cada partido).
+## Versión 1.4.0
+- Botón ⭐ en verde con ✓ ~1 s (mando y app).
+- Patrocinadores con imagen de pantalla completa (diapositiva).
+- Ventana 📡 Remoto en el mando del segundo móvil: vista previa, estado y control de la cámara; avisos de batería/red.
+- Resumen desde vídeo de la galería, con ⭐ y aplicando marcas de un partido (desfase ajustable).
+- Conexión con YouTube: crear emisión programada, elegir emisión, actualizar descripción con capítulos (requiere configurar Google Cloud).

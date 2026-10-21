@@ -41,6 +41,11 @@ class Prefs(context: Context) {
     get() = sp.getBoolean("recordLocal", true)
     set(v) = sp.edit().putBoolean("recordLocal", v).apply()
 
+  /** Emisión de YouTube seleccionada (id de la emisión / vídeo). */
+  var ytBroadcastId: String
+    get() = sp.getString("ytBroadcastId", "") ?: ""
+    set(v) = sp.edit().putString("ytBroadcastId", v).apply()
+
   /** URL pública de la web de control (GitHub Pages), para el QR del segundo móvil. */
   var remoteUrl: String
     get() = sp.getString("remoteUrl", DEFAULT_REMOTE) ?: DEFAULT_REMOTE

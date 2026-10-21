@@ -39,6 +39,13 @@
     </provider>
 
     <activity
+      android:name=".VideoHighlightsActivity"
+      android:exported="false"
+      android:screenOrientation="landscape"
+      android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+      android:windowSoftInputMode="adjustPan" />
+
+    <activity
       android:name=".SettingsActivity"
       android:exported="false"
       android:label="@string/settings"

@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 data class TeamInfo(val name: String, val short: String, val color: Int, val logo: String)
 
-data class Sponsor(val logo: String, val text: String)
+data class Sponsor(val logo: String, val text: String, val full: String = "")
 
 /** Estado que la web de control envía a la app para pintar el marcador. */
 data class OverlayState(
@@ -46,6 +46,8 @@ data class OverlayState(
   val hlBefore: Int,
   val hlAfter: Int,
   val ytDesc: String,
+  /** Partidos con marcas para el resumen desde vídeo (JSON tal cual). */
+  val savedMatchesJson: String,
   val serverOffset: Long,
 ) {
   val isVolley get() = sport != "football"
@@ -85,11 +87,11 @@ data class OverlayState(
       val sponsors = mutableListOf<Sponsor>()
       o.optJSONArray("sponsorList")?.let { arr ->
         for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { sp ->
-          val logo = sp.optString("logo")
-          if (logo.isNotBlank()) sponsors += Sponsor(logo, sp.optString("text"))
+          val logo = sp.optString("logo"); val full = sp.optString("full")
+          if (logo.isNotBlank() || full.isNotBlank()) sponsors += Sponsor(logo, sp.optString("text"), full)
         }
       }
-      val full = o.optJSONObject("spFullItem")?.let { Sponsor(it.optString("logo"), it.optString("text")) }?.takeIf { it.logo.isNotBlank() }
+      val full = o.optJSONObject("spFullItem")?.let { Sponsor(it.optString("logo"), it.optString("text"), it.optString("full")) }?.takeIf { it.logo.isNotBlank() || it.full.isNotBlank() }
       val pos = board.optString("pos", "tl").takeIf { it in setOf("tl", "tr", "bl", "br") } ?: "tl"
       return OverlayState(
         sport = o.optString("sport", "volley"),
@@ -129,6 +131,7 @@ data class OverlayState(
         hlBefore = o.optJSONObject("hl")?.optInt("before", 10) ?: 10,
         hlAfter = o.optJSONObject("hl")?.optInt("after", 3) ?: 3,
         ytDesc = o.optString("ytDesc", ""),
+        savedMatchesJson = o.optJSONArray("savedMatches")?.toString() ?: "[]",
         serverOffset = o.optLong("serverOffset"),
       )
     }

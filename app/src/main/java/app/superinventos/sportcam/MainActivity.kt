@@ -33,7 +33,14 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.Scope
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -84,6 +91,26 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   @Volatile private var makingHighlights = false
 
   private fun serverNow() = System.currentTimeMillis() + (overlayState?.serverOffset ?: 0L)
+
+  // Cámara a distancia
+  @Volatile private var remoteOpenTs = 0L
+  private var lastStatusAt = 0L
+  private var lastPreviewAt = 0L
+  @Volatile private var previewBusy = false
+
+  // YouTube
+  private var pendingYt: ((String) -> Unit)? = null
+  private val ytAuth = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
+    try {
+      val res = Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(r.data)
+      val token = res.accessToken
+      val action = pendingYt; pendingYt = null
+      if (token != null && action != null) action(token) else ytPublish(message = "No se completó el inicio de sesión")
+    } catch (e: Exception) {
+      pendingYt = null
+      ytPublish(message = "No se completó el inicio de sesión: ${e.message}")
+    }
+  }
 
   private var stream: GenericStream? = null
   private var surfaceReady = false
@@ -152,9 +179,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     tvDim = findViewById(R.id.tvDim)
     btnMute.setOnClickListener { setMuted(!muted, fromUser = true) }
     findViewById<View>(R.id.btnDim).setOnClickListener { setDim(true) }
-    findViewById<View>(R.id.btnMark).setOnClickListener {
+    findViewById<View>(R.id.btnMark).setOnClickListener { v ->
       web.evaluateJavascript("window.scCmd && scCmd('mark')", null)
       vibrate()
+      val b = v as TextView
+      b.text = "✓"; b.setBackgroundResource(R.drawable.bg_btn_on); b.setTextColor(ContextCompat.getColor(this, R.color.bg))
+      ui.postDelayed({ b.text = "⭐"; b.setBackgroundResource(R.drawable.bg_btn); b.setTextColor(ContextCompat.getColor(this, R.color.text)) }, 1000)
     }
     findViewById<View>(R.id.btnMark).setOnLongClickListener { showHighlightsMenu(); true }
     dimOverlay.setOnClickListener { setDim(false) }
@@ -313,11 +343,16 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         .setNegativeButton("Seguir emitiendo", null).show()
       return
     }
+    startLive(fromRemote = false)
+  }
+
+  private fun startLive(fromRemote: Boolean) {
+    if (wantLive) return
     val s = stream ?: return toast("La cámara aún no está lista")
     val url = prefs.streamUrl()
     if (url == null) {
       toast("Configura la plataforma y la clave de emisión")
-      startActivity(Intent(this, SettingsActivity::class.java))
+      if (!fromRemote) startActivity(Intent(this, SettingsActivity::class.java))
       return
     }
     wantLive = true; connected = false; reconnecting = false; liveSince = 0L; liveStartTs = 0L
@@ -473,6 +508,123 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private fun tick() {
     updateOverlay()
     updateStatus()
+    val now = System.currentTimeMillis()
+    if (now - lastStatusAt > 3000) { lastStatusAt = now; publishStatus() }
+    if (serverNow() - remoteOpenTs < 15_000 && now - lastPreviewAt > 5000) { lastPreviewAt = now; sendPreview() }
+  }
+
+  private fun publishStatus() {
+    val bm = getSystemService(BATTERY_SERVICE) as? BatteryManager
+    val o = JSONObject()
+      .put("wantLive", wantLive).put("connected", connected).put("reconnecting", reconnecting)
+      .put("rec", stream?.isRecording == true)
+      .put("liveSecs", if (liveSince > 0) (System.currentTimeMillis() - liveSince) / 1000 else 0)
+      .put("recSecs", if (recordSince > 0 && stream?.isRecording == true) (System.currentTimeMillis() - recordSince) / 1000 else 0)
+      .put("battery", bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1)
+      .put("charging", bm?.isCharging ?: false)
+      .put("bitrateKbps", currentBitrate / 1000)
+      .put("weakNet", wantLive && connected && System.currentTimeMillis() - weakNetAt < 4000)
+      .put("muted", muted).put("dim", dimOverlay.visibility == View.VISIBLE)
+      .put("liveStartTs", liveStartTs)
+    web.evaluateJavascript("window.scStatus && scStatus($o)", null)
+  }
+
+  /** Foto pequeña de lo que se emite (con marcador) para la ventana Remoto. */
+  private fun sendPreview() {
+    val s = stream ?: return
+    if (previewBusy || !s.isOnPreview) return
+    previewBusy = true
+    try {
+      s.getGlInterface().takePhoto { bmp ->
+        Thread {
+          try {
+            val w = 480; val h = (bmp.height * w / bmp.width.toFloat()).toInt().coerceAtLeast(1)
+            val small = Bitmap.createScaledBitmap(bmp, w, h, true)
+            val out = ByteArrayOutputStream()
+            small.compress(Bitmap.CompressFormat.JPEG, 55, out)
+            val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+            runOnUiThread { web.evaluateJavascript("window.scPreview && scPreview('data:image/jpeg;base64,$b64')", null) }
+          } catch (_: Exception) {} finally { previewBusy = false }
+        }.start()
+      }
+    } catch (_: Exception) { previewBusy = false }
+  }
+
+  /** Órdenes que llegan desde la ventana Remoto del mando. */
+  private fun remoteCommand(action: String) {
+    when (action) {
+      "live_start" -> startLive(fromRemote = true)
+      "live_stop" -> if (wantLive) stopLive()
+      "rec_toggle" -> toggleRecord()
+      "mute_toggle" -> setMuted(!muted, fromUser = true)
+      "zoom_in" -> zoomBy(1.25f)
+      "zoom_out" -> zoomBy(0.8f)
+      "switch" -> switchCamera()
+      "dim_on" -> setDim(true)
+      "dim_off" -> setDim(false)
+    }
+    lastStatusAt = 0L
+  }
+
+  /* ======================= YouTube ======================= */
+
+  private fun withYtToken(action: (String) -> Unit) {
+    val req = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(YouTubeClient.SCOPE))).build()
+    Identity.getAuthorizationClient(this).authorize(req)
+      .addOnSuccessListener { res ->
+        val pi = res.pendingIntent
+        if (res.hasResolution() && pi != null) {
+          pendingYt = action
+          ytAuth.launch(IntentSenderRequest.Builder(pi.intentSender).build())
+        } else {
+          val t = res.accessToken
+          if (t != null) action(t) else ytPublish(message = "Google no devolvió acceso a YouTube")
+        }
+      }
+      .addOnFailureListener { e ->
+        ytPublish(message = "No se pudo conectar con Google (${e.message}). Revisa la configuración de Google Cloud.")
+      }
+  }
+
+  private fun ytPublish(connected: Boolean = false, account: String = "", broadcasts: List<YouTubeClient.Broadcast> = emptyList(), message: String = "") {
+    val arr = JSONArray()
+    val selected = prefs.ytBroadcastId
+    broadcasts.forEach { b ->
+      arr.put(JSONObject().put("id", b.id).put("title", b.title).put("when", prettyDate(b.start))
+        .put("privacy", when (b.privacy) { "public" -> "pública"; "unlisted" -> "oculta"; "private" -> "privada"; else -> b.privacy })
+        .put("status", when (b.status) { "created", "ready" -> "programada"; "live" -> "EN DIRECTO"; "complete" -> "terminada"; "testing" -> "en prueba"; else -> b.status })
+        .put("selected", b.id == selected))
+    }
+    val o = JSONObject().put("connected", connected).put("account", account).put("broadcasts", arr).put("message", message)
+    runOnUiThread { web.evaluateJavascript("window.scYt && scYt($o)", null) }
+  }
+
+  private fun prettyDate(iso: String): String = try {
+    val d = java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault())
+    String.format(Locale("es", "ES"), "%02d/%02d %02d:%02d", d.dayOfMonth, d.monthValue, d.hour, d.minute)
+  } catch (_: Exception) { iso }
+
+  private fun ytRun(work: (String) -> String?) {
+    withYtToken { token ->
+      Thread {
+        var msg: String? = null
+        try { msg = work(token) } catch (e: Exception) { msg = e.message ?: "Error con YouTube" }
+        try {
+          ytPublish(true, YouTubeClient.channelTitle(token), YouTubeClient.listBroadcasts(token), msg.orEmpty())
+        } catch (e: Exception) {
+          ytPublish(message = e.message ?: "Error con YouTube")
+        }
+      }.start()
+    }
+  }
+
+  /** Usa la emisión: la asocia a la emisión SportCam y guarda su clave en Ajustes. */
+  private fun ytSelect(token: String, broadcastId: String) {
+    val st = YouTubeClient.ensureStream(token)
+    YouTubeClient.bind(token, broadcastId, st.id)
+    prefs.platform = Prefs.PLATFORM_YOUTUBE
+    prefs.youtubeKey = st.key
+    prefs.ytBroadcastId = broadcastId
   }
 
   private fun updateOverlay() {
@@ -708,6 +860,54 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
           updateOverlay()
         }
       } catch (_: Exception) {}
+    }
+
+    @JavascriptInterface
+    fun command(action: String) { ui.post { remoteCommand(action) } }
+
+    @JavascriptInterface
+    fun onRemote(ts: Double) { remoteOpenTs = ts.toLong() }
+
+    @JavascriptInterface
+    fun openVideoHighlights() {
+      ui.post {
+        val st = overlayState
+        startActivity(Intent(this@MainActivity, VideoHighlightsActivity::class.java)
+          .putExtra("matches", st?.savedMatchesJson ?: "[]")
+          .putExtra("before", st?.hlBefore ?: 10)
+          .putExtra("after", st?.hlAfter ?: 3))
+      }
+    }
+
+    @JavascriptInterface
+    fun ytConnect() { ui.post { ytRun { null } } }
+
+    @JavascriptInterface
+    fun ytCreate(json: String) {
+      ui.post {
+        ytRun { token ->
+          val o = JSONObject(json)
+          val st = YouTubeClient.ensureStream(token)
+          val id = YouTubeClient.createBroadcast(token, o.getString("title"), o.optString("desc"), o.getString("when"), o.optString("privacy", "unlisted"), st.id)
+          prefs.platform = Prefs.PLATFORM_YOUTUBE; prefs.youtubeKey = st.key; prefs.ytBroadcastId = id
+          "Emisión creada y lista: al pulsar EN DIRECTO se emitirá en ella."
+        }
+      }
+    }
+
+    @JavascriptInterface
+    fun ytUse(id: String) {
+      ui.post { ytRun { token -> ytSelect(token, id); "Emisión seleccionada: la app emitirá en ella." } }
+    }
+
+    @JavascriptInterface
+    fun ytUpdateDesc(id: String, desc: String) {
+      ui.post {
+        val marks = overlayState?.marks.orEmpty()
+        val start = if (liveStartTs > 0) liveStartTs else lastRecording?.startTs ?: 0L
+        val full = if (start > 0 && marks.isNotEmpty()) "$desc\n\nMOMENTOS DEL PARTIDO\n${Highlights.chapters(start, marks)}" else desc
+        ytRun { token -> YouTubeClient.updateDescription(token, id, full); "Descripción actualizada en YouTube." }
+      }
     }
 
     @JavascriptInterface
