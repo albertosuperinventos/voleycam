@@ -24,3 +24,12 @@
 - Ventana 📡 Remoto en el mando del segundo móvil: vista previa, estado y control de la cámara; avisos de batería/red.
 - Resumen desde vídeo de la galería, con ⭐ y aplicando marcas de un partido (desfase ajustable).
 - Conexión con YouTube: crear emisión programada, elegir emisión, actualizar descripción con capítulos (requiere configurar Google Cloud).
+## Versión 1.5.0
+- Nombre visible VoleyCam.
+- Escudo del club Voleibol Tomares para EDM Voleibol Tomares.
+- Imagen de portada: miniatura de YouTube al crear emisión y alternada en PREPARTIDO.
+- Lista de emisiones de YouTube: en uso arriba, próximas debajo, anteriores ocultas.
+
+## Siguiente versión
+- Rediseño del mando por momento de uso: Juego · Pantalla · Partido · Después · Ajustes (boceto antes de programar). Mini mando con nombres completos y botones con texto.
+- Opcional: firma de la app como secreto de GitHub (requiere reinstalar y nueva SHA-1 en Google Cloud).
