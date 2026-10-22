@@ -88,6 +88,9 @@ class SettingsActivity : AppCompatActivity() {
         .setNegativeButton("Cancelar", null)
         .show()
     }
+    findViewById<Button>(R.id.btnUseKey).setOnClickListener {
+      ChannelPicker.show(this, prefs) { tvKey.text = prefs.channelKey; updateQr(); setResult(RESULT_OK) }
+    }
     findViewById<Button>(R.id.btnSave).setOnClickListener { save(); finish() }
 
     updatePlatformFields()

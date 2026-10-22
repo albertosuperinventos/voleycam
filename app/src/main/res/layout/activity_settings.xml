@@ -127,6 +127,12 @@
           android:layout_height="wrap_content"
           android:text="Nueva" />
       </LinearLayout>
+      <Button
+        android:id="@+id/btnUseKey"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="Usar el canal de otro móvil (QR o clave)" />
 
       <TextView
         android:layout_width="match_parent"

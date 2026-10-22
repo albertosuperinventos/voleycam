@@ -3,108 +3,155 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#0b1220">
+<meta name="theme-color" content="#FFFFFF">
 <title>VoleyCam · Mando</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0b1220; --panel:#141d2f; --panel2:#1b263c; --line:#26334d;
-  --text:#eef2f8; --muted:#8c9ab3; --accent:#c6f432; --danger:#ff5d5d; --warn:#ffb020;
+  /* Pabellón: pista clara, tinta marino, azul y amarillo de balón */
+  --bg:#EDF1F5; --panel:#FFFFFF; --panel2:#F3F6F9; --line:#D6DEE8;
+  --text:#13233F; --muted:#5E6E85; --accent:#1D5FB4; --accent-s:#E3ECF8;
+  --sun:#FFC629; --sun-s:#FFF4D1; --danger:#D62839; --ok:#1E9E5A; --warn:#B26B00;
   --r:14px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 Inter,system-ui,sans-serif;height:100%}
-body{display:flex;flex-direction:column;min-height:100%;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
-button{font:inherit;color:inherit;border:0;background:var(--panel2);border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:600}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 Barlow,system-ui,sans-serif;height:100%}
+body{display:flex;flex-direction:column;min-height:100%;padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+button{font:600 15px Barlow,sans-serif;color:var(--text);background:var(--panel);border:1.5px solid var(--line);border-radius:11px;padding:10px 12px;cursor:pointer}
 button:active{transform:scale(.97)}
-button.primary{background:var(--accent);color:#0b1220}
-button.danger{background:transparent;color:var(--danger);border:1px solid #5a2a2a}
-button.ghost{background:transparent;border:1px solid var(--line)}
-button.on{background:var(--accent);color:#0b1220}
-input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
-input[type=color]{padding:2px;height:42px}
-label{display:block;color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
-header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
-header h1{font:800 22px 'Barlow Condensed',sans-serif;letter-spacing:.03em;margin:0;flex:1}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.sun{background:var(--sun);border-color:var(--sun);color:var(--text)}
+button.danger{color:var(--danger);border-color:#f0c2c8;background:var(--panel)}
+button.ghost{background:transparent}
+button.on{background:var(--accent-s);border-color:var(--accent);color:var(--accent)}
+button.flash{background:var(--ok)!important;border-color:var(--ok)!important;color:#fff!important}
+input,select,textarea{font:500 16px Barlow,sans-serif;color:var(--text);background:var(--panel);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+input[type=color]{padding:2px;height:44px}
+label{display:block;color:var(--muted);font:600 14px Barlow,sans-serif;margin:10px 2px 5px}
+header{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header h1{font:800 24px 'Barlow Condensed',sans-serif;margin:0;flex:1}
 header h1 span{color:var(--accent)}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--danger)}
-.dot.ok{background:#3ddc84}
-.chip{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
-main{padding:14px 16px;flex:1}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px}
-.card h2{font:700 13px Inter,sans-serif;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px}
-.row{display:flex;gap:10px;align-items:center}
+.dot.ok{background:var(--ok)}
+.chip{font:600 13px Barlow;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.hbtn{padding:6px 9px;font-size:16px;line-height:1}
+main{padding:12px;flex:1;display:flex;flex-direction:column;gap:14px}
+.sec{display:flex;flex-direction:column;gap:7px}
+.sec>h2{margin:0 2px;font:700 19px 'Barlow Condensed',sans-serif;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.sec>h2 small{font:500 14px Barlow;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.card h2{margin:0 0 8px;font:700 18px 'Barlow Condensed',sans-serif}
+.row{display:flex;gap:8px;align-items:center}
 .row>*{flex:1}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.muted{color:var(--muted)}
-.hidden{display:none!important}
-nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#0e1626;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:10}
-nav button{flex:1;background:none;border-radius:0;padding:12px 4px;color:var(--muted);font-size:13px}
-nav button.act{color:var(--accent)}
-
-/* Marcador */
-.teams{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.tpanel{position:relative;border-radius:var(--r);background:var(--panel);border:1px solid var(--line);overflow:hidden;user-select:none}
-.tpanel .bar{height:6px}
-.tpanel .hit{display:flex;flex-direction:column;align-items:center;padding:12px 8px 6px;cursor:pointer}
-.tpanel .hit:active{background:var(--panel2)}
-.logo{width:44px;height:44px;border-radius:50%;background:#0006 center/contain no-repeat;border:1px solid var(--line)}
-.tname{font:700 20px 'Barlow Condensed',sans-serif;letter-spacing:.04em;margin-top:6px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.pts{font:800 84px/1 'Barlow Condensed',sans-serif;margin:4px 0}
-.tfoot{display:flex;gap:6px;padding:0 8px 10px}
-.tfoot button{flex:1;padding:8px}
-.serve{position:absolute;top:14px;right:10px;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:transparent;padding:0}
-.serve.on{background:var(--warn);border-color:var(--warn)}
-.mid{display:flex;justify-content:center;gap:16px;align-items:center;margin:12px 0;font:700 18px 'Barlow Condensed',sans-serif;letter-spacing:.05em}
-.mid b{color:var(--accent);font-size:26px}
-.clock{font:800 64px/1 'Barlow Condensed',sans-serif;text-align:center;letter-spacing:.02em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .btns{display:flex;flex-wrap:wrap;gap:8px}
 .btns button{flex:1 1 30%}
-.final{text-align:center;color:var(--accent);font:800 20px 'Barlow Condensed',sans-serif;letter-spacing:.08em;margin:8px 0}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.hidden{display:none!important}
+.link{background:none;border:0;padding:4px;color:var(--accent);font:600 15px Barlow}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:10}
+nav button{flex:1;background:none;border:0;border-top:3px solid transparent;border-radius:0;padding:8px 2px 10px;color:var(--muted);font:600 12px Barlow}
+nav button b{display:block;font-size:19px;font-weight:400;margin-bottom:1px}
+nav button.act{color:var(--accent);border-top-color:var(--accent)}
+body.native nav{position:sticky}
+
+/* Marcador (Juego) */
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tpanel{position:relative;border-radius:18px;background:var(--panel);border:1px solid var(--line);overflow:hidden;user-select:none;text-align:center}
+.tpanel .bar{height:10px}
+.tpanel .hit{display:flex;flex-direction:column;align-items:center;padding:10px 6px 2px;cursor:pointer}
+.tpanel .hit:active{background:var(--panel2)}
+.logo{width:52px;height:52px;background:center/contain no-repeat;flex:0 0 auto}
+.tname{font:800 22px 'Barlow Condensed',sans-serif;letter-spacing:.02em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pts{font:800 112px/.92 'Barlow Condensed',sans-serif;letter-spacing:-.02em;margin:0 0 4px}
+.serve{position:absolute;top:20px;right:10px;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:var(--panel);padding:0}
+.serve.on{background:var(--sun);border-color:#e6ad00}
+.tsets{display:flex;align-items:center;justify-content:center;gap:8px;padding:0 8px 8px}
+.tsets button{width:36px;height:34px;padding:0;font-size:19px}
+.tsets b{font:800 30px 'Barlow Condensed',sans-serif;color:var(--accent);min-width:22px}
+.tsets span{font:600 13px Barlow;color:var(--muted)}
+.tfoot{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 8px 9px}
+.setline{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px}
+.pill{background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:3px 11px;font:700 17px 'Barlow Condensed',sans-serif;color:var(--muted)}
+.pill.now{background:var(--text);border-color:var(--text);color:#fff}
+.final{text-align:center;color:var(--accent);font:800 22px 'Barlow Condensed',sans-serif}
+.clock{font:800 64px/1 'Barlow Condensed',sans-serif;text-align:center}
+.tline{display:flex;align-items:center;gap:10px}
+.tline .t{font:800 36px 'Barlow Condensed',sans-serif;flex:1}
+.sw{width:46px;height:28px;border-radius:99px;background:var(--line);position:relative;padding:0;border:0;flex:0 0 46px}
+.sw:after{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0003;transition:left .15s}
+.sw.on{background:var(--accent)}.sw.on:after{left:21px}
+.optrow{display:flex;align-items:center;gap:10px;padding:8px 2px;border-top:1px solid var(--line)}
+.optrow:first-child{border-top:0}
+.optrow>span{flex:1}
+.nowbar{display:flex;align-items:center;gap:10px;border-radius:14px;padding:10px 12px;background:var(--panel);border:1.5px solid var(--line)}
+.nowbar.full{background:var(--sun-s);border-color:var(--sun)}
+.nowbar b{flex:1;font:700 19px 'Barlow Condensed',sans-serif}
+.nowbar .ld{width:10px;height:10px;border-radius:50%;background:var(--muted)}
+.nowbar.full .ld{background:var(--danger)}
+.sptiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sptile{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px;font:600 13px Barlow;border-radius:12px}
+.sptile i{display:block;width:100%;height:48px;background:center/contain no-repeat}
+.sptile.add{justify-content:center;color:var(--muted);border-style:dashed}
+.posgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px;width:86px;padding:3px;border:1.5px solid var(--line);border-radius:9px}
+.posgrid button{height:22px;padding:0;border:0;border-radius:4px;background:var(--panel2)}
+.posgrid button.on{background:var(--accent)}
 
 /* Listas */
-.item{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.item{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
 .item:first-child{border-top:0}
 .item .grow{flex:1;min-width:0}
-.item .sw{width:14px;height:14px;border-radius:4px;display:inline-block;vertical-align:middle;margin-right:6px}
-.preview-logo{width:64px;height:64px;border-radius:12px;background:#0006 center/contain no-repeat;border:1px dashed var(--line);flex:0 0 64px}
+.item .swc{width:12px;height:12px;border-radius:3px;display:inline-block;vertical-align:middle;margin-right:5px}
+.preview-logo{width:60px;height:60px;border-radius:12px;background:var(--panel2) center/contain no-repeat;border:1px dashed var(--line);flex:0 0 60px}
+.restable{width:100%;border-collapse:collapse}
+.restable th{font:600 13px Barlow;color:var(--muted);padding:4px}
+.restable td{text-align:center;font:700 22px 'Barlow Condensed',sans-serif;padding:4px}
+.restable td.n{text-align:left;font:800 20px 'Barlow Condensed',sans-serif}
+.restable td.lo{color:#a7b3c3}
+.restable td.win{background:var(--accent);color:#fff;border-radius:8px}
+.restable td.tot{background:var(--panel2);border-radius:8px}
+.ytuse{border:2px solid var(--accent);border-radius:12px;padding:9px 11px;background:var(--accent-s)}
+.ytuse b{font:700 18px 'Barlow Condensed',sans-serif}
 .gate{max-width:420px;margin:12vh auto;padding:0 20px;text-align:center}
-.gate h1{font:800 40px 'Barlow Condensed',sans-serif;margin:0 0 6px}
+.gate h1{font:800 44px 'Barlow Condensed',sans-serif;margin:0 0 6px}
 .gate h1 span{color:var(--accent)}
 code{background:var(--panel2);padding:2px 6px;border-radius:6px;word-break:break-all}
-.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--accent);color:#0b1220;padding:10px 16px;border-radius:10px;font-weight:700;z-index:20}
-body.native nav{position:sticky}
-.hbtn{padding:6px 10px;font-size:18px;line-height:1;background:var(--panel2)}
+.toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;z-index:40;max-width:90vw;text-align:center}
+.warnbar{background:#FDE7EA;color:#8a1020;font-size:14px;font-weight:600;padding:7px 14px;border-bottom:1px solid #f3c2c9}
+
+/* Mini mando / compacto */
 body.compact{padding-bottom:0}
 body.compact nav{display:none}
 body.compact header{padding:6px 10px}
-body.compact header h1{font-size:18px}
-body.compact main{padding:8px 10px}
-.crow{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:6px;padding-right:6px;min-height:58px}
-.cbar{width:6px;align-self:stretch}
-.clogo{width:30px;height:30px;border-radius:50%;background:#0006 center/contain no-repeat;flex:0 0 30px}
-.cname{flex:1;min-width:0;font:700 18px 'Barlow Condensed',sans-serif;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cserve{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);background:transparent;padding:0;flex:0 0 20px}
-.cserve.on{background:var(--warn);border-color:var(--warn)}
-.csets{display:flex;align-items:center;gap:2px}
-.csets button{padding:4px 8px}
-.csets b{min-width:18px;text-align:center;color:var(--accent);font:800 20px 'Barlow Condensed',sans-serif}
-.cpts{min-width:64px;padding:4px 8px;font:800 38px/1 'Barlow Condensed',sans-serif;background:#fff;color:#0b1220}
-.cmin{padding:8px 8px}
-.cstrip{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
-.cstrip button{padding:8px 10px;font-size:14px}
-.cstrip .cinfo{font:700 16px 'Barlow Condensed',sans-serif;color:var(--muted);letter-spacing:.04em}
-.cclock{font:800 26px/1 'Barlow Condensed',sans-serif;min-width:62px;text-align:center}
+body.compact header h1{font-size:19px}
+body.compact main{padding:8px;gap:6px}
+.crow{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;padding-right:6px;min-height:56px}
+.cbar{width:7px;align-self:stretch}
+.clogo{width:30px;height:30px;background:center/contain no-repeat;flex:0 0 30px}
+.cname{flex:1;min-width:0;font:800 20px 'Barlow Condensed',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cserve{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);background:var(--panel);padding:0;flex:0 0 20px}
+.cserve.on{background:var(--sun);border-color:#e6ad00}
+.csets{display:flex;align-items:center;gap:3px}
+.csets button{padding:3px 8px}
+.csets b{min-width:18px;text-align:center;color:var(--accent);font:800 21px 'Barlow Condensed',sans-serif}
+.cpts{min-width:62px;padding:3px 8px;font:800 38px/1 'Barlow Condensed',sans-serif;background:var(--text);border-color:var(--text);color:#fff}
+.cmin{padding:8px}
+.cinfo{display:flex;justify-content:space-between;align-items:center;font:700 17px 'Barlow Condensed',sans-serif;color:var(--muted);padding:0 4px}
+.cbtns{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.cbtns button{padding:9px 2px;font-size:14px}
+.cclock{font:800 22px 'Barlow Condensed',sans-serif;color:var(--text)}
 .setrow{display:flex;align-items:center;gap:8px;margin-top:8px}
 .setrow input{width:64px;text-align:center;padding:8px}
-.setrow span{min-width:48px;color:var(--muted);font-weight:600}
-.midbtn{padding:4px 10px}
-button.flash{background:#3ddc84!important;color:#0b1220!important}
-.warnbar{background:#5a1f1f;color:#ffd0c8;font-size:13px;font-weight:600;padding:6px 16px}
-#remoteModal{position:fixed;inset:0;background:var(--bg);z-index:30;overflow:auto;padding:12px 16px 24px}
-#remoteModal .prev{width:100%;aspect-ratio:16/9;border-radius:12px;background:#000 center/contain no-repeat;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
-.stgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:12px 0;font-size:14px}
+.setrow span{min-width:44px;color:var(--muted);font-weight:600}
+
+/* Remoto */
+#remoteModal{position:fixed;inset:0;background:var(--bg);z-index:30;overflow:auto;padding:12px 14px 24px}
+#remoteModal .prev{width:100%;aspect-ratio:16/9;border-radius:12px;background:#000 center/contain no-repeat;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:#cbd5e1;font-size:14px}
+.stgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:12px 0;font-size:15px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
 .stgrid b{color:var(--text)}
 .stgrid span{color:var(--muted)}
 </style>
@@ -186,7 +233,8 @@ function start() {
   let offset = 0;
   let connected = false;
   let loaded = false;
-  let tab = 'score';
+  let tab = (() => { try { const t = localStorage.getItem('sc_tab'); return ['juego','pantalla','partido','despues','ajustes'].includes(t) ? t : 'juego'; } catch (e) { return 'juego'; } })();
+  let showSets = false, timerOpen = false, spFormOpen = false;
   let compact = IS_NATIVE ? hash.get('mini') === '1' : (() => { try { return localStorage.getItem('sc_compact') === '1'; } catch (e) { return false; } })();
   const undo = [];
   let editing = null;   // id de equipo en edición o 'new'
@@ -204,11 +252,11 @@ function start() {
   });
   teamsRef.on('value', s => { teams = s.val() || {}; render(); pushNative(); });
   sponsRef.on('value', s => { sponsors = s.val() || {}; render(); pushNative(); });
-  matchesRef.on('value', s => { matches = s.val() || {}; if (tab === 'match') render(); });
+  matchesRef.on('value', s => { matches = s.val() || {}; if (tab !== 'juego') render(); });
   coverRef.on('value', s => {
     cover = s.val() || '';
     if (IS_NATIVE) { try { window.SportCamNative.setCover(cover); } catch (e) {} }
-    if (tab === 'match' && !compact) render();
+    if (tab !== 'juego' && !compact) render();
   });
   statusRef.on('value', s => { status = s.val(); if (!IS_NATIVE) { renderWarn(); if (remoteOpen) renderRemote(); } });
   if (IS_NATIVE) {
@@ -222,7 +270,7 @@ function start() {
     });
     remoteRef.on('value', s => { try { window.SportCamNative.onRemote(s.val() || 0); } catch (e) {} });
   }
-  marksRef.on('value', s => { marks = s.val() || {}; if (tab === 'match' && !compact) render(); pushNative(); });
+  marksRef.on('value', s => { marks = s.val() || {}; if (tab !== 'juego' && !compact) render(); pushNative(); });
 
   /* ---------- Acciones ---------- */
   function act(fn) {
@@ -284,7 +332,7 @@ function start() {
   // La app publica su estado, la vista previa y el estado de YouTube a través de estas funciones
   window.scStatus = o => statusRef.set(Object.assign({ ts: now() }, o));
   window.scPreview = img => previewRef.set({ ts: now(), img });
-  window.scYt = o => { ytState = Object.assign({ connected: false, broadcasts: [], message: '' }, o); if (tab === 'match' && !compact) render(); };
+  window.scYt = o => { ytState = Object.assign({ connected: false, broadcasts: [], message: '' }, o); if (tab !== 'juego' && !compact) render(); };
 
   function savedMatchesForNative() {
     const cur = { title: 'Partido actual', liveStart: (status && status.liveStartTs) || 0,
@@ -355,12 +403,13 @@ function start() {
       <div id="warn"></div>
       <main id="main"></main>
       <nav>
-        <button data-tab="score">Marcador</button>
-        <button data-tab="graphics">Rótulos</button>
-        <button data-tab="teams">Equipos</button>
-        <button data-tab="match">Partido</button>
+        <button data-tab="juego"><b>●</b>Juego</button>
+        <button data-tab="pantalla"><b>▣</b>Pantalla</button>
+        <button data-tab="partido"><b>☰</b>Partido</button>
+        <button data-tab="despues"><b>✓</b>Después</button>
+        <button data-tab="ajustes"><b>⚙</b>Ajustes</button>
       </nav>`;
-    $app.querySelectorAll('nav button').forEach(b => b.onclick = () => { tab = b.dataset.tab; editing = null; render(); window.scrollTo(0, 0); });
+    $app.querySelectorAll('nav button').forEach(b => b.onclick = () => { tab = b.dataset.tab; editing = null; editingSp = null; try { localStorage.setItem('sc_tab', tab); } catch (e) {} render(); window.scrollTo(0, 0); });
     document.getElementById('cmpBtn').onclick = () => setCompact(!compact);
     const rb = document.getElementById('remBtn'); if (rb) rb.onclick = openRemote;
   }
@@ -464,13 +513,26 @@ function start() {
       ae.addEventListener('blur', () => setTimeout(render, 0), { once: true });
       return;
     }
-    m.innerHTML = compact ? viewCompact() : tab === 'score' ? viewScore() : tab === 'graphics' ? viewGraphics() : tab === 'teams' ? viewTeams() : viewMatch();
+    const views = { juego: viewScore, pantalla: viewGraphics, partido: viewPartido, despues: viewDespues, ajustes: viewAjustes };
+    m.innerHTML = compact ? viewCompact() : (views[tab] || viewScore)();
     bind(m);
     tickClock();
   }
 
+  const sec = (title, body, extra) => `<section class="sec"><h2>${title}${extra ? `<small>${extra}</small>` : ''}</h2>${body}</section>`;
+  const sw = (on, act, attrs = '') => `<button class="sw ${on ? 'on' : ''}" data-act="${act}" ${attrs} aria-pressed="${on}"></button>`;
+  const opt = (label, on, act, attrs) => `<div class="optrow"><span>${label}</span>${sw(on, act, attrs)}</div>`;
+  const tmDots = side => '●'.repeat(live.to[side]) + '○'.repeat(2 - live.to[side]);
+  const sideTeam = side => teamView(side === 'h' ? live.homeId : live.awayId, side === 'h' ? 'LOCAL' : 'VISITANTE');
+  /** Qué pantalla completa se ve ahora en el vídeo (solo puede haber una). */
+  function onScreen() {
+    if (live.spFull.show && sponsors[live.spFull.id]) return { kind: 'sp', text: 'Patrocinador: ' + (sponsors[live.spFull.id].name || 'logo') };
+    if (live.brk.show) return { kind: 'brk', text: live.brk.text };
+    return null;
+  }
+
   function teamPanel(side) {
-    const t = teamView(side === 'h' ? live.homeId : live.awayId, side === 'h' ? 'LOCAL' : 'VISITANTE');
+    const t = sideTeam(side);
     const volley = live.sport === 'volley';
     return `<div class="tpanel">
       <div class="bar" style="background:${esc(t.color)}"></div>
@@ -480,18 +542,21 @@ function start() {
         <div class="tname">${esc(t.short)}</div>
         <div class="pts">${live.score[side]}</div>
       </div>
+      ${volley ? `<div class="tsets"><button data-act="setAdj" data-s="${side}" data-v="-1">−</button><span>SETS</span><b>${live.sets[side]}</b><button data-act="setAdj" data-s="${side}" data-v="1">+</button></div>` : ''}
       <div class="tfoot"><button class="ghost" data-act="minus" data-s="${side}">−1</button>
-        ${volley ? `<button data-act="tmCycle" data-s="${side}" title="Tiempos muertos usados">TM ${'●'.repeat(live.to[side])}${'○'.repeat(2 - live.to[side])}</button>` : ''}</div>
+        ${volley ? `<button data-act="tmCycle" data-s="${side}" title="Tiempos muertos usados">TM ${tmDots(side)}</button>` : '<span></span>'}</div>
     </div>`;
   }
 
   function compactRow(side) {
-    const t = teamView(side === 'h' ? live.homeId : live.awayId, side === 'h' ? 'LOCAL' : 'VISITANTE');
+    const t = sideTeam(side);
     const volley = live.sport === 'volley';
+    const nm = (teams[side === 'h' ? live.homeId : live.awayId] || {}).name || '';
+    const full = nm && nm.length <= 14 ? nm : t.short;
     return `<div class="crow">
       <div class="cbar" style="background:${esc(t.color)}"></div>
       <div class="clogo" style="${t.logo ? `background-image:url('${t.logo}')` : ''}"></div>
-      <div class="cname">${esc(t.short)}</div>
+      <div class="cname">${esc(full)}</div>
       ${volley ? `<button class="cserve ${live.serve === side ? 'on' : ''}" data-act="serve" data-s="${side}" title="Saque"></button>
         <div class="csets"><button data-act="setAdj" data-s="${side}" data-v="-1">−</button><b>${live.sets[side]}</b><button data-act="setAdj" data-s="${side}" data-v="1">+</button></div>` : ''}
       <button class="cpts" data-act="${volley ? 'point' : 'goal'}" data-s="${side}">${live.score[side]}</button>
@@ -502,27 +567,23 @@ function start() {
   function viewCompact() {
     const volley = live.sport === 'volley';
     const showClock = !volley || live.timer.show;
+    const scr = onScreen();
+    const info = volley ? `${live.finished ? 'FINAL' : 'SET ' + live.setNo}${live.history.length ? ' · ' + live.history.map(x => x.h + '-' + x.a).join(' ') : ''}` : esc(live.clock.period);
+    const quick = volley ? ['TIEMPO MUERTO', 'tm', 'T. muerto'] : ['DESCANSO', 'half', 'Descanso'];
     return `${compactRow('h')}${compactRow('a')}
-      <div class="cstrip">
-        ${volley ? `<span class="cinfo">${live.finished ? 'FINAL' : 'SET ' + live.setNo}${live.history.length ? ' · ' + live.history.map(x => x.h + '-' + x.a).join(' ') : ''}</span>` : `<span class="cinfo">${esc(live.clock.period)}</span>`}
-      </div>
-      <div class="cstrip">
-        <button data-act="undo">↶</button>
-        <button data-act="mark">⭐</button>
-        <button class="${live.muted ? 'danger' : ''}" data-act="muteToggle">${live.muted ? '🔇' : '🎙'}</button>
-        ${volley ? `<button data-act="tmCycle" data-s="h">TM L ${'●'.repeat(live.to.h)}${'○'.repeat(2 - live.to.h)}</button>
-          <button data-act="tmCycle" data-s="a">TM V ${'●'.repeat(live.to.a)}${'○'.repeat(2 - live.to.a)}</button>` : ''}
-        ${volley ? `<button class="${live.timer.show ? 'on' : ''}" data-act="timerToggle">⏱ ${live.timer.show ? 'Visible' : 'Oculto'}</button>` : ''}
-        ${showClock ? `<span class="cclock" id="clk">00:00</span><button class="${live.clock.running ? '' : 'primary'}" data-act="clk">${live.clock.running ? '❚❚' : '▶'}</button>` : ''}
-        ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO" data-k="tm">T. muerto</button>`
-                 : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO" data-k="half">Descanso</button>`}
+      <div class="cinfo"><span>${info}${scr ? ` · <span style="color:var(--danger)">● ${esc(scr.text)}</span>` : ''}${live.muted ? ' · 🔇' : ''}</span>
+        ${showClock ? `<span class="row" style="flex:0 0 auto;gap:6px"><span class="cclock" id="clk">00:00</span><button class="${live.clock.running ? '' : 'primary'}" style="padding:4px 10px" data-act="clk">${live.clock.running ? '❚❚' : '▶'}</button></span>` : ''}</div>
+      <div class="cbtns">
+        <button data-act="undo">Deshacer</button>
+        <button data-act="mark">⭐ Jugada</button>
+        ${scr ? `<button class="sun" data-act="allHide">Quitar</button>`
+              : `<button data-act="brkq" data-v="${quick[0]}" data-k="${quick[1]}">${quick[2]}</button>`}
+        <button class="primary" data-act="expand">Más ⤢</button>
       </div>`;
   }
 
   function timerCard(volley) {
-    return `<div class="card" style="margin-top:14px">
-      ${volley ? `<div class="row" style="margin-bottom:8px"><h2 style="margin:0">Temporizador</h2>
-        <button style="flex:0 0 auto" class="${live.timer.show ? 'on' : ''}" data-act="timerToggle">${live.timer.show ? 'Visible en vídeo' : 'Oculto'}</button></div>` : ''}
+    return `<div class="card">
       <div class="clock" id="clk">00:00</div>
       <p class="muted" style="text-align:center;margin:4px 0 10px">${volley ? '' : esc(live.clock.period) + ' · '}${live.clock.dir === 'down' ? 'cuenta atrás' : 'ascendente'}</p>
       <div class="btns">
@@ -547,103 +608,230 @@ function start() {
     const rows = live.history.map((x, i) => `<div class="setrow"><span>Set ${i + 1}</span>
       <input type="number" min="0" id="sh${i}" value="${x.h}"> – <input type="number" min="0" id="sa${i}" value="${x.a}">
       <button data-act="setEdit" data-i="${i}">Guardar</button><button class="danger" data-act="setDel" data-i="${i}">✕</button></div>`).join('');
-    return `<div class="card"><h2>Sets jugados</h2>
+    return `<div class="card"><h2>Corregir sets</h2>
       ${rows || '<p class="muted" style="margin:0">Aún no hay sets terminados.</p>'}
       <label>Añadir set terminado</label>
       <div class="setrow" style="margin-top:0"><span>Set ${live.history.length + 1}</span>
         <input type="number" min="0" id="nsH" placeholder="L"> – <input type="number" min="0" id="nsA" placeholder="V">
         <button data-act="setAdd">Añadir</button></div>
-      <p class="muted" style="font-size:13px;margin-bottom:0">Los sets ganados se recalculan con estos resultados.</p></div>`;
+      <p class="muted small" style="margin-bottom:0">Los sets ganados se recalculan con estos resultados.</p></div>`;
   }
 
+  /* ----- Pestaña JUEGO ----- */
   function viewScore() {
     const volley = live.sport === 'volley';
+    const scr = onScreen();
     let h = `<div class="teams">${teamPanel('h')}${teamPanel('a')}</div>`;
     if (volley) {
-      h += `<div class="mid">
-        <span><button class="midbtn" data-act="setAdj" data-s="h" data-v="-1">−</button> <b>${live.sets.h}</b> <button class="midbtn" data-act="setAdj" data-s="h" data-v="1">+</button></span>
-        <span>${live.finished ? 'FINAL' : 'SET ' + live.setNo}</span>
-        <span><button class="midbtn" data-act="setAdj" data-s="a" data-v="-1">−</button> <b>${live.sets.a}</b> <button class="midbtn" data-act="setAdj" data-s="a" data-v="1">+</button></span></div>`;
-      if (live.history.length) h += `<p class="muted" style="text-align:center;margin-top:-6px">${live.history.map(x => x.h + '-' + x.a).join(' · ')}</p>`;
+      h += `<div class="setline">${live.history.map((x, i) => `<span class="pill">${x.h}-${x.a}</span>`).join('')}
+        <span class="pill now">${live.finished ? 'FINAL' : 'SET ' + live.setNo}</span>
+        <button class="link" data-act="setsToggle">${showSets ? 'Cerrar' : '✎ Corregir'}</button></div>`;
       if (live.finished) h += `<div class="final">PARTIDO TERMINADO</div>`;
-    } else {
-      h += timerCard(false);
+      if (showSets) h += setsCard();
     }
-    h += `<div class="btns" style="margin-top:12px">
+    h += `<div class="grid3">
         <button data-act="undo">↶ Deshacer</button>
-        <button data-act="mark">⭐ Jugada</button>
-        <button class="${live.muted ? 'danger' : ''}" data-act="muteToggle">${live.muted ? '🔇 Silenciado' : '🎙 Micro'}</button>
-        ${volley ? `<button class="${live.brk.show && live.brk.text === 'TIEMPO MUERTO' ? 'on' : ''}" data-act="brkq" data-v="TIEMPO MUERTO" data-k="tm">Tiempo muerto</button>`
-                 : `<button class="${live.brk.show && live.brk.text === 'DESCANSO' ? 'on' : ''}" data-act="brkq" data-v="DESCANSO" data-k="half">Descanso</button>`}
-        <button class="${live.banner.show ? 'on' : ''}" data-act="bannerToggle">Rótulo</button>
+        <button class="sun" data-act="mark">⭐ Jugada</button>
+        <button class="${live.muted ? 'danger' : ''}" data-act="muteToggle">${live.muted ? '🔇 Sin micro' : '🎙 Micro'}</button>
       </div>`;
-    if (volley) h += timerCard(true) + setsCard();
+    const quick = volley ? [['TIEMPO MUERTO', 'tm', 'Tiempo muerto'], ['FIN DE SET', 'set', 'Fin de set']] : [['DESCANSO', 'half', 'Descanso'], ['FIN DEL PARTIDO', 'end', 'Final']];
+    h += sec('Pantalla rápida', `<div class="grid3">${quick.map(([v, k, t]) => `<button class="${live.brk.show && live.brk.text === v ? 'on' : ''}" data-act="brkq" data-v="${v}" data-k="${k}">${t}</button>`).join('')}
+        <button class="${scr ? 'sun' : 'ghost'}" data-act="allHide" ${scr ? '' : 'disabled'}>Quitar</button></div>`,
+      scr ? '● ' + esc(scr.text) : 'se ve la cámara');
+    if (volley) {
+      h += sec('Temporizador', `<div class="card"><div class="tline"><span class="t" id="clk">00:00</span>
+          <button class="${live.clock.running ? '' : 'primary'}" data-act="clk">${live.clock.running ? 'Pausar' : 'Iniciar'}</button>
+          <span class="small muted">En vídeo</span>${sw(live.timer.show, 'timerToggle')}</div>
+          <button class="link" data-act="timerOpen" style="margin-top:4px">${timerOpen ? 'Cerrar ajustes' : 'Ajustar tiempo…'}</button></div>
+        ${timerOpen ? timerCard(true) : ''}`);
+    } else {
+      h += sec('Cronómetro', timerCard(false));
+    }
     return h;
   }
 
+  /* ----- Pestaña PANTALLA ----- */
   function viewGraphics() {
     const presets = live.sport === 'volley'
       ? [['PREPARTIDO', 'pre'], ['TIEMPO MUERTO', 'tm'], ['FIN DE SET', 'set'], ['FIN DE PARTIDO', 'end']]
       : [['PREPARTIDO', 'pre'], ['DESCANSO', 'half'], ['FIN DEL PARTIDO', 'end']];
     const sp = Object.entries(sponsors);
-    const posBtn = (v, t) => `<button class="${live.board.pos === v ? 'on' : ''}" data-act="boardPos" data-v="${v}">${t}</button>`;
+    const scr = onScreen();
+    const pos = v => `<button class="${live.board.pos === v ? 'on' : ''}" data-act="boardPos" data-v="${v}" title="${v}"></button>`;
     return `
-      <div class="card"><h2>Marcador en el vídeo</h2>
-        <div class="row"><span>Mostrar marcador</span>
-          <button style="flex:0 0 auto" class="${live.board.show ? 'on' : ''}" data-act="boardToggle">${live.board.show ? 'Sí' : 'No'}</button></div>
-        <label>Posición</label>
-        <div class="grid2">${posBtn('tl', '↖ Arriba izq.')}${posBtn('tr', 'Arriba der. ↗')}${posBtn('bl', '↙ Abajo izq.')}${posBtn('br', 'Abajo der. ↘')}</div>
-      </div>
-      <div class="card"><h2>Rótulo inferior</h2>
-        <input id="bannerText" value="${esc(live.banner.text)}" placeholder="Ej: Jornada 5 · Liga Provincial">
-        <div class="row" style="margin-top:10px">
-          <button data-act="bannerSave">Guardar texto</button>
-          <button class="${live.banner.show ? 'on' : ''}" data-act="bannerToggle">${live.banner.show ? 'Ocultar' : 'Mostrar'}</button>
-        </div></div>
-      <div class="card"><h2>Pantalla completa</h2>
-        <div class="btns">${presets.map(([p, k]) => `<button class="${live.brk.show && live.brk.text === p ? 'on' : ''}" data-act="brkq" data-v="${p}" data-k="${k}">${p}</button>`).join('')}</div>
-        <label>Texto personalizado</label>
-        <div class="row"><input id="brkText" placeholder="Texto"><button style="flex:0 0 auto" data-act="brkCustom">Mostrar</button></div>
-        ${live.brk.show ? `<p><button class="danger" style="width:100%" data-act="brkHide">Quitar pantalla completa</button></p>` : ''}
-      </div>
-      <div class="card"><h2>Patrocinadores</h2>
-        <div class="row"><span>Mostrar en emisión</span>
-          <button style="flex:0 0 auto" class="${live.spons.show ? 'on' : ''}" data-act="sponsToggle">${live.spons.show ? 'Sí' : 'No'}</button></div>
-        <div class="row" style="margin-top:8px"><span>Carrusel de patrocinadores en las pantallas completas</span>
-          <button style="flex:0 0 auto" class="${live.spons.carousel ? 'on' : ''}" data-act="carouselToggle">${live.spons.carousel ? 'Sí' : 'No'}</button></div>
-        <label>Cambiar cada (segundos)</label>
-        <input type="number" min="3" max="120" id="sponsSec" value="${live.spons.sec}">
-        ${live.spFull.show ? `<p><button class="danger" style="width:100%" data-act="spFullHide">Quitar patrocinador de pantalla completa</button></p>` : ''}
-        <div style="margin-top:10px">${sp.length ? sp.map(([id, s]) => editingSp === id ? `
-          <div class="item" style="flex-direction:column;align-items:stretch">
-            <label style="margin-top:0">Nombre</label><input id="esName" value="${esc(s.name)}">
-            <label>Texto bajo el logo a pantalla completa</label><input id="esText" value="${esc(s.text)}">
-            <label>Descripción para YouTube (una línea por servicio)</label><textarea id="esDesc" rows="4">${esc(s.desc)}</textarea>
-            <label>Web / Instagram (una por línea)</label><textarea id="esLink" rows="2">${esc(s.link)}</textarea>
-            <label>Imagen de pantalla completa (diapositiva 16:9, opcional)</label>
-            ${s.full ? `<div class="prev" style="width:100%;aspect-ratio:16/9;border-radius:10px;background:#000 url('${s.full}') center/contain no-repeat"></div>` : '<p class="muted" style="margin:4px 0">Sin imagen: a pantalla completa se ve el logo.</p>'}
-            <div class="grid2" style="margin-top:8px"><button data-act="spFullPick" data-id="${id}">🖼 Elegir imagen</button>
-              ${s.full ? `<button class="danger" data-act="spFullDel" data-id="${id}">Quitar imagen</button>` : '<span></span>'}</div>
-            <div class="row" style="margin-top:10px"><button class="ghost" data-act="spEditCancel">Cancelar</button><button class="primary" data-act="spEditSave" data-id="${id}">Guardar</button></div>
-          </div>` : `
-          <div class="item"><div class="preview-logo" style="background-image:url('${s.logo}')"></div>
-            <div class="grow"><b>${esc(s.name || 'Patrocinador')}${s.full ? ' 🖼' : ''}</b>${s.text ? `<br><span class="muted">${esc(s.text)}</span>` : ''}</div>
-            <div style="display:flex;flex-direction:column;gap:6px">
-              <button class="${live.spFull.show && live.spFull.id === id ? 'on' : ''}" data-act="spFull" data-id="${id}">Pantalla completa</button>
-              <button data-act="spEdit" data-id="${id}">Editar</button>
-              <button class="danger" data-act="sponsDel" data-id="${id}">Borrar</button></div></div>`).join('')
-          : '<p class="muted">Sin patrocinadores.</p>'}</div>
-        <label>Nuevo patrocinador</label>
-        <input id="sponsName" placeholder="Nombre (opcional, solo para la lista)">
-        <input id="sponsText" placeholder="Texto bajo el logo a pantalla completa (opcional)" style="margin-top:8px">
-        <textarea id="sponsDesc" rows="3" placeholder="Descripción para YouTube, una línea por servicio (opcional)" style="margin-top:8px"></textarea>
-        <textarea id="sponsLink" rows="2" placeholder="Web / Instagram, una por línea (opcional)" style="margin-top:8px"></textarea>
-        <p class="muted" style="font-size:13px">Logo en PNG con fondo transparente, mínimo 600 px de ancho.</p>
-        <button class="primary" style="width:100%" data-act="sponsAdd">Elegir logo y guardar</button>
-      </div>`;
+      <div class="nowbar ${scr ? 'full' : ''}"><span class="ld"></span>
+        <b>${scr ? esc(scr.text) : live.board.show ? 'Cámara con marcador' : 'Cámara sin marcador'}</b>
+        ${scr ? '<button class="sun" data-act="allHide">Quitar</button>' : ''}</div>
+      ${sec('Pantalla completa', `<div class="grid2">${presets.map(([p, k]) => `<button class="${live.brk.show && live.brk.text === p ? 'on' : ''}" data-act="brkq" data-v="${p}" data-k="${k}">${p}</button>`).join('')}</div>
+        <div class="row"><input id="brkText" placeholder="Texto propio, ej: CALENTAMIENTO"><button style="flex:0 0 auto" data-act="brkCustom">Mostrar</button></div>`, 'solo una a la vez')}
+      ${sec('Patrocinadores', `<div class="sptiles">${sp.map(([id, s]) => `<button class="sptile ${live.spFull.show && live.spFull.id === id ? 'on' : ''}" data-act="spFull" data-id="${id}">
+            <i style="background-image:url('${s.full || s.logo}')"></i>${esc(s.name || 'Patrocinador')}</button>`).join('')}
+          <button class="sptile add" data-act="goSponsors">＋ Añadir</button></div>
+        <div class="card" style="padding:4px 12px">
+          ${opt('Logos en la esquina del vídeo', live.spons.show, 'sponsToggle')}
+          ${opt('Carrusel en las pantallas completas', live.spons.carousel, 'carouselToggle')}
+          <div class="optrow"><span>Cambiar cada (segundos)</span><input type="number" min="3" max="120" id="sponsSec" value="${live.spons.sec}" style="width:80px"></div>
+        </div>`, 'toca uno para ponerlo a pantalla completa')}
+      ${sec('Marcador', `<div class="card" style="padding:4px 12px">
+          ${opt('Mostrar marcador', live.board.show, 'boardToggle')}
+          <div class="optrow"><span>Posición</span><div class="posgrid">${pos('tl')}${pos('tr')}${pos('bl')}${pos('br')}</div></div></div>`)}
+      ${sec('Rótulo inferior', `<div class="card">
+          <input id="bannerText" value="${esc(live.banner.text)}" placeholder="Ej: Jornada 5 · Liga Provincial">
+          <div class="row" style="margin-top:10px"><button data-act="bannerSave">Guardar texto</button>
+            <span class="small muted" style="flex:0 0 auto">En vídeo</span>${sw(live.banner.show, 'bannerToggle')}</div></div>`)}`;
   }
 
-  function viewTeams() {
+  function teamOptions(sel) {
+    const list = Object.entries(teams).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
+    return `<option value="">— Sin equipo —</option>` + list.map(([id, t]) => `<option value="${id}" ${id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+  }
+
+  const histOf = m => Array.isArray(m.history) ? m.history : Object.values(m.history || {});
+  function youtubeCard() {
+    const i = live.info, t = ytTexts();
+    const inp = (id, v, ph, type = 'text') => `<input id="${id}" type="${type}" value="${esc(v)}" placeholder="${esc(ph)}">`;
+    return `<div class="card">
+      <label style="margin-top:0">Fecha y hora</label>${inp('yiWhen', i.when, '', 'datetime-local')}
+      <label>Pabellón</label>${inp('yiVenue', i.venue, 'Pabellón Vistalegre')}
+      <label>Competición</label>${inp('yiComp', i.comp, 'Liga Oro Provincial Sevilla - Grupo B')}
+      <div class="grid2">
+        <div><label>Categoría</label>${inp('yiCat', i.cat, 'Juvenil Femenino')}</div>
+        <div><label>Temporada</label>${inp('yiSeason', i.season, SC.defaultSeason(new Date()))}</div>
+      </div>
+      <details style="margin-top:10px"><summary class="muted">Ver título y descripción de YouTube</summary>
+        <p style="font-weight:700;margin:8px 0 4px">${esc(t.title)}</p>
+        <pre style="white-space:pre-wrap;font:14px/1.4 Barlow,sans-serif;background:var(--panel2);padding:10px;border-radius:10px;margin:0">${esc(t.desc)}</pre>
+      </details>
+    </div>`;
+  }
+
+  function coverCard() {
+    return `<div class="card">
+      <p class="muted small" style="margin-top:0">Miniatura de las emisiones que crees en YouTube; también se alterna con la cámara en PREPARTIDO. Formato 16:9 (1920×1080).</p>
+      ${cover ? `<div style="width:100%;aspect-ratio:16/9;border-radius:10px;background:#000 url('${cover}') center/contain no-repeat;border:1px solid var(--line)"></div>` : ''}
+      <div class="grid2" style="margin-top:10px"><button data-act="coverPick">🖼 ${cover ? 'Cambiar' : 'Elegir'} portada</button>
+        ${cover ? '<button class="danger" data-act="coverDel">Quitar</button>' : '<span></span>'}</div>
+    </div>`;
+  }
+
+  function ytConnectCard() {
+    if (!IS_NATIVE) return `<div class="card"><p class="muted small" style="margin:0">Crear y programar la emisión en YouTube se hace desde el mando de la app del móvil cámara.</p></div>`;
+    const pv = live.info.privacy || 'unlisted';
+    const pbtn = (v, t) => `<button class="${pv === v ? 'on' : ''}" data-act="ytPriv" data-v="${v}">${t}</button>`;
+    const all = ytState.broadcasts || [];
+    const upcomingSt = ['created', 'ready', 'testing', 'live', 'liveStarting', 'testStarting'];
+    const inUse = all.find(b => b.selected);
+    const upcoming = all.filter(b => !b.selected && upcomingSt.includes(b.raw)).sort((a, b) => (a.startIso || '').localeCompare(b.startIso || ''));
+    const old = all.filter(b => !b.selected && !upcomingSt.includes(b.raw)).sort((a, b) => (b.startIso || '').localeCompare(a.startIso || ''));
+    const row = (b, btns) => `<div class="item"><div class="grow"><b>${esc(b.title)}</b><br>
+        <span class="muted small">${esc(b.when || '')} · ${esc(b.privacy || '')} · ${esc(b.status || '')}</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px">${btns}</div></div>`;
+    return `<div class="card">
+      ${ytState.connected ? `<p class="muted" style="margin-top:0">Conectado${ytState.account ? ' como ' + esc(ytState.account) : ''}.</p>`
+        : `<p class="muted small" style="margin-top:0">Conecta tu cuenta para crear y programar la emisión sin pasar por YouTube Studio.</p>`}
+      <button style="width:100%" data-act="ytConnect">${ytState.connected ? '🔄 Actualizar' : '🔗 Conectar con YouTube'}</button>
+      ${ytState.message ? `<p class="small" style="color:var(--warn)">${esc(ytState.message)}</p>` : ''}
+      ${ytState.connected ? `
+        <label>Se emitirá en</label>
+        ${inUse ? `<div class="ytuse"><b>✔ ${esc(inUse.title)}</b><br>
+            <span class="muted small">${esc(inUse.when || '')} · ${esc(inUse.privacy || '')} · ${esc(inUse.status || '')}</span></div>`
+          : '<p class="muted" style="margin:0">Ninguna elegida: crea una o pulsa "Usar esta" en una próxima.</p>'}
+        <label>Crear nueva</label>
+        <div class="grid3">${pbtn('public', 'Pública')}${pbtn('unlisted', 'Oculta')}${pbtn('private', 'Privada')}</div>
+        <p class="muted small">Título, descripción y fecha salen de "Datos del partido"${cover ? '; la portada se pone como miniatura' : ''}.</p>
+        <button class="primary" style="width:100%" data-act="ytCreate">📅 Crear emisión programada</button>
+        ${upcoming.length ? `<label>Próximas</label>${upcoming.map(b => row(b, `<button data-act="ytUse" data-id="${esc(b.id)}">Usar esta</button>`)).join('')}` : ''}
+        ${old.length ? `<p><button class="ghost" style="width:100%" data-act="ytOld">${ytShowOld ? 'Ocultar anteriores' : `Ver anteriores (${old.length})`}</button></p>
+          ${ytShowOld ? old.map(b => row(b, `<button data-act="ytDesc" data-id="${esc(b.id)}">Act. descripción</button>`)).join('') : ''}` : ''}
+      ` : ''}
+    </div>`;
+  }
+
+  /* ----- Pestaña PARTIDO ----- */
+  function viewPartido() {
+    const volley = live.sport === 'volley';
+    return `
+      ${sec('Quién juega', `<div class="card">
+        <div class="grid2">
+          <button class="${volley ? 'on' : ''}" data-act="sport" data-v="volley">Voleibol</button>
+          <button class="${!volley ? 'on' : ''}" data-act="sport" data-v="football">Fútbol</button>
+        </div>
+        <label>Local</label><select id="selHome">${teamOptions(live.homeId)}</select>
+        <label>Visitante</label><select id="selAway">${teamOptions(live.awayId)}</select>
+        ${volley ? `<label>Formato</label><div class="grid2">
+            <button class="${live.rules.bestOf === 5 ? 'on' : ''}" data-act="bestOf" data-v="5">Al mejor de 5</button>
+            <button class="${live.rules.bestOf === 3 ? 'on' : ''}" data-act="bestOf" data-v="3">Al mejor de 3</button></div>
+          <div class="grid2">
+            <div><label>Puntos por set</label><input type="number" id="setPts" value="${live.rules.setPts}"></div>
+            <div><label>Set decisivo</label><input type="number" id="tiePts" value="${live.rules.tiePts}"></div></div>`
+        : `<label>Cronómetro</label><div class="grid2">
+            <button class="${live.clock.dir === 'up' ? 'on' : ''}" data-act="dir" data-v="up">Ascendente</button>
+            <button class="${live.clock.dir === 'down' ? 'on' : ''}" data-act="dir" data-v="down">Cuenta atrás</button></div>
+          <label>Duración de cada parte (minutos)</label>
+          <input type="number" id="durMin" value="${Math.round(live.clock.durMs / 60000)}">`}
+        <p class="muted small" style="margin-bottom:0">¿Falta un equipo? Añádelo en Ajustes.</p></div>`)}
+      ${sec('Datos del partido', youtubeCard(), 'para el título y la descripción')}
+      ${sec('YouTube', ytConnectCard())}
+      <button class="danger" style="width:100%" data-act="newMatch">Nuevo partido (pone todo a cero)</button>`;
+  }
+
+  function resultTable() {
+    const volley = live.sport === 'volley';
+    const H = live.history;
+    const row = side => {
+      const t = sideTeam(side);
+      const cells = volley ? H.map(x => { const me = side === 'h' ? x.h : x.a, ot = side === 'h' ? x.a : x.h; return `<td class="${me > ot ? '' : 'lo'}">${me}</td>`; }).join('') : '';
+      const tot = volley ? live.sets[side] : live.score[side];
+      const other = volley ? live.sets[side === 'h' ? 'a' : 'h'] : live.score[side === 'h' ? 'a' : 'h'];
+      return `<tr><td class="n"><span class="swc" style="background:${esc(t.color)}"></span>${esc(t.short)}</td>${cells}<td class="${tot > other ? 'win' : 'tot'}">${tot}</td></tr>`;
+    };
+    return `<table class="restable"><tr><th></th>${volley ? H.map((x, i) => `<th>S${i + 1}</th>`).join('') : ''}<th>${volley ? 'Sets' : 'Goles'}</th></tr>${row('h')}${row('a')}</table>`;
+  }
+
+  function highlightsCard() {
+    const list = Object.entries(marks).sort((a, b) => a[1].ts - b[1].ts);
+    const time = ts => new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return `<div class="card">
+      <p class="muted small" style="margin-top:0">Pulsa ⭐ tras una buena jugada. Al terminar, el móvil cámara corta esos momentos de su grabación y los une en un vídeo.</p>
+      <div>${list.map(([id, m]) => `<div class="item"><div class="grow">${esc(m.label || 'Jugada')}<br>
+        <span class="muted small">${time(m.ts)}</span></div>
+        <button class="danger" data-act="markDel" data-id="${id}">✕</button></div>`).join('') || '<p class="muted">Sin jugadas marcadas.</p>'}</div>
+      ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resumen y capítulos</button></p>
+        <p><button style="width:100%" data-act="videoHl">🎞 Resumen desde un vídeo de la galería</button></p>`
+                  : `<p class="muted small">El resumen se crea desde la app del móvil cámara (botón 🎬 o al parar la grabación).</p>`}
+      ${list.length ? `<button class="danger" style="width:100%" data-act="marksClear">Borrar todas las marcas</button>` : ''}
+    </div>`;
+  }
+
+  function historyList() {
+    const list = Object.entries(matches).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+    if (!list.length) return '<p class="muted" style="margin:0">Aún no hay partidos guardados.</p>';
+    return list.map(([id, m]) => {
+      const date = new Date(m.ts).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const res = m.sport === 'volley' ? `${m.sets.h}-${m.sets.a}` : `${m.score.h}-${m.score.a}`;
+      const det = m.sport === 'volley' ? histOf(m).map(x => x.h + '-' + x.a).join(' · ') : '';
+      return `<div class="item"><div class="grow"><b>${esc(m.home.short)} ${res} ${esc(m.away.short)}</b><br>
+        <span class="muted small">${date}${det ? ' · ' + det : ''}</span></div>
+        <button data-act="shareMatch" data-id="${id}">📤</button>
+        <button class="danger" data-act="delMatch" data-id="${id}">✕</button></div>`;
+    }).join('');
+  }
+
+  /* ----- Pestaña DESPUÉS ----- */
+  function viewDespues() {
+    const inUse = (ytState.broadcasts || []).find(b => b.selected);
+    return `
+      ${sec('Resultado', `<div class="card">${resultTable()}
+        <div class="grid2" style="margin-top:10px"><button class="primary" data-act="shareCurrent">📤 Compartir imagen</button>
+          <button data-act="saveMatch">💾 Guardar en historial</button></div></div>`)}
+      ${sec('Resumen de jugadas', highlightsCard(), Object.keys(marks).length + ' marcadas')}
+      ${sec('YouTube', `<div class="card"><p class="muted small" style="margin-top:0">La descripción incluye el resultado final y los patrocinadores.</p>
+        <div class="grid2"><button data-act="copyTitle">📋 Copiar título</button><button data-act="copyDesc">📋 Copiar descripción</button></div>
+        ${IS_NATIVE && inUse ? `<p style="margin-bottom:0"><button class="primary" style="width:100%" data-act="ytDesc" data-id="${esc(inUse.id)}">⬆ Subir descripción a "${esc(inUse.title)}"</button></p>` : ''}</div>`)}
+      ${sec('Historial', `<div class="card">${historyList()}</div>`)}`;
+  }
+
+  function teamsBlock() {
     if (editing) {
       const t = editing === 'new' ? { name: '', short: '', color: '#1e6bff', logo: '' } : (teams[editing] || {});
       const logo = draftLogo != null ? draftLogo : (t.logo || '');
@@ -658,126 +846,74 @@ function start() {
           <div><label>Color</label><input id="tColor" type="color" value="${esc(t.color || '#1e6bff')}"></div>
         </div>
         <div class="row" style="margin-top:14px"><button class="ghost" data-act="teamCancel">Cancelar</button><button class="primary" data-act="teamSave">Guardar</button></div>
-        ${editing !== 'new' ? `<p><button class="danger" style="width:100%" data-act="teamDel">Borrar equipo</button></p>` : ''}
+        ${editing !== 'new' ? `<p style="margin-bottom:0"><button class="danger" style="width:100%" data-act="teamDel">Borrar equipo</button></p>` : ''}
       </div>`;
     }
     const list = Object.entries(teams).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
-    return `<div class="card"><h2>Equipos guardados</h2>
+    return `<div class="card">
       ${list.length ? list.map(([id, t]) => `<div class="item">
-        <div class="logo" style="${t.logo ? `background-image:url('${t.logo}')` : ''}"></div>
-        <div class="grow"><b>${esc(t.name)}</b><br><span class="muted"><span class="sw" style="background:${esc(t.color)}"></span>${esc(t.short)}</span></div>
+        <div class="logo" style="width:40px;height:40px;${t.logo ? `background-image:url('${t.logo}')` : ''}"></div>
+        <div class="grow"><b>${esc(t.name)}</b><br><span class="muted small"><span class="swc" style="background:${esc(t.color)}"></span>${esc(t.short)}</span></div>
         <button data-act="teamEdit" data-id="${id}">Editar</button></div>`).join('') : '<p class="muted">Aún no hay equipos.</p>'}
-      <p><button class="primary" style="width:100%" data-act="teamNew">+ Añadir equipo</button></p></div>
-      ${Object.keys(window.SPORTCAM_PRESETS || {}).map(k => `<div class="card"><h2>Equipos de liga</h2>
-        <button style="width:100%" data-act="loadPreset" data-v="${esc(k)}">Cargar equipos ${esc(k)}</button>
-        <p class="muted" style="font-size:13px;margin-bottom:0">Crea los equipos que falten y actualiza los que ya existan con el mismo nombre.</p></div>`).join('')}`;
+      <p><button class="primary" style="width:100%" data-act="teamNew">+ Añadir equipo</button></p>
+      ${Object.keys(window.SPORTCAM_PRESETS || {}).map(k => `<button class="ghost" style="width:100%;margin-top:6px" data-act="loadPreset" data-v="${esc(k)}">Cargar equipos ${esc(k)}</button>`).join('')}
+      <p class="muted small" style="margin-bottom:0">Cargar una liga crea los equipos que falten y actualiza los que ya existan con el mismo nombre.</p></div>`;
   }
 
-  function teamOptions(sel) {
-    const list = Object.entries(teams).sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
-    return `<option value="">— Sin equipo —</option>` + list.map(([id, t]) => `<option value="${id}" ${id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+  function sponsorsBlock() {
+    const sp = Object.entries(sponsors);
+    return `<div class="card">${sp.length ? sp.map(([id, s]) => editingSp === id ? `
+          <div class="item" style="flex-direction:column;align-items:stretch">
+            <label style="margin-top:0">Nombre</label><input id="esName" value="${esc(s.name)}">
+            <label>Texto bajo el logo a pantalla completa</label><input id="esText" value="${esc(s.text)}">
+            <label>Descripción para YouTube (una línea por servicio)</label><textarea id="esDesc" rows="4">${esc(s.desc)}</textarea>
+            <label>Web / Instagram (una por línea)</label><textarea id="esLink" rows="2">${esc(s.link)}</textarea>
+            <label>Imagen de pantalla completa (diapositiva 16:9, opcional)</label>
+            ${s.full ? `<div style="width:100%;aspect-ratio:16/9;border-radius:10px;background:#000 url('${s.full}') center/contain no-repeat"></div>` : '<p class="muted" style="margin:4px 0">Sin imagen: a pantalla completa se ve el logo.</p>'}
+            <div class="grid2" style="margin-top:8px"><button data-act="spFullPick" data-id="${id}">🖼 Elegir imagen</button>
+              ${s.full ? `<button class="danger" data-act="spFullDel" data-id="${id}">Quitar imagen</button>` : '<span></span>'}</div>
+            <div class="row" style="margin-top:10px"><button class="ghost" data-act="spEditCancel">Cancelar</button><button class="primary" data-act="spEditSave" data-id="${id}">Guardar</button></div>
+            <button class="danger" style="margin-top:8px" data-act="sponsDel" data-id="${id}">Borrar patrocinador</button>
+          </div>` : `
+          <div class="item"><div class="preview-logo" style="width:48px;height:48px;flex-basis:48px;background-image:url('${s.logo}')"></div>
+            <div class="grow"><b>${esc(s.name || 'Patrocinador')}${s.full ? ' 🖼' : ''}</b>${s.text ? `<br><span class="muted small">${esc(s.text)}</span>` : ''}</div>
+            <button data-act="spEdit" data-id="${id}">Editar</button></div>`).join('')
+        : '<p class="muted">Sin patrocinadores.</p>'}
+      <details id="spAdd" style="margin-top:8px" ${spFormOpen ? 'open' : ''}><summary class="link" style="padding:6px 0">＋ Añadir patrocinador</summary>
+        <input id="sponsName" placeholder="Nombre (opcional, solo para la lista)" style="margin-top:6px">
+        <input id="sponsText" placeholder="Texto bajo el logo a pantalla completa (opcional)" style="margin-top:8px">
+        <textarea id="sponsDesc" rows="3" placeholder="Descripción para YouTube, una línea por servicio (opcional)" style="margin-top:8px"></textarea>
+        <textarea id="sponsLink" rows="2" placeholder="Web / Instagram, una por línea (opcional)" style="margin-top:8px"></textarea>
+        <p class="muted small">Logo en PNG con fondo transparente, mínimo 600 px de ancho.</p>
+        <button class="primary" style="width:100%" data-act="sponsAdd">Elegir logo y guardar</button>
+      </details></div>`;
   }
 
-  const histOf = m => Array.isArray(m.history) ? m.history : Object.values(m.history || {});
-  function youtubeCard() {
-    const i = live.info, t = ytTexts();
-    const inp = (id, v, ph, type = 'text') => `<input id="${id}" type="${type}" value="${esc(v)}" placeholder="${esc(ph)}">`;
-    return `<div class="card"><h2>Título y descripción para YouTube</h2>
-      <label style="margin-top:0">Fecha y hora</label>${inp('yiWhen', i.when, '', 'datetime-local')}
-      <label>Pabellón</label>${inp('yiVenue', i.venue, 'Pabellón Vistalegre')}
-      <label>Competición</label>${inp('yiComp', i.comp, 'Liga Oro Provincial Sevilla - Grupo B')}
-      <div class="grid2">
-        <div><label>Categoría</label>${inp('yiCat', i.cat, 'Juvenil Femenino')}</div>
-        <div><label>Temporada</label>${inp('yiSeason', i.season, SC.defaultSeason(new Date()))}</div>
-      </div>
-      <p class="muted" style="font-size:13px">Los equipos salen del local y visitante elegidos; los patrocinadores, de Rótulos (nombre, descripción y web).</p>
-      <div class="grid2">
-        <button data-act="copyTitle">📋 Copiar título</button>
-        <button class="primary" data-act="copyDesc">📋 Copiar descripción</button>
-      </div>
-      <details style="margin-top:10px"><summary class="muted">Ver cómo queda</summary>
-        <p style="font-weight:700;margin:8px 0 4px">${esc(t.title)}</p>
-        <pre style="white-space:pre-wrap;font:13px/1.4 Inter,sans-serif;background:var(--panel2);padding:10px;border-radius:10px;margin:0">${esc(t.desc)}</pre>
-      </details>
+  function channelBlock() {
+    const remote = location.origin + location.pathname.replace(/index\.html$/, '');
+    const link = remote + '#k=' + encodeURIComponent(KEY);
+    return `<div class="card">
+      <p class="muted small" style="margin-top:0">El canal guarda equipos, patrocinadores, historial y el marcador. Dos móviles con el mismo canal comparten todo.</p>
+      <p style="margin:0 0 8px">Clave: <code>${esc(KEY)}</code></p>
+      ${IS_NATIVE ? `<div class="grid2"><button data-act="copyLink" data-v="${esc(link)}">📋 Copiar enlace</button>
+          <button class="primary" data-act="channelApp">📷 Usar canal de otro móvil</button></div>
+        <p class="muted small" style="margin-bottom:0">Para traer aquí lo del otro móvil, escanea el QR de Ajustes de su app o pega su clave. Para el mando en otro móvil, el QR está en Ajustes de esta app.</p>`
+      : `<div class="grid2"><button data-act="copyLink" data-v="${esc(link)}">📋 Copiar enlace</button>
+          <button data-act="channelWeb">Cambiar canal</button></div>`}
     </div>`;
   }
 
-  function coverCard() {
-    return `<div class="card"><h2>Imagen de portada</h2>
-      <p class="muted" style="margin-top:0;font-size:13px">Se usa como miniatura de las emisiones que crees en YouTube y se alterna en la pantalla PREPARTIDO. Formato 16:9 (1920×1080).</p>
-      ${cover ? `<div style="width:100%;aspect-ratio:16/9;border-radius:10px;background:#000 url('${cover}') center/contain no-repeat;border:1px solid var(--line)"></div>` : ''}
-      <div class="grid2" style="margin-top:10px"><button data-act="coverPick">🖼 ${cover ? 'Cambiar' : 'Elegir'} portada</button>
-        ${cover ? '<button class="danger" data-act="coverDel">Quitar</button>' : '<span></span>'}</div>
-    </div>`;
-  }
-
-  function ytConnectCard() {
-    if (!IS_NATIVE) return `<div class="card"><h2>YouTube</h2><p class="muted" style="margin:0;font-size:13px">Crear y programar la emisión en YouTube se hace desde el mando de la app del móvil cámara.</p></div>`;
-    const pv = live.info.privacy || 'unlisted';
-    const pbtn = (v, t) => `<button class="${pv === v ? 'on' : ''}" data-act="ytPriv" data-v="${v}">${t}</button>`;
-    const all = ytState.broadcasts || [];
-    const upcomingSt = ['created', 'ready', 'testing', 'live', 'liveStarting', 'testStarting'];
-    const inUse = all.find(b => b.selected);
-    const upcoming = all.filter(b => !b.selected && upcomingSt.includes(b.raw)).sort((a, b) => (a.startIso || '').localeCompare(b.startIso || ''));
-    const old = all.filter(b => !b.selected && !upcomingSt.includes(b.raw)).sort((a, b) => (b.startIso || '').localeCompare(a.startIso || ''));
-    const row = (b, btns) => `<div class="item"><div class="grow"><b>${esc(b.title)}</b><br>
-        <span class="muted" style="font-size:13px">${esc(b.when || '')} · ${esc(b.privacy || '')} · ${esc(b.status || '')}</span></div>
-        <div style="display:flex;flex-direction:column;gap:6px">${btns}</div></div>`;
-    return `<div class="card"><h2>YouTube</h2>
-      ${ytState.connected ? `<p class="muted" style="margin-top:0">Conectado${ytState.account ? ' como ' + esc(ytState.account) : ''}.</p>`
-        : `<p class="muted" style="margin-top:0;font-size:13px">Conecta tu cuenta para crear y programar la emisión sin pasar por YouTube Studio.</p>`}
-      <button style="width:100%" data-act="ytConnect">${ytState.connected ? '🔄 Actualizar' : '🔗 Conectar con YouTube'}</button>
-      ${ytState.message ? `<p style="font-size:13px;color:var(--warn)">${esc(ytState.message)}</p>` : ''}
-      ${ytState.connected ? `
-        <label>Se emitirá en</label>
-        ${inUse ? `<div class="item" style="border:1px solid var(--accent);border-radius:10px;padding:10px"><div class="grow"><b>✔ ${esc(inUse.title)}</b><br>
-            <span class="muted" style="font-size:13px">${esc(inUse.when || '')} · ${esc(inUse.privacy || '')} · ${esc(inUse.status || '')}</span></div>
-            <button data-act="ytDesc" data-id="${esc(inUse.id)}">Act. descripción</button></div>`
-          : '<p class="muted" style="margin:0">Ninguna elegida: crea una o pulsa "Usar esta" en una próxima.</p>'}
-        <label>Crear nueva</label>
-        <div class="btns">${pbtn('public', 'Pública')}${pbtn('unlisted', 'Oculta')}${pbtn('private', 'Privada')}</div>
-        <p class="muted" style="font-size:13px">Título, descripción y fecha se toman de la tarjeta de arriba${cover ? '; la portada se pone como miniatura' : ''}.</p>
-        <button class="primary" style="width:100%" data-act="ytCreate">📅 Crear emisión programada</button>
-        ${upcoming.length ? `<label>Próximas</label>${upcoming.map(b => row(b, `<button data-act="ytUse" data-id="${esc(b.id)}">Usar esta</button>`)).join('')}` : ''}
-        ${old.length ? `<p><button class="ghost" style="width:100%" data-act="ytOld">${ytShowOld ? 'Ocultar anteriores' : `Ver anteriores (${old.length})`}</button></p>
-          ${ytShowOld ? old.map(b => row(b, `<button data-act="ytDesc" data-id="${esc(b.id)}">Act. descripción</button>`)).join('') : ''}` : ''}
-      ` : ''}
-    </div>`;
-  }
-
-  function highlightsCard() {
-    const list = Object.entries(marks).sort((a, b) => a[1].ts - b[1].ts);
-    const time = ts => new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    return `<div class="card"><h2>Resumen de jugadas (${list.length})</h2>
-      <p class="muted" style="margin-top:0;font-size:13px">Pulsa ⭐ tras una buena jugada. Al terminar, el móvil cámara corta esos momentos de su grabación y los une en un vídeo.</p>
-      <div class="grid2">
-        <div><label>Segundos antes</label><input type="number" min="2" max="60" id="hlBefore" value="${live.hl.before}"></div>
-        <div><label>Segundos después</label><input type="number" min="0" max="30" id="hlAfter" value="${live.hl.after}"></div>
-      </div>
-      <div class="row" style="margin-top:10px"><span>Marcar solo el final de cada set</span>
-        <button style="flex:0 0 auto" class="${live.hl.auto ? 'on' : ''}" data-act="hlAuto">${live.hl.auto ? 'Sí' : 'No'}</button></div>
-      <div style="margin-top:8px">${list.map(([id, m]) => `<div class="item"><div class="grow">${esc(m.label || 'Jugada')}<br>
-        <span class="muted" style="font-size:13px">${time(m.ts)}</span></div>
-        <button class="danger" data-act="markDel" data-id="${id}">✕</button></div>`).join('') || '<p class="muted">Sin jugadas marcadas.</p>'}</div>
-      ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resumen y capítulos</button></p>
-        <p><button style="width:100%" data-act="videoHl">🎞 Resumen desde un vídeo de la galería</button></p>`
-                  : `<p class="muted" style="font-size:13px">El resumen se crea desde la app del móvil cámara (botón 🎬 o al parar la grabación).</p>`}
-      ${list.length ? `<button class="danger" style="width:100%" data-act="marksClear">Borrar todas las marcas</button>` : ''}
-    </div>`;
-  }
-
-  function historyList() {
-    const list = Object.entries(matches).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
-    if (!list.length) return '<p class="muted" style="margin:0">Aún no hay partidos guardados.</p>';
-    return list.map(([id, m]) => {
-      const date = new Date(m.ts).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
-      const res = m.sport === 'volley' ? `${m.sets.h}-${m.sets.a}` : `${m.score.h}-${m.score.a}`;
-      const det = m.sport === 'volley' ? histOf(m).map(x => x.h + '-' + x.a).join(' · ') : '';
-      return `<div class="item"><div class="grow"><b>${esc(m.home.short)} ${res} ${esc(m.away.short)}</b><br>
-        <span class="muted" style="font-size:13px">${date}${det ? ' · ' + det : ''}</span></div>
-        <button data-act="shareMatch" data-id="${id}">📤</button>
-        <button class="danger" data-act="delMatch" data-id="${id}">✕</button></div>`;
-    }).join('');
+  /* ----- Pestaña AJUSTES ----- */
+  function viewAjustes() {
+    return `
+      ${sec('Equipos', teamsBlock())}
+      ${sec('Patrocinadores', sponsorsBlock())}
+      ${sec('Portada', coverCard())}
+      ${sec('Resumen de jugadas', `<div class="card" style="padding:4px 12px">
+        <div class="optrow"><span>Segundos antes de la marca</span><input type="number" min="2" max="60" id="hlBefore" value="${live.hl.before}" style="width:80px"></div>
+        <div class="optrow"><span>Segundos después</span><input type="number" min="0" max="30" id="hlAfter" value="${live.hl.after}" style="width:80px"></div>
+        ${opt('Marcar automáticamente el final de cada set', live.hl.auto, 'hlAuto')}</div>`)}
+      ${sec('Canal', channelBlock())}`;
   }
 
   /** Foto del partido actual para guardar o compartir. */
@@ -854,55 +990,6 @@ function start() {
     }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
     toast('Imagen descargada');
-  }
-
-  function viewMatch() {
-    const volley = live.sport === 'volley';
-    const remote = location.origin + location.pathname.replace(/index\.html$/, '');
-    return `
-      <div class="card"><h2>Deporte</h2>
-        <div class="grid2">
-          <button class="${volley ? 'on' : ''}" data-act="sport" data-v="volley">Voleibol</button>
-          <button class="${!volley ? 'on' : ''}" data-act="sport" data-v="football">Fútbol</button>
-        </div>
-        <label>Local</label><select id="selHome">${teamOptions(live.homeId)}</select>
-        <label>Visitante</label><select id="selAway">${teamOptions(live.awayId)}</select>
-      </div>
-      ${volley ? `<div class="card"><h2>Reglas voleibol</h2>
-        <div class="grid2">
-          <button class="${live.rules.bestOf === 5 ? 'on' : ''}" data-act="bestOf" data-v="5">Al mejor de 5</button>
-          <button class="${live.rules.bestOf === 3 ? 'on' : ''}" data-act="bestOf" data-v="3">Al mejor de 3</button>
-        </div>
-        <div class="grid2">
-          <div><label>Puntos por set</label><input type="number" id="setPts" value="${live.rules.setPts}"></div>
-          <div><label>Set decisivo</label><input type="number" id="tiePts" value="${live.rules.tiePts}"></div>
-        </div>
-        <label>Ajustar sets</label>
-        <div class="grid2">
-          <div class="row"><button data-act="setAdj" data-s="h" data-v="-1">−</button><b style="text-align:center">Local ${live.sets.h}</b><button data-act="setAdj" data-s="h" data-v="1">+</button></div>
-          <div class="row"><button data-act="setAdj" data-s="a" data-v="-1">−</button><b style="text-align:center">Visit. ${live.sets.a}</b><button data-act="setAdj" data-s="a" data-v="1">+</button></div>
-        </div></div>`
-      : `<div class="card"><h2>Cronómetro</h2>
-        <div class="grid2">
-          <button class="${live.clock.dir === 'up' ? 'on' : ''}" data-act="dir" data-v="up">Ascendente</button>
-          <button class="${live.clock.dir === 'down' ? 'on' : ''}" data-act="dir" data-v="down">Cuenta atrás</button>
-        </div>
-        <label>Duración de cada parte (minutos)</label>
-        <input type="number" id="durMin" value="${Math.round(live.clock.durMs / 60000)}"></div>`}
-      <div class="card"><h2>Partido</h2>
-        <div class="grid2">
-          <button data-act="shareCurrent">📤 Compartir resultado</button>
-          <button data-act="saveMatch">💾 Guardar en historial</button>
-        </div>
-        <p><button class="danger" style="width:100%" data-act="newMatch">Nuevo partido (pone todo a cero)</button></p></div>
-      ${youtubeCard()}
-      ${coverCard()}
-      ${ytConnectCard()}
-      ${highlightsCard()}
-      <div class="card"><h2>Historial</h2>${historyList()}</div>
-      ${IS_NATIVE ? '' : `<div class="card"><h2>Canal</h2>
-        <p class="muted" style="margin-top:0">Clave: <code>${esc(KEY)}</code></p>
-        <button style="width:100%" data-act="copyLink" data-v="${esc(remote + '#k=' + encodeURIComponent(KEY))}">Copiar enlace del mando</button></div>`}`;
   }
 
   function tickClock() {
@@ -1010,13 +1097,29 @@ function start() {
       case 'delMatch': if (confirm('¿Borrar este partido del historial?')) matchesRef.child(d.id).remove(); return;
       case 'tmCycle': return act(L => SC.cycleTimeout(L, s));
       case 'muteToggle': return setField('muted', !live.muted);
-      case 'brkq':
-        return liveRef.child('brk').set({ show: !(live.brk.show && live.brk.text === v), text: v, kind: d.k || 'custom' });
+      // Solo una pantalla completa a la vez: al poner una se quita la otra
+      case 'brkq': {
+        const show = !(live.brk.show && live.brk.text === v);
+        return liveRef.update({ brk: { show, text: v, kind: d.k || 'custom' }, 'spFull/show': false });
+      }
       case 'brkCustom': {
         const t = val('brkText').trim(); if (!t) return toast('Escribe un texto');
-        return liveRef.child('brk').set({ show: true, text: t.toUpperCase(), kind: 'custom' });
+        return liveRef.update({ brk: { show: true, text: t.toUpperCase(), kind: 'custom' }, 'spFull/show': false });
       }
       case 'brkHide': return setField('brk/show', false);
+      case 'allHide': return liveRef.update({ 'brk/show': false, 'spFull/show': false });
+      case 'setsToggle': showSets = !showSets; return render();
+      case 'timerOpen': timerOpen = !timerOpen; return render();
+      case 'expand': return setCompact(false);
+      case 'goSponsors': tab = 'ajustes'; spFormOpen = true; render(); { const e = document.getElementById('spAdd'); if (e) e.scrollIntoView({ block: 'center' }); } return;
+      case 'channelApp': try { window.SportCamNative.changeChannel(); } catch (e) { toast('Actualiza la app'); } return;
+      case 'channelWeb': {
+        const k = (prompt('Pega la clave del canal o el enlace del mando:') || '').trim();
+        const m = k.match(/[#&?]k=([^&]+)/); const nk = m ? decodeURIComponent(m[1]) : k;
+        if (!nk) return; if (nk.length < 16) return toast('Clave no válida');
+        try { localStorage.setItem('sc_key', nk); } catch (e) {}
+        location.hash = 'k=' + encodeURIComponent(nk); location.reload(); return;
+      }
       case 'bannerSave': return setField('banner/text', val('bannerText').trim()), toast('Guardado');
       case 'bannerToggle': {
         const t = document.getElementById('bannerText');
@@ -1027,8 +1130,10 @@ function start() {
       case 'carouselToggle': return setField('spons/carousel', !live.spons.carousel);
       case 'boardToggle': return setField('board/show', !live.board.show);
       case 'boardPos': return setField('board/pos', v);
-      case 'spFull':
-        return liveRef.child('spFull').set({ show: !(live.spFull.show && live.spFull.id === d.id), id: d.id });
+      case 'spFull': {
+        const show = !(live.spFull.show && live.spFull.id === d.id);
+        return liveRef.update({ spFull: { show, id: d.id }, 'brk/show': false });
+      }
       case 'spFullHide': return setField('spFull/show', false);
       case 'sponsAdd': {
         const name = val('sponsName').trim(), text = val('sponsText').trim(), desc = val('sponsDesc').trim(), link = val('sponsLink').trim();

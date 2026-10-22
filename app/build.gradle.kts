@@ -10,8 +10,8 @@ android {
     applicationId = "app.superinventos.sportcam"
     minSdk = 29
     targetSdk = 35
-    versionCode = 7
-    versionName = "1.5.0"
+    versionCode = 8
+    versionName = "1.6.0"
   }
 
   signingConfigs {
@@ -57,4 +57,5 @@ dependencies {
   implementation("androidx.webkit:webkit:1.12.1")
   implementation("com.google.zxing:core:3.5.3")
   implementation("com.google.android.gms:play-services-auth:21.2.0")
+  implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }

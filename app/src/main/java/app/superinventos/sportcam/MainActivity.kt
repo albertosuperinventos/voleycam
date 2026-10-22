@@ -808,7 +808,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val loader = WebViewAssetLoader.Builder()
       .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
       .build()
-    web.setBackgroundColor(ContextCompat.getColor(this, R.color.bg))
+    web.setBackgroundColor(0xFFEDF1F5.toInt())
     web.settings.javaScriptEnabled = true
     web.settings.domStorageEnabled = true
     web.addJavascriptInterface(Bridge(), "SportCamNative")
@@ -861,6 +861,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   }
 
   inner class Bridge {
+    @JavascriptInterface
+    fun changeChannel() {
+      ui.post { ChannelPicker.show(this@MainActivity, prefs) { loadWeb() } }
+    }
+
     @JavascriptInterface
     fun setMini(mini: Boolean) {
       ui.post { panelMini = mini; applyPanelSize() }

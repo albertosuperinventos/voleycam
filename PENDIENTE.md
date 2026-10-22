@@ -30,6 +30,12 @@
 - Imagen de portada: miniatura de YouTube al crear emisión y alternada en PREPARTIDO.
 - Lista de emisiones de YouTube: en uso arriba, próximas debajo, anteriores ocultas.
 
+## Versión 1.6.0
+- Mando nuevo en tema claro con 5 pestañas: Juego, Pantalla, Partido, Después, Ajustes.
+- Mini mando renovado (nombres, marcador oscuro, Deshacer · Jugada · T. muerto/Quitar · Más).
+- Solo una pantalla completa a la vez (rótulo o patrocinador) y botón Quitar.
+- Usar el canal de otro móvil: escanear QR o pegar clave (Ajustes de la app y Ajustes del mando).
+
 ## Siguiente versión
-- Rediseño del mando por momento de uso: Juego · Pantalla · Partido · Después · Ajustes (boceto antes de programar). Mini mando con nombres completos y botones con texto.
+- ~~Rediseño del mando~~ (hecho en 1.6.0) por momento de uso: Juego · Pantalla · Partido · Después · Ajustes (boceto antes de programar). Mini mando con nombres completos y botones con texto.
 - Opcional: firma de la app como secreto de GitHub (requiere reinstalar y nueva SHA-1 en Google Cloud).
