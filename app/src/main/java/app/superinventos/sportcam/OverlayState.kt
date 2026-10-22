@@ -45,6 +45,13 @@ data class OverlayState(
   val marks: List<Highlights.Mark>,
   val hlBefore: Int,
   val hlAfter: Int,
+  /** Nombre del botón 💜 (jugadora). */
+  val hlName: String,
+  val replaySlow: Boolean,
+  /** Datos del partido (fecha ISO local, competición, categoría) para la portada del resumen. */
+  val infoWhen: String,
+  val infoComp: String,
+  val infoCat: String,
   val ytDesc: String,
   /** Partidos con marcas para el resumen desde vídeo (JSON tal cual). */
   val savedMatchesJson: String,
@@ -126,10 +133,15 @@ data class OverlayState(
         timeoutsA = o.optJSONObject("to")?.optInt("a") ?: 0,
         muted = o.optBoolean("muted"),
         marks = o.optJSONArray("marks")?.let { arr ->
-          (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { Highlights.Mark(it.optLong("ts"), it.optString("label")) } }
+          (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { Highlights.Mark(it.optLong("ts"), it.optString("label"), it.optString("kind")) } }
         } ?: emptyList(),
         hlBefore = o.optJSONObject("hl")?.optInt("before", 10) ?: 10,
         hlAfter = o.optJSONObject("hl")?.optInt("after", 3) ?: 3,
+        hlName = o.optJSONObject("hl")?.optString("name", "Carmen")?.ifBlank { "Carmen" } ?: "Carmen",
+        replaySlow = o.optJSONObject("hl")?.optBoolean("slow") ?: false,
+        infoWhen = o.optJSONObject("info")?.optString("when").orEmpty(),
+        infoComp = o.optJSONObject("info")?.optString("comp").orEmpty(),
+        infoCat = o.optJSONObject("info")?.optString("cat").orEmpty(),
         ytDesc = o.optString("ytDesc", ""),
         savedMatchesJson = o.optJSONArray("savedMatches")?.toString() ?: "[]",
         serverOffset = o.optLong("serverOffset"),

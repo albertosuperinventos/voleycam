@@ -17,7 +17,10 @@ import java.util.Locale
  */
 object Highlights {
 
-  data class Mark(val ts: Long, val label: String)
+  /** kind "" = jugada del partido (⭐), "carmen" = jugada de la jugadora (💜). */
+  data class Mark(val ts: Long, val label: String, val kind: String = "") {
+    val isPlayer get() = kind == "carmen"
+  }
 
   /** Grabación terminada: dónde está y cuándo empezó/acabó (hora del servidor, ms). */
   data class Recording(val uri: Uri, val startTs: Long, val endTs: Long)
@@ -113,7 +116,7 @@ object Highlights {
   fun chapters(startTs: Long, marks: List<Mark>): String {
     val sb = StringBuilder("00:00 Inicio\n")
     var lastSec = 0L
-    marks.filter { it.ts > startTs }.sortedBy { it.ts }.forEach { m ->
+    marks.filter { it.ts > startTs && !it.isPlayer }.sortedBy { it.ts }.forEach { m ->
       val sec = (m.ts - startTs) / 1000
       if (sec - lastSec < 10) return@forEach   // YouTube exige 10 s entre capítulos
       lastSec = sec

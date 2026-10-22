@@ -387,4 +387,40 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
       label(c, "GANADOR: ${w.name.uppercase()}", width / 2f, y + d(20f), y + d(76f), d(34f), accent, 0, width - d(160f))
     }
   }
+
+  /* ---------------- Vídeo resumen y repetición ---------------- */
+
+  /** Portada del vídeo resumen (opaca): título, resultado por sets y una línea con fecha y competición. */
+  fun renderIntro(s: OverlayState, subtitle: String, bmp: Bitmap): Bitmap {
+    bmp.eraseColor(ink)
+    val c = Canvas(bmp)
+    withShadow {
+      label(c, "RESUMEN DEL PARTIDO", width / 2f, d(50f), d(130f), d(64f), accent, 0, width - d(120f))
+      if (s.isVolley && s.history.isNotEmpty()) drawSetTable(c, s, true) else drawResult(c, s)
+      if (subtitle.isNotBlank()) label(c, subtitle, width / 2f, height - d(90f), height - d(40f), d(30f), Color.argb(220, 255, 255, 255), 0, width - d(120f))
+    }
+    return bmp
+  }
+
+  /** Diapositiva de patrocinador para el final del vídeo resumen (opaca). */
+  fun renderSponsorSlide(sp: Sponsor, bmp: Bitmap): Bitmap {
+    bmp.eraseColor(ink)
+    drawFullSponsor(Canvas(bmp), sp)
+    return bmp
+  }
+
+  private val replayRect = RectF()
+
+  /** Repetición: el fotograma guardado a toda pantalla y el rótulo REPETICIÓN. */
+  fun renderReplay(frame: Bitmap, slow: Boolean, bmp: Bitmap): Bitmap {
+    val c = Canvas(bmp)
+    replayRect.set(0f, 0f, width.toFloat(), height.toFloat())
+    c.drawBitmap(frame, null, replayRect, bmpPaint)
+    val txt = if (slow) "REPETICIÓN · CÁMARA LENTA" else "REPETICIÓN"
+    text.textSize = d(30f)
+    val w = text.measureText(txt) + d(44f)
+    rect(c, d(28f), d(28f), d(28f) + w, d(28f) + d(52f), accent, d(6f))
+    label(c, txt, d(28f) + d(22f), d(28f), d(80f), d(30f), ink, -1)
+    return bmp
+  }
 }

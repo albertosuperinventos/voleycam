@@ -199,6 +199,22 @@ class VideoHighlightsActivity : AppCompatActivity() {
       .setTitle("Marcas de qué partido")
       .setItems(options.map { "${it.optString("title")} (${it.optJSONArray("marks")?.length()} marcas)" }.toTypedArray()) { _, which ->
         val m = options[which]
+        val ms0 = m.getJSONArray("marks")
+        val nPlayer = (0 until ms0.length()).count { ms0.getJSONObject(it).optString("kind") == "carmen" }
+        if (nPlayer == 0) { applyMarks(m, null); return@setItems }
+        val name = intent.getStringExtra("playerName") ?: "Carmen"
+        AlertDialog.Builder(this)
+          .setTitle("¿Qué jugadas?")
+          .setItems(arrayOf("⭐ Las del partido (${ms0.length() - nPlayer})", "💜 Las de $name ($nPlayer)", "Todas (${ms0.length()})")) { _, k ->
+            applyMarks(m, when (k) { 0 -> false; 1 -> true; else -> null })
+          }.show()
+      }
+      .setNegativeButton("Cancelar", null).show()
+  }
+
+  /** [player]: true solo 💜, false solo ⭐, null todas. */
+  private fun applyMarks(m: org.json.JSONObject, player: Boolean?) {
+      run {
         val start = m.optLong("liveStart")
         val offset = (etOffset.text.toString().toIntOrNull() ?: 0)
         getSharedPreferences("sportcam", MODE_PRIVATE).edit().putInt("hlOffset", offset).apply()
@@ -206,13 +222,13 @@ class VideoHighlightsActivity : AppCompatActivity() {
         var added = 0
         for (i in 0 until ms.length()) {
           val mk = ms.getJSONObject(i)
+          if (player != null && (mk.optString("kind") == "carmen") != player) continue
           val p = (mk.optLong("ts") - start + offset * 1000L).toInt()
           if (p in 0..durationMs) { marks += p; labels[p] = mk.optString("label"); added++ }
         }
         refreshMarks()
         toast(if (added > 0) "$added marcas añadidas. Revisa alguna y ajusta el desfase si no cuadran." else "Ninguna marca cae dentro de este vídeo")
       }
-      .setNegativeButton("Cancelar", null).show()
   }
 
   private fun create() {

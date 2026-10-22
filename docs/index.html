@@ -141,8 +141,8 @@ body.compact main{padding:8px;gap:6px}
 .cpts{min-width:62px;padding:3px 8px;font:800 38px/1 'Barlow Condensed',sans-serif;background:var(--text);border-color:var(--text);color:#fff}
 .cmin{padding:8px}
 .cinfo{display:flex;justify-content:space-between;align-items:center;font:700 17px 'Barlow Condensed',sans-serif;color:var(--muted);padding:0 4px}
-.cbtns{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.cbtns button{padding:9px 2px;font-size:14px}
+.cbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.cbtns button{padding:8px 2px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cclock{font:800 22px 'Barlow Condensed',sans-serif;color:var(--text)}
 .setrow{display:flex;align-items:center;gap:8px;margin-top:8px}
 .setrow input{width:64px;text-align:center;padding:8px}
@@ -258,7 +258,7 @@ function start() {
     if (IS_NATIVE) { try { window.SportCamNative.setCover(cover); } catch (e) {} }
     if (tab !== 'juego' && !compact) render();
   });
-  statusRef.on('value', s => { status = s.val(); if (!IS_NATIVE) { renderWarn(); if (remoteOpen) renderRemote(); } });
+  statusRef.on('value', s => { const was = replaying(); status = s.val(); if (was !== replaying() && (tab === 'juego' || compact)) render(); if (!IS_NATIVE) { renderWarn(); if (remoteOpen) renderRemote(); } });
   if (IS_NATIVE) {
     // Órdenes del mando remoto hacia la cámara
     let lastCmd = ''; try { lastCmd = localStorage.getItem('sc_lastcmd') || ''; } catch (e) {}
@@ -305,7 +305,7 @@ function start() {
         ytTitle: ytTexts().title,
         ytPrivacy: live.info.privacy || 'unlisted',
         ytWhen: live.info.when || '',
-        marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '' })).sort((a, b) => a.ts - b.ts),
+        marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '', kind: m.kind || '' })).sort((a, b) => a.ts - b.ts),
         ytDesc: ytTexts().desc,
         serverOffset: offset
       });
@@ -336,10 +336,10 @@ function start() {
 
   function savedMatchesForNative() {
     const cur = { title: 'Partido actual', liveStart: (status && status.liveStartTs) || 0,
-                  marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '' })) };
+                  marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '', kind: m.kind || '' })) };
     const old = Object.values(matches).filter(m => m.liveStart && m.marks).sort((a, b) => b.ts - a.ts).map(m => ({
       title: `${m.home.short} - ${m.away.short} · ${new Date(m.ts).toLocaleDateString('es-ES')}`,
-      liveStart: m.liveStart, marks: (Array.isArray(m.marks) ? m.marks : Object.values(m.marks)).map(x => ({ ts: x.ts, label: x.label || '' }))
+      liveStart: m.liveStart, marks: (Array.isArray(m.marks) ? m.marks : Object.values(m.marks)).map(x => ({ ts: x.ts, label: x.label || '', kind: x.kind || '' }))
     }));
     return [cur].concat(old);
   }
@@ -347,6 +347,7 @@ function start() {
   window.scCmd = (cmd, v) => {
     if (cmd === 'mute') setField('muted', !!v);
     if (cmd === 'mark') addMark();
+    if (cmd === 'markc') addMark(null, 'carmen');
   };
 
   /* ---------- Jugadas marcadas (resumen) ---------- */
@@ -355,13 +356,25 @@ function start() {
     if (L.sport === 'volley') return `${prefix || 'Jugada'} · Set ${L.setNo} · ${sc}`;
     return `${prefix || 'Jugada'} · ${L.clock.period} ${SC.fmtClock(SC.clockDisplayMs(L.clock, now()))} · ${sc}`;
   }
-  function addMark(label) {
-    marksRef.push({ ts: now(), label: label || markLabel(live) });
+  const hlName = () => (live.hl.name || 'Carmen').trim() || 'Carmen';
+  /** kind '' = jugada del partido (⭐); 'carmen' = jugada de la jugadora (💜). */
+  function addMark(label, kind) {
+    const c = kind === 'carmen';
+    const m = { ts: now(), label: label || markLabel(live, c ? hlName() : '') };
+    if (c) m.kind = 'carmen';
+    marksRef.push(m);
     if (navigator.vibrate) navigator.vibrate(60);
     markFlashUntil = Date.now() + 1000;
-    document.querySelectorAll('[data-act=mark]').forEach(b => { b.classList.add('flash'); b.dataset.old = b.textContent; b.textContent = '✓'; });
-    setTimeout(() => document.querySelectorAll('[data-act=mark]').forEach(b => { b.classList.remove('flash'); if (b.dataset.old) b.textContent = b.dataset.old; }), 1000);
+    const sel = c ? '[data-act=markc]' : '[data-act=mark]';
+    document.querySelectorAll(sel).forEach(b => { b.classList.add('flash'); b.dataset.old = b.textContent; b.textContent = '✓'; });
+    setTimeout(() => document.querySelectorAll(sel).forEach(b => { b.classList.remove('flash'); if (b.dataset.old) b.textContent = b.dataset.old; }), 1000);
   }
+  const replaying = () => !!(status && status.replay && now() - (status.ts || 0) < 30000);
+  function replayCmd() {
+    if (IS_NATIVE) { try { window.SportCamNative.command('replay'); } catch (e) {} return; }
+    sendCmd('replay');
+  }
+  const replayBtn = () => `<button class="${replaying() ? 'sun' : ''}" data-act="replay">${replaying() ? '■ Cortar' : '⏪ Repetir'}</button>`;
 
   /* ---------- Imágenes ---------- */
   function fileToLogo(file, max = 160, jpeg = false) {
@@ -574,8 +587,10 @@ function start() {
       <div class="cinfo"><span>${info}${scr ? ` · <span style="color:var(--danger)">● ${esc(scr.text)}</span>` : ''}${live.muted ? ' · 🔇' : ''}</span>
         ${showClock ? `<span class="row" style="flex:0 0 auto;gap:6px"><span class="cclock" id="clk">00:00</span><button class="${live.clock.running ? '' : 'primary'}" style="padding:4px 10px" data-act="clk">${live.clock.running ? '❚❚' : '▶'}</button></span>` : ''}</div>
       <div class="cbtns">
+        <button class="sun" data-act="mark">⭐ Jugada</button>
+        <button data-act="markc">💜 ${esc(hlName())}</button>
+        ${replayBtn()}
         <button data-act="undo">Deshacer</button>
-        <button data-act="mark">⭐ Jugada</button>
         ${scr ? `<button class="sun" data-act="allHide">Quitar</button>`
               : `<button data-act="brkq" data-v="${quick[0]}" data-k="${quick[1]}">${quick[2]}</button>`}
         <button class="primary" data-act="expand">Más ⤢</button>
@@ -630,8 +645,12 @@ function start() {
       if (showSets) h += setsCard();
     }
     h += `<div class="grid3">
-        <button data-act="undo">↶ Deshacer</button>
         <button class="sun" data-act="mark">⭐ Jugada</button>
+        <button data-act="markc">💜 ${esc(hlName())}</button>
+        ${replayBtn()}
+      </div>
+      <div class="grid2">
+        <button data-act="undo">↶ Deshacer</button>
         <button class="${live.muted ? 'danger' : ''}" data-act="muteToggle">${live.muted ? '🔇 Sin micro' : '🎙 Micro'}</button>
       </div>`;
     const quick = volley ? [['TIEMPO MUERTO', 'tm', 'Tiempo muerto'], ['FIN DE SET', 'set', 'Fin de set']] : [['DESCANSO', 'half', 'Descanso'], ['FIN DEL PARTIDO', 'end', 'Final']];
@@ -792,11 +811,13 @@ function start() {
     const list = Object.entries(marks).sort((a, b) => a[1].ts - b[1].ts);
     const time = ts => new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     return `<div class="card">
-      <p class="muted small" style="margin-top:0">Pulsa ⭐ tras una buena jugada. Al terminar, el móvil cámara corta esos momentos de su grabación y los une en un vídeo.</p>
-      <div>${list.map(([id, m]) => `<div class="item"><div class="grow">${esc(m.label || 'Jugada')}<br>
+      <p class="muted small" style="margin-top:0">⭐ va al resumen del partido (con portada y patrocinadores) y 💜 al resumen de ${esc(hlName())}. Al terminar, el móvil cámara corta esos momentos de su grabación.</p>
+      <div>${list.map(([id, m]) => `<div class="item"><button class="ghost" style="flex:0 0 44px;padding:6px" data-act="markKind" data-id="${id}" title="Cambiar tipo">${m.kind === 'carmen' ? '💜' : '⭐'}</button>
+        <div class="grow">${esc(m.label || 'Jugada')}<br>
         <span class="muted small">${time(m.ts)}</span></div>
         <button class="danger" data-act="markDel" data-id="${id}">✕</button></div>`).join('') || '<p class="muted">Sin jugadas marcadas.</p>'}</div>
-      ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resumen y capítulos</button></p>
+      ${list.length ? '<p class="muted small" style="margin:4px 0 0">Toca ⭐ / 💜 para cambiar una jugada de resumen.</p>' : ''}
+      ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resúmenes</button></p>
         <p><button style="width:100%" data-act="videoHl">🎞 Resumen desde un vídeo de la galería</button></p>`
                   : `<p class="muted small">El resumen se crea desde la app del móvil cámara (botón 🎬 o al parar la grabación).</p>`}
       ${list.length ? `<button class="danger" style="width:100%" data-act="marksClear">Borrar todas las marcas</button>` : ''}
@@ -824,7 +845,7 @@ function start() {
       ${sec('Resultado', `<div class="card">${resultTable()}
         <div class="grid2" style="margin-top:10px"><button class="primary" data-act="shareCurrent">📤 Compartir imagen</button>
           <button data-act="saveMatch">💾 Guardar en historial</button></div></div>`)}
-      ${sec('Resumen de jugadas', highlightsCard(), Object.keys(marks).length + ' marcadas')}
+      ${sec('Resumen de jugadas', highlightsCard(), (() => { const v = Object.values(marks), c = v.filter(m => m.kind === 'carmen').length; return `⭐ ${v.length - c} · 💜 ${c}`; })())}
       ${sec('YouTube', `<div class="card"><p class="muted small" style="margin-top:0">La descripción incluye el resultado final y los patrocinadores.</p>
         <div class="grid2"><button data-act="copyTitle">📋 Copiar título</button><button data-act="copyDesc">📋 Copiar descripción</button></div>
         ${IS_NATIVE && inUse ? `<p style="margin-bottom:0"><button class="primary" style="width:100%" data-act="ytDesc" data-id="${esc(inUse.id)}">⬆ Subir descripción a "${esc(inUse.title)}"</button></p>` : ''}</div>`)}
@@ -912,7 +933,9 @@ function start() {
       ${sec('Resumen de jugadas', `<div class="card" style="padding:4px 12px">
         <div class="optrow"><span>Segundos antes de la marca</span><input type="number" min="2" max="60" id="hlBefore" value="${live.hl.before}" style="width:80px"></div>
         <div class="optrow"><span>Segundos después</span><input type="number" min="0" max="30" id="hlAfter" value="${live.hl.after}" style="width:80px"></div>
-        ${opt('Marcar automáticamente el final de cada set', live.hl.auto, 'hlAuto')}</div>`)}
+        ${opt('Marcar automáticamente el final de cada set', live.hl.auto, 'hlAuto')}
+        <div class="optrow"><span>Nombre del botón 💜</span><input id="hlName" value="${esc(hlName())}" maxlength="16" style="width:130px"></div>
+        ${opt('Repetición a cámara lenta', live.hl.slow, 'hlSlow')}</div>`)}
       ${sec('Canal', channelBlock())}`;
   }
 
@@ -922,7 +945,7 @@ function start() {
     return { ts: Date.now(), sport: live.sport, home: tv(live.homeId, 'LOCAL'), away: tv(live.awayId, 'VISITANTE'),
              score: live.score, sets: live.sets, history: live.history, finished: live.finished,
              liveStart: (status && status.liveStartTs) || 0,
-             marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '' })) };
+             marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '', kind: m.kind || '' })) };
   }
   function hasData(L) { return L.score.h || L.score.a || L.sets.h || L.sets.a || L.history.length; }
 
@@ -1012,6 +1035,7 @@ function start() {
     [['yiWhen', 'when'], ['yiVenue', 'venue'], ['yiComp', 'comp'], ['yiCat', 'cat'], ['yiSeason', 'season']]
       .forEach(([id, k]) => on(id, 'change', e => setField('info/' + k, e.target.value.trim())));
     on('hlBefore', 'change', e => setField('hl/before', Math.min(60, Math.max(2, +e.target.value || 10))));
+    on('hlName', 'change', e => setField('hl/name', e.target.value.trim() || 'Carmen'));
     on('hlAfter', 'change', e => setField('hl/after', Math.min(30, Math.max(0, +e.target.value || 0))));
     on('sponsSec', 'change', e => setField('spons/sec', Math.min(120, Math.max(3, +e.target.value || 10))));
   }
@@ -1061,6 +1085,10 @@ function start() {
         if (Object.keys(marks).length && confirm('¿Borrar también las jugadas marcadas?')) marksRef.remove();
         return;
       case 'mark': return addMark();
+      case 'markc': return addMark(null, 'carmen');
+      case 'markKind': { const m = marks[d.id]; if (!m) return; return marksRef.child(d.id).update({ kind: m.kind === 'carmen' ? null : 'carmen' }); }
+      case 'replay': return replayCmd();
+      case 'hlSlow': return setField('hl/slow', !live.hl.slow);
       case 'videoHl': try { window.SportCamNative.openVideoHighlights(); } catch (e) { toast('Solo desde la app'); } return;
       case 'spFullPick': {
         const img = await pickImage(1280, true); if (!img) return;

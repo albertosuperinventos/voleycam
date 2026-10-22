@@ -12,6 +12,8 @@ import android.net.Uri
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
+import android.os.HandlerThread
+import android.graphics.BitmapFactory
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Base64
@@ -182,13 +184,20 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     tvDim = findViewById(R.id.tvDim)
     btnMute.setOnClickListener { setMuted(!muted, fromUser = true) }
     findViewById<View>(R.id.btnDim).setOnClickListener { setDim(true) }
-    findViewById<View>(R.id.btnMark).setOnClickListener { v ->
-      web.evaluateJavascript("window.scCmd && scCmd('mark')", null)
-      vibrate()
+    fun flash(v: View, label: String) {
       val b = v as TextView
       b.text = "✓"; b.setBackgroundResource(R.drawable.bg_btn_on); b.setTextColor(ContextCompat.getColor(this, R.color.bg))
-      ui.postDelayed({ b.text = "⭐"; b.setBackgroundResource(R.drawable.bg_btn); b.setTextColor(ContextCompat.getColor(this, R.color.text)) }, 1000)
+      ui.postDelayed({ b.text = label; b.setBackgroundResource(R.drawable.bg_btn); b.setTextColor(ContextCompat.getColor(this, R.color.text)) }, 1000)
     }
+    findViewById<View>(R.id.btnMark).setOnClickListener { v ->
+      web.evaluateJavascript("window.scCmd && scCmd('mark')", null)
+      vibrate(); flash(v, "⭐")
+    }
+    findViewById<View>(R.id.btnMarkC).setOnClickListener { v ->
+      web.evaluateJavascript("window.scCmd && scCmd('markc')", null)
+      vibrate(); flash(v, "💜")
+    }
+    findViewById<View>(R.id.btnReplay).setOnClickListener { toggleReplay() }
     findViewById<View>(R.id.btnMark).setOnLongClickListener { showHighlightsMenu(); true }
     dimOverlay.setOnClickListener { setDim(false) }
 
@@ -239,6 +248,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     // Grabaciones que quedaron a medias en una sesión anterior
     Thread { RecordingSaver.pending(applicationContext).forEach { RecordingSaver.moveToGallery(applicationContext, it) } }.start()
 
+    replayH.post(captureLoop)
+
     if (hasPerms()) setupStream()
     else askPerms.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
   }
@@ -265,6 +276,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   override fun onDestroy() {
     ui.removeCallbacksAndMessages(null)
+    replayH.removeCallbacksAndMessages(null)
+    replayThread.quitSafely()
     wantLive = false
     stream?.let {
       if (it.isStreaming) it.stopStream()
@@ -529,6 +542,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       .put("weakNet", wantLive && connected && System.currentTimeMillis() - weakNetAt < 4000)
       .put("muted", muted).put("dim", dimOverlay.visibility == View.VISIBLE)
       .put("liveStartTs", liveStartTs)
+      .put("replay", replaying)
     web.evaluateJavascript("window.scStatus && scStatus($o)", null)
   }
 
@@ -536,6 +550,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private fun sendPreview() {
     val s = stream ?: return
     if (previewBusy || !s.isOnPreview) return
+    // Si se está guardando imagen para la repetición, se usa el último fotograma (no se pide otra foto)
+    val last = synchronized(replayFrames) { replayFrames.lastOrNull() }
+    if (captureActive() && last != null && System.currentTimeMillis() - last.first < 2000) {
+      val b64 = Base64.encodeToString(last.second, Base64.NO_WRAP)
+      web.evaluateJavascript("window.scPreview && scPreview('data:image/jpeg;base64,$b64')", null)
+      return
+    }
+    if (captureBusy) return
     previewBusy = true
     try {
       s.getGlInterface().takePhoto { bmp ->
@@ -565,6 +587,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       "switch" -> switchCamera()
       "dim_on" -> setDim(true)
       "dim_off" -> setDim(false)
+      "replay" -> toggleReplay()
     }
     lastStatusAt = 0L
   }
@@ -645,6 +668,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   }
 
   private fun updateOverlay() {
+    if (replaying) return
     val r = renderer ?: return
     val f = overlayFilter ?: return
     val now = System.currentTimeMillis()
@@ -716,45 +740,139 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   /* ======================= Resumen de jugadas ======================= */
 
+  private val playerName get() = overlayState?.hlName ?: "Carmen"
+  private var lastSummaryUri: Uri? = null
+  private var lastPlayerUri: Uri? = null
+
+  /** Menú de resúmenes y YouTube (al terminar la grabación, botón 🎬 del mando o pulsación larga en ⭐). */
   private fun showHighlightsMenu() {
     val rec = lastRecording
     val marks = overlayState?.marks.orEmpty()
-    val b = AlertDialog.Builder(this).setTitle("Resumen y YouTube")
-    if (rec != null) {
-      val n = marks.count { it.ts in rec.startTs..rec.endTs }
-      b.setMessage("La última grabación tiene $n jugadas marcadas.")
-      b.setPositiveButton("Crear resumen") { _, _ -> makeHighlights() }
-    } else {
-      b.setMessage(if (stream?.isRecording == true) "Para la grabación para poder crear el vídeo resumen."
-                   else "Aún no hay grabación terminada; puedes copiar la descripción con los capítulos del directo.")
+    val inRec = if (rec != null) marks.filter { it.ts in rec.startTs..rec.endTs } else emptyList()
+    val nGame = inRec.count { !it.isPlayer }; val nPlayer = inRec.count { it.isPlayer }
+    val items = mutableListOf<Pair<String, () -> Unit>>()
+    if (rec != null && inRec.isNotEmpty()) {
+      items += "🎬 Crear resúmenes (⭐ $nGame · 💜 $nPlayer)" to { makeSummaries(game = true, player = true) }
+      if (nGame > 0 && nPlayer > 0) {
+        items += "⭐ Solo resumen del partido" to { makeSummaries(game = true, player = false) }
+        items += "💜 Solo resumen de $playerName" to { makeSummaries(game = false, player = true) }
+      }
     }
-    b.setNeutralButton("Copiar descripción + capítulos") { _, _ -> copyChapters() }
-    b.setNegativeButton("Cerrar", null)
+    lastSummaryUri?.let { u -> items += "📤 Compartir resumen del partido" to { shareVideo(u) } }
+    lastPlayerUri?.let { u -> items += "📤 Compartir resumen de $playerName" to { shareVideo(u) } }
+    if (prefs.ytBroadcastId.isNotBlank()) items += "⬆ Subir descripción y capítulos a YouTube" to { uploadDescription(prefs.ytBroadcastId, overlayState?.ytDesc.orEmpty()) }
+    items += "📋 Copiar descripción + capítulos" to { copyChapters() }
+    val msg = when {
+      rec == null && stream?.isRecording == true -> "Para la grabación para poder crear los resúmenes."
+      rec == null -> "Aún no hay grabación terminada."
+      inRec.isEmpty() -> "La última grabación no tiene jugadas marcadas."
+      else -> null
+    }
+    val b = AlertDialog.Builder(this).setTitle(msg?.let { "Resumen y YouTube · $it" } ?: "Resumen y YouTube")
+      .setItems(items.map { it.first }.toTypedArray()) { _, i -> items[i].second() }
+      .setNegativeButton("Cerrar", null)
     b.show()
   }
 
-  private fun makeHighlights() {
+  private fun shareVideo(u: Uri) {
+    try {
+      startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("video/mp4")
+        .putExtra(Intent.EXTRA_STREAM, u).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Compartir resumen"))
+    } catch (e: Exception) { toast("No se pudo compartir: ${e.message}") }
+  }
+
+  /** Línea de la portada del resumen: fecha · competición · categoría. */
+  private fun summarySubtitle(st: OverlayState): String {
+    val date = try {
+      val d = java.time.LocalDateTime.parse(st.infoWhen)
+      String.format(Locale.US, "%02d/%02d/%d", d.dayOfMonth, d.monthValue, d.year)
+    } catch (_: Exception) { SimpleDateFormat("dd/MM/yyyy", Locale.US).format(Date()) }
+    return listOf(date, st.infoComp, st.infoCat).filter { it.isNotBlank() }.joinToString("  ·  ")
+  }
+
+  private var progressDialog: AlertDialog? = null
+  private fun progress(text: String?) {
+    if (text == null) { progressDialog?.dismiss(); progressDialog = null; return }
+    val d = progressDialog
+    if (d == null) progressDialog = AlertDialog.Builder(this).setTitle("Creando resúmenes").setMessage(text).setCancelable(false).show()
+    else d.setMessage(text)
+  }
+
+  /** Resumen del partido (⭐, con portada y patrocinadores) y/o de la jugadora (💜, solo jugadas). */
+  private fun makeSummaries(game: Boolean, player: Boolean) {
     val rec = lastRecording ?: return
-    if (makingHighlights) return toast("Ya se está creando el resumen…")
-    val st = overlayState
-    val ranges = Highlights.ranges(rec, st?.marks.orEmpty(), st?.hlBefore ?: 10, st?.hlAfter ?: 3)
-    if (ranges.isEmpty()) return toast("No hay jugadas marcadas en la última grabación")
+    if (makingHighlights) return toast("Ya se están creando los resúmenes…")
+    val st = overlayState ?: return toast("El mando aún no ha cargado")
+    val marks = st.marks
+    val gameRanges = if (game) Highlights.ranges(rec, marks.filter { !it.isPlayer }, st.hlBefore, st.hlAfter) else emptyList()
+    val playerRanges = if (player) Highlights.ranges(rec, marks.filter { it.isPlayer }, st.hlBefore, st.hlAfter) else emptyList()
+    if (gameRanges.isEmpty() && playerRanges.isEmpty()) return toast("No hay jugadas marcadas en la última grabación")
     makingHighlights = true
-    toast("Creando resumen de ${ranges.size} jugadas…")
+    progress("Cortando jugadas…")
+    val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+    val results = mutableListOf<String>()
     Thread {
-      var msg: String
-      try {
-        val out = File(cacheDir, "resumen.mp4").apply { delete() }
-        val n = Highlights.cut(applicationContext, rec.uri, ranges, out)
-        val name = "VoleyCam_resumen_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".mp4"
-        msg = if (n > 0 && RecordingSaver.moveToGallery(applicationContext, out, name) != null)
-          "Resumen guardado en Películas/VoleyCam ($n jugadas)" else "No se pudo crear el resumen"
-      } catch (e: Exception) {
-        msg = "No se pudo crear el resumen: ${e.message}"
+      // 1) Resumen de la jugadora: solo cortar (rápido)
+      if (playerRanges.isNotEmpty()) {
+        try {
+          val out = File(cacheDir, "resumen_jugadora.mp4").apply { delete() }
+          val n = Highlights.cut(applicationContext, rec.uri, playerRanges, out)
+          val safe = playerName.replace(Regex("[^A-Za-z0-9ÁÉÍÓÚáéíóúÑñ]"), "")
+          val u = if (n > 0) RecordingSaver.moveToGallery(applicationContext, out, "VoleyCam_${safe}_$stamp.mp4") else null
+          if (u != null) { lastPlayerUri = u; results += "💜 Resumen de $playerName: $n jugadas" } else results += "💜 No se pudo crear el resumen de $playerName"
+        } catch (e: Exception) { results += "💜 Error en el resumen de $playerName: ${e.message}" }
       }
-      makingHighlights = false
-      runOnUiThread { toast(msg) }
+      if (gameRanges.isEmpty()) { runOnUiThread { finishSummaries(results) }; return@Thread }
+      // 2) Resumen del partido: cortar y añadir portada + patrocinadores
+      val clip = File(cacheDir, "resumen_cortado.mp4").apply { delete() }
+      val n = try { Highlights.cut(applicationContext, rec.uri, gameRanges, clip) } catch (_: Exception) { 0 }
+      if (n == 0) { results += "⭐ No se pudo crear el resumen del partido"; runOnUiThread { finishSummaries(results) }; return@Thread }
+      val (w, h) = SummaryMaker.videoSize(clip)
+      val slides = try { SummaryMaker.renderSlides(applicationContext, w, h, st, summarySubtitle(st)) } catch (_: Exception) { emptyList() }
+      val name = "VoleyCam_resumen_$stamp.mp4"
+      fun saveClipOnly(why: String) {
+        val u = RecordingSaver.moveToGallery(applicationContext, clip, name)
+        if (u != null) { lastSummaryUri = u; results += "⭐ Resumen del partido: $n jugadas (sin portada: $why)" } else results += "⭐ No se pudo guardar el resumen del partido"
+      }
+      if (slides.isEmpty()) { saveClipOnly("no se pudo dibujar"); runOnUiThread { finishSummaries(results) }; return@Thread }
+      runOnUiThread {
+        progress("Añadiendo portada y patrocinadores… 0 %")
+        val final = File(cacheDir, "resumen_final.mp4")
+        SummaryMaker.compose(applicationContext, clip, slides, w, h, final,
+          onProgress = { p -> progress("Añadiendo portada y patrocinadores… $p %") },
+          onDone = { ok, err ->
+            Thread {
+              if (ok) {
+                val u = RecordingSaver.moveToGallery(applicationContext, final, name)
+                if (u != null) { lastSummaryUri = u; results += "⭐ Resumen del partido: $n jugadas, con portada y patrocinadores"; clip.delete() }
+                else saveClipOnly("no se pudo guardar")
+              } else saveClipOnly(err.take(60))
+              runOnUiThread { finishSummaries(results) }
+            }.start()
+          })
+      }
     }.start()
+  }
+
+  private fun finishSummaries(results: List<String>) {
+    makingHighlights = false
+    progress(null)
+    AlertDialog.Builder(this)
+      .setTitle("Resúmenes guardados en Películas/VoleyCam")
+      .setMessage(results.joinToString("\n"))
+      .setPositiveButton("Más opciones") { _, _ -> showHighlightsMenu() }
+      .setNegativeButton("Cerrar", null)
+      .show()
+  }
+
+  /** Sube a YouTube la descripción con los capítulos (solo jugadas ⭐). */
+  private fun uploadDescription(id: String, desc: String) {
+    val marks = overlayState?.marks.orEmpty()
+    val start = if (liveStartTs > 0) liveStartTs else lastRecording?.startTs ?: 0L
+    val ch = if (start > 0) Highlights.chapters(start, marks) else ""
+    val full = if (ch.contains('\n')) "$desc\n\nMOMENTOS DEL PARTIDO\n$ch" else desc
+    toast("Subiendo descripción a YouTube…")
+    ytRun { token -> YouTubeClient.updateDescription(token, id, full); "Descripción actualizada en YouTube." }
   }
 
   private fun copyChapters() {
@@ -767,6 +885,102 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val text = if (desc.isBlank()) chapters else "$desc\n\nMOMENTOS DEL PARTIDO\n$chapters"
     copyToClipboard(text)
     toast("Copiado: pégalo en la descripción del vídeo en YouTube Studio")
+  }
+
+  /* ======================= Repetición en directo ======================= */
+
+  private val replayThread = HandlerThread("replay").apply { start() }
+  private val replayH = Handler(replayThread.looper)
+  /** Últimos fotogramas emitidos: (hora local ms, JPEG 640x360). */
+  private val replayFrames = ArrayDeque<Pair<Long, ByteArray>>()
+  @Volatile private var replaying = false
+  @Volatile private var captureBusy = false
+  private var captureSince = 0L
+  private val replayBitmaps = arrayOfNulls<Bitmap>(3)
+  private var replayIdx = 0
+
+  private fun captureActive() = stream?.isOnPreview == true && (wantLive || stream?.isRecording == true)
+
+  private val captureLoop = object : Runnable {
+    override fun run() {
+      captureFrame()
+      replayH.postDelayed(this, REPLAY_FRAME_MS)
+    }
+  }
+
+  private fun captureFrame() {
+    val s = stream ?: return
+    val now = System.currentTimeMillis()
+    if (!captureActive() || replaying) { if (!captureActive()) synchronized(replayFrames) { replayFrames.clear() }; return }
+    if (captureBusy && now - captureSince < 1500) return
+    if (previewBusy) return
+    captureBusy = true; captureSince = now
+    try {
+      s.getGlInterface().takePhoto { bmp ->
+        replayH.post {
+          try {
+            if (!replaying) {
+              val small = Bitmap.createScaledBitmap(bmp, REPLAY_W, REPLAY_H, true)
+              val out = ByteArrayOutputStream()
+              small.compress(Bitmap.CompressFormat.JPEG, 72, out)
+              small.recycle()
+              val t = System.currentTimeMillis()
+              synchronized(replayFrames) {
+                replayFrames.addLast(t to out.toByteArray())
+                while (replayFrames.isNotEmpty() && t - replayFrames.first().first > REPLAY_KEEP_MS) replayFrames.removeFirst()
+              }
+            }
+          } catch (_: Exception) {} finally { captureBusy = false }
+        }
+      }
+    } catch (_: Exception) { captureBusy = false }
+  }
+
+  private fun toggleReplay() {
+    if (replaying) { replaying = false; return }
+    val r = renderer ?: return toast("La cámara aún no está lista")
+    val f = overlayFilter ?: return
+    val now = System.currentTimeMillis()
+    val frames = synchronized(replayFrames) { replayFrames.filter { now - it.first <= REPLAY_SHOW_MS } }
+    if (frames.size < 10) return toast(if (captureActive()) "Aún no hay imagen suficiente para repetir" else "La repetición funciona emitiendo o grabando")
+    val slow = overlayState?.replaySlow == true
+    replaying = true
+    lastStatusAt = 0L
+    for (i in replayBitmaps.indices) if (replayBitmaps[i]?.width != r.width || replayBitmaps[i]?.height != r.height)
+      replayBitmaps[i] = Bitmap.createBitmap(r.width, r.height, Bitmap.Config.ARGB_8888)
+    replayH.post(object : Runnable {
+      var i = 0
+      val opts = BitmapFactory.Options().apply { inMutable = true }
+      var frame: Bitmap? = null
+      override fun run() {
+        if (!replaying || i >= frames.size) { endReplay(); return }
+        try {
+          opts.inBitmap = frame
+          frame = BitmapFactory.decodeByteArray(frames[i].second, 0, frames[i].second.size, opts)
+          replayIdx = (replayIdx + 1) % replayBitmaps.size
+          val out = replayBitmaps[replayIdx]
+          val fr = frame
+          if (out != null && fr != null) { r.renderReplay(fr, slow, out); f.setImage(out) }
+        } catch (_: Exception) { opts.inBitmap = null }
+        val gap = if (i + 1 < frames.size) (frames[i + 1].first - frames[i].first).coerceIn(30, 200) else REPLAY_FRAME_MS
+        i++
+        replayH.postDelayed(this, if (slow) gap * 2 else gap)
+      }
+    })
+    ui.post { updateReplayButton() }
+  }
+
+  private fun endReplay() {
+    replaying = false
+    synchronized(replayFrames) { replayFrames.clear() }   // no repetir lo ya repetido
+    ui.post { lastSig = ""; updateOverlay(); lastStatusAt = 0L; updateReplayButton() }
+  }
+
+  private fun updateReplayButton() {
+    val b = findViewById<TextView>(R.id.btnReplay)
+    b.text = if (replaying) "■" else "⏪"
+    b.setBackgroundResource(if (replaying) R.drawable.bg_btn_on else R.drawable.bg_btn)
+    b.setTextColor(ContextCompat.getColor(this, if (replaying) R.color.bg else R.color.text))
   }
 
   private fun copyToClipboard(text: String) {
@@ -901,7 +1115,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       ui.post {
         val st = overlayState
         startActivity(Intent(this@MainActivity, VideoHighlightsActivity::class.java)
-          .putExtra("matches", st?.savedMatchesJson ?: "[]")
+          .putExtra("playerName", overlayState?.hlName ?: "Carmen").putExtra("matches", st?.savedMatchesJson ?: "[]")
           .putExtra("before", st?.hlBefore ?: 10)
           .putExtra("after", st?.hlAfter ?: 3))
       }
@@ -935,12 +1149,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     @JavascriptInterface
     fun ytUpdateDesc(id: String, desc: String) {
-      ui.post {
-        val marks = overlayState?.marks.orEmpty()
-        val start = if (liveStartTs > 0) liveStartTs else lastRecording?.startTs ?: 0L
-        val full = if (start > 0 && marks.isNotEmpty()) "$desc\n\nMOMENTOS DEL PARTIDO\n${Highlights.chapters(start, marks)}" else desc
-        ytRun { token -> YouTubeClient.updateDescription(token, id, full); "Descripción actualizada en YouTube." }
-      }
+      ui.post { uploadDescription(id, desc) }
     }
 
     @JavascriptInterface
@@ -989,5 +1198,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     private const val AUDIO_BITRATE = 128_000
     private const val RETRIES = 1000
     private const val RETRY_DELAY_MS = 5000L
+    private const val REPLAY_W = 640
+    private const val REPLAY_H = 360
+    private const val REPLAY_FRAME_MS = 66L     // ~15 fotogramas por segundo
+    private const val REPLAY_KEEP_MS = 10_000L  // se guardan los últimos 10 s
+    private const val REPLAY_SHOW_MS = 8_000L   // se repiten los últimos 8 s
   }
 }

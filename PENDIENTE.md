@@ -36,7 +36,7 @@
 - Solo una pantalla completa a la vez (rótulo o patrocinador) y botón Quitar.
 - Usar el canal de otro móvil: escanear QR o pegar clave (Ajustes de la app y Ajustes del mando).
 
-## Próxima versión (1.7.0) — acordado, sin compilar
+## Versión 1.7.0
 - Repetición en directo: botón aparte "⏪ Repetir" (⭐ solo marca). Búfer de ~10 s en memoria (≈640x360, 15 fps), rótulo REPETICIÓN, vuelve sola a cámara; audio en directo. Velocidad normal/lenta en Ajustes. Se lanza desde mando, mini mando y botón de cámara; botón para cortarla.
 - Dos favoritos: ⭐ Jugada (general) y 💜 Carmen (nombre editable en Ajustes). Marcas con tipo; tocar una marca cambia su tipo. Resumen del partido / Resumen de Carmen por separado (también desde galería). Fin de set automático solo general. Capítulos YouTube solo con ⭐. Marcas a menos de 5 s se unen en una sola jugada.
 - Menú fin de directo: Crear resumen · Subir descripción a YouTube · Cerrar; al terminar el resumen vuelve el menú con Compartir.
