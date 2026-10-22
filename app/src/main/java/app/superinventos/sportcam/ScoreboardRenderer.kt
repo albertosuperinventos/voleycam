@@ -35,30 +35,34 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   private val logoCache = object : LruCache<String, Bitmap>(32) {}
 
+  /** Imagen de portada (data URL). Se alterna en la pantalla PREPARTIDO. */
+  var cover: String = ""
+
   /** Qué ocupa la pantalla completa en este instante. */
   private sealed class Screen {
     object None : Screen()
     object Break : Screen()
+    object Cover : Screen()
     data class Spons(val sp: Sponsor) : Screen()
   }
 
   private fun screen(s: OverlayState, now: Long): Screen {
     s.fullSponsor?.let { return Screen.Spons(it) }
     if (!s.breakShow) return Screen.None
-    if (s.sponsCarousel && s.sponsors.isNotEmpty()) {
-      // Ciclo: pantalla de descanso, patrocinador 1, patrocinador 2…
-      val slot = ((now / 1000 / s.sponsSec) % (s.sponsors.size + 1)).toInt()
-      return if (slot == 0) Screen.Break else Screen.Spons(s.sponsors[slot - 1])
-    }
-    return Screen.Break
+    // Ciclo: pantalla elegida, portada (en prepartido), patrocinadores (si hay carrusel)
+    val slots = mutableListOf<Screen>(Screen.Break)
+    if (s.breakKind == "pre" && cover.isNotBlank()) slots += Screen.Cover
+    if (s.sponsCarousel) s.sponsors.forEach { slots += Screen.Spons(it) }
+    if (slots.size == 1) return Screen.Break
+    return slots[((now / 1000 / s.sponsSec) % slots.size).toInt()]
   }
 
   /** Clave que cambia cuando hay que volver a pintar. */
   fun signature(s: OverlayState?, version: Int, now: Long): String {
     if (s == null) return "none"
     val clockSec = if (!s.isVolley || s.timerShow) s.clockMs(now) / 1000 else 0
-    val tick = if (s.sponsors.size > 1 || (s.breakShow && s.sponsCarousel)) now / 1000 / s.sponsSec else 0
-    return "$version|$clockSec|$tick"
+    val tick = if (s.sponsors.size > 1 || s.breakShow) now / 1000 / s.sponsSec else 0
+    return "$version|$clockSec|$tick|${cover.length}"
   }
 
   /** Pinta sobre [bmp] (se borra antes). */
@@ -69,6 +73,11 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     when (val sc = screen(s, now)) {
       is Screen.Spons -> { drawFullSponsor(c, sc.sp); return bmp }
       Screen.Break -> { drawBreak(c, s); return bmp }
+      Screen.Cover -> {
+        rect(c, 0f, 0f, width.toFloat(), height.toFloat(), Color.BLACK)
+        drawLogoFit(c, cover, RectF(0f, 0f, width.toFloat(), height.toFloat()))
+        return bmp
+      }
       Screen.None -> {}
     }
 

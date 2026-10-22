@@ -92,6 +92,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   private fun serverNow() = System.currentTimeMillis() + (overlayState?.serverOffset ?: 0L)
 
+  // Portada (miniatura de YouTube y prepartido)
+  @Volatile private var coverData = ""
+
   // Cámara a distancia
   @Volatile private var remoteOpenTs = 0L
   private var lastStatusAt = 0L
@@ -299,7 +302,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       s.prepareVideo(w, h, vBitrate, prefs.fps) && s.prepareAudio(AUDIO_RATE, true, AUDIO_BITRATE)
     } catch (_: IllegalArgumentException) { false }
     if (ok) {
-      renderer = ScoreboardRenderer(w, h)
+      renderer = ScoreboardRenderer(w, h).also { it.cover = coverData }
       for (i in overlayBitmaps.indices) overlayBitmaps[i] = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
       lastSig = ""
       bitrateAdapter = QueueAwareBitrateAdapter(vBitrate + AUDIO_BITRATE) { b ->
@@ -591,6 +594,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val selected = prefs.ytBroadcastId
     broadcasts.forEach { b ->
       arr.put(JSONObject().put("id", b.id).put("title", b.title).put("when", prettyDate(b.start))
+        .put("startIso", b.start).put("raw", b.status)
         .put("privacy", when (b.privacy) { "public" -> "pública"; "unlisted" -> "oculta"; "private" -> "privada"; else -> b.privacy })
         .put("status", when (b.status) { "created", "ready" -> "programada"; "live" -> "EN DIRECTO"; "complete" -> "terminada"; "testing" -> "en prueba"; else -> b.status })
         .put("selected", b.id == selected))
@@ -618,7 +622,20 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
   }
 
-  /** Usa la emisión: la asocia a la emisión SportCam y guarda su clave en Ajustes. */
+  /** Portada en JPEG 1280×720 como máximo, para la miniatura de YouTube. */
+  private fun coverJpeg(): ByteArray? {
+    if (coverData.isBlank()) return null
+    return try {
+      val bytes = Base64.decode(coverData.substringAfter("base64,"), Base64.DEFAULT)
+      var bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+      if (bmp.width > 1280) bmp = Bitmap.createScaledBitmap(bmp, 1280, (bmp.height * 1280f / bmp.width).toInt(), true)
+      val out = ByteArrayOutputStream()
+      bmp.compress(Bitmap.CompressFormat.JPEG, 88, out)
+      out.toByteArray()
+    } catch (_: Exception) { null }
+  }
+
+  /** Usa la emisión: la asocia a la emisión VoleyCam y guarda su clave en Ajustes. */
   private fun ytSelect(token: String, broadcastId: String) {
     val st = YouTubeClient.ensureStream(token)
     YouTubeClient.bind(token, broadcastId, st.id)
@@ -866,6 +883,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     fun command(action: String) { ui.post { remoteCommand(action) } }
 
     @JavascriptInterface
+    fun setCover(dataUrl: String) {
+      coverData = dataUrl
+      ui.post { renderer?.cover = dataUrl; stateVersion++; updateOverlay() }
+    }
+
+    @JavascriptInterface
     fun onRemote(ts: Double) { remoteOpenTs = ts.toLong() }
 
     @JavascriptInterface
@@ -890,7 +913,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
           val st = YouTubeClient.ensureStream(token)
           val id = YouTubeClient.createBroadcast(token, o.getString("title"), o.optString("desc"), o.getString("when"), o.optString("privacy", "unlisted"), st.id)
           prefs.platform = Prefs.PLATFORM_YOUTUBE; prefs.youtubeKey = st.key; prefs.ytBroadcastId = id
-          "Emisión creada y lista: al pulsar EN DIRECTO se emitirá en ella."
+          var extra = ""
+          coverJpeg()?.let { jpg ->
+            extra = try { YouTubeClient.setThumbnail(token, id, jpg); " Portada puesta como miniatura." }
+                    catch (e: Exception) { " No se pudo poner la miniatura (${e.message}); revisa que el canal tenga las funciones intermedias activadas." }
+          }
+          "Emisión creada y lista: al pulsar EN DIRECTO se emitirá en ella.$extra"
         }
       }
     }

@@ -94,6 +94,24 @@ object YouTubeClient {
     call(token, "POST", "liveBroadcasts/bind?id=${enc(broadcastId)}&streamId=${enc(streamId)}&part=id,contentDetails")
   }
 
+  /** Pone la miniatura del vídeo (JPEG, máx. 2 MB). Requiere canal con funciones intermedias. */
+  fun setThumbnail(token: String, videoId: String, jpeg: ByteArray) {
+    val c = URL("https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${enc(videoId)}").openConnection() as HttpURLConnection
+    c.requestMethod = "POST"; c.doOutput = true
+    c.connectTimeout = 15000; c.readTimeout = 30000
+    c.setRequestProperty("Authorization", "Bearer $token")
+    c.setRequestProperty("Content-Type", "image/jpeg")
+    c.setFixedLengthStreamingMode(jpeg.size)
+    c.outputStream.use { it.write(jpeg) }
+    val code = c.responseCode
+    val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
+    c.disconnect()
+    if (code !in 200..299) {
+      val msg = try { JSONObject(text).getJSONObject("error").optString("message") } catch (_: Exception) { text.take(200) }
+      throw ApiException(msg)
+    }
+  }
+
   /** Cambia la descripción del vídeo manteniendo título y categoría. */
   fun updateDescription(token: String, videoId: String, desc: String) {
     val v = call(token, "GET", "videos?part=snippet&id=${enc(videoId)}").optJSONArray("items")?.optJSONObject(0)
