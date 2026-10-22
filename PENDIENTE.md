@@ -41,7 +41,9 @@
 - Dos favoritos: ⭐ Jugada (general) y 💜 Carmen (nombre editable en Ajustes). Marcas con tipo; tocar una marca cambia su tipo. Resumen del partido / Resumen de Carmen por separado (también desde galería). Fin de set automático solo general. Capítulos YouTube solo con ⭐. Marcas a menos de 5 s se unen en una sola jugada.
 - Menú fin de directo: Crear resumen · Subir descripción a YouTube · Cerrar; al terminar el resumen vuelve el menú con Compartir.
 - Resumen del partido con portada 3 s (RESUMEN DEL PARTIDO, escudos, equipos, sets, fecha, competición) y patrocinadores al final 3 s cada uno (diapositiva o logo). Requiere recodificar (1-2 min, barra de progreso). El de Carmen SIN portada ni patrocinadores.
-- Pendiente de confirmar: ¿jugadas de Carmen también en el resumen general? ¿💜 puede lanzar repetición?
+- Un solo botón "Crear resúmenes" hace los dos (el de Carmen solo si hay marcas 💜); en Después se puede crear uno suelto.
+- Las jugadas 💜 NO entran en el resumen general (solo si además se pulsó ⭐).
+- 💜 no lanza repetición (solo ⏪).
 
 ## Siguiente versión
 - ~~Rediseño del mando~~ (hecho en 1.6.0) por momento de uso: Juego · Pantalla · Partido · Después · Ajustes (boceto antes de programar). Mini mando con nombres completos y botones con texto.
