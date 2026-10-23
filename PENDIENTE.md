@@ -58,3 +58,5 @@
 - Tiempo muerto automático: al pulsar TM de un equipo en Juego se cuenta y sale TIEMPO MUERTO con carrusel de patrocinadores 30 s; vuelve sola a la cámara (botón Volver para antes).
 - Fin de set: sale FIN DE SET con carrusel hasta pulsar "Volver al partido"; máximo 2 min y vuelve sola.
 - La hora de vuelta se guarda en el canal (la cumple el móvil cámara aunque el mando se apague). Cuenta atrás visible en el botón.
+- YouTube: interruptor "Contenido para niños" al crear la emisión (por defecto NO).
+- PREPARTIDO siempre con carrusel en este orden: portada → escudos → patrocinadores (sin depender del interruptor).
