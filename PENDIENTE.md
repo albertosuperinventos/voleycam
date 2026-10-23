@@ -60,3 +60,4 @@
 - La hora de vuelta se guarda en el canal (la cumple el móvil cámara aunque el mando se apague). Cuenta atrás visible en el botón.
 - YouTube: interruptor "Contenido para niños" al crear la emisión (por defecto NO).
 - PREPARTIDO siempre con carrusel en este orden: portada → escudos → patrocinadores (sin depender del interruptor).
+- "Nuevo partido": guarda siempre el partido con sus jugadas en el historial y vacía la lista de jugadas, sin preguntar (sigue preguntando confirmación de poner a cero). Quitar botón "Borrar todas las marcas".
