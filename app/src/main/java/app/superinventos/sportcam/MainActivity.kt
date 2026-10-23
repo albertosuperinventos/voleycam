@@ -798,7 +798,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     else d.setMessage(text)
   }
 
-  /** Resumen del partido (⭐, con portada y patrocinadores) y/o de la jugadora (💜, solo jugadas). */
+  /** Resumen del partido (⭐, con portada y patrocinadores) y/o de la jugadora (💜, solo jugadas), con fundidos. */
   private fun makeSummaries(game: Boolean, player: Boolean) {
     val rec = lastRecording ?: return
     if (makingHighlights) return toast("Ya se están creando los resúmenes…")
@@ -808,50 +808,53 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val playerRanges = if (player) Highlights.ranges(rec, marks.filter { it.isPlayer }, st.hlBefore, st.hlAfter) else emptyList()
     if (gameRanges.isEmpty() && playerRanges.isEmpty()) return toast("No hay jugadas marcadas en la última grabación")
     makingHighlights = true
-    progress("Cortando jugadas…")
     val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+    val safe = playerName.replace(Regex("[^A-Za-z0-9ÁÉÍÓÚáéíóúÑñ]"), "").ifBlank { "jugadora" }
     val results = mutableListOf<String>()
-    Thread {
-      // 1) Resumen de la jugadora: solo cortar (rápido)
-      if (playerRanges.isNotEmpty()) {
-        try {
-          val out = File(cacheDir, "resumen_jugadora.mp4").apply { delete() }
-          val n = Highlights.cut(applicationContext, rec.uri, playerRanges, out)
-          val safe = playerName.replace(Regex("[^A-Za-z0-9ÁÉÍÓÚáéíóúÑñ]"), "")
-          val u = if (n > 0) RecordingSaver.moveToGallery(applicationContext, out, "VoleyCam_${safe}_$stamp.mp4") else null
-          if (u != null) { lastPlayerUri = u; results += "💜 Resumen de $playerName: $n jugadas" } else results += "💜 No se pudo crear el resumen de $playerName"
-        } catch (e: Exception) { results += "💜 Error en el resumen de $playerName: ${e.message}" }
+    val jobs = mutableListOf<() -> Unit>()
+
+    /** Monta un resumen; si el montaje falla, guarda los cortes sin fundidos. Al terminar sigue con el siguiente trabajo. */
+    fun job(title: String, icon: String, ranges: List<LongRange>, withSlides: Boolean, fileName: String, setUri: (Uri) -> Unit) {
+      jobs += {
+        runOnUiThread { progress("$title: preparando…") }
+        Thread {
+          val (w, h) = SummaryMaker.videoSize(applicationContext, rec.uri)
+          val items = try {
+            val slides = if (withSlides) SummaryMaker.renderSlides(applicationContext, w, h, st, summarySubtitle(st)) else null
+            SummaryMaker.prepare(applicationContext, rec.uri, ranges, slides, w, h)
+          } catch (_: Exception) { null }
+          fun fallback(why: String) {
+            val out = File(cacheDir, "resumen_cortes.mp4").apply { delete() }
+            val n = try { Highlights.cut(applicationContext, rec.uri, ranges, out) } catch (_: Exception) { 0 }
+            val u = if (n > 0) RecordingSaver.moveToGallery(applicationContext, out, fileName) else null
+            if (u != null) { setUri(u); results += "$icon $title: ${ranges.size} jugadas (sin fundidos: $why)" }
+            else results += "$icon No se pudo crear: $title"
+            runOnUiThread { next(jobs, results) }
+          }
+          if (items == null) { fallback("no se pudo preparar"); return@Thread }
+          runOnUiThread {
+            val final = File(cacheDir, "resumen_montado.mp4")
+            SummaryMaker.export(applicationContext, items, final,
+              onProgress = { p -> progress(if (p >= 0) "$title: montando… $p %" else "$title: montando…") },
+              onDone = { ok, err ->
+                Thread {
+                  val u = if (ok) RecordingSaver.moveToGallery(applicationContext, final, fileName) else null
+                  if (u != null) { setUri(u); results += "$icon $title: ${ranges.size} jugadas" + if (withSlides) ", con portada y patrocinadores" else "" ; runOnUiThread { next(jobs, results) } }
+                  else fallback(if (ok) "no se pudo guardar" else err.take(60))
+                }.start()
+              })
+          }
+        }.start()
       }
-      if (gameRanges.isEmpty()) { runOnUiThread { finishSummaries(results) }; return@Thread }
-      // 2) Resumen del partido: cortar y añadir portada + patrocinadores
-      val clip = File(cacheDir, "resumen_cortado.mp4").apply { delete() }
-      val n = try { Highlights.cut(applicationContext, rec.uri, gameRanges, clip) } catch (_: Exception) { 0 }
-      if (n == 0) { results += "⭐ No se pudo crear el resumen del partido"; runOnUiThread { finishSummaries(results) }; return@Thread }
-      val (w, h) = SummaryMaker.videoSize(clip)
-      val slides = try { SummaryMaker.renderSlides(applicationContext, w, h, st, summarySubtitle(st)) } catch (_: Exception) { emptyList() }
-      val name = "VoleyCam_resumen_$stamp.mp4"
-      fun saveClipOnly(why: String) {
-        val u = RecordingSaver.moveToGallery(applicationContext, clip, name)
-        if (u != null) { lastSummaryUri = u; results += "⭐ Resumen del partido: $n jugadas (sin portada: $why)" } else results += "⭐ No se pudo guardar el resumen del partido"
-      }
-      if (slides.isEmpty()) { saveClipOnly("no se pudo dibujar"); runOnUiThread { finishSummaries(results) }; return@Thread }
-      runOnUiThread {
-        progress("Añadiendo portada y patrocinadores… 0 %")
-        val final = File(cacheDir, "resumen_final.mp4")
-        SummaryMaker.compose(applicationContext, clip, slides, w, h, final,
-          onProgress = { p -> progress("Añadiendo portada y patrocinadores… $p %") },
-          onDone = { ok, err ->
-            Thread {
-              if (ok) {
-                val u = RecordingSaver.moveToGallery(applicationContext, final, name)
-                if (u != null) { lastSummaryUri = u; results += "⭐ Resumen del partido: $n jugadas, con portada y patrocinadores"; clip.delete() }
-                else saveClipOnly("no se pudo guardar")
-              } else saveClipOnly(err.take(60))
-              runOnUiThread { finishSummaries(results) }
-            }.start()
-          })
-      }
-    }.start()
+    }
+    if (gameRanges.isNotEmpty()) job("Resumen del partido", "⭐", gameRanges, true, "VoleyCam_resumen_$stamp.mp4") { lastSummaryUri = it }
+    if (playerRanges.isNotEmpty()) job("Resumen de $playerName", "💜", playerRanges, false, "VoleyCam_${safe}_$stamp.mp4") { lastPlayerUri = it }
+    next(jobs, results)
+  }
+
+  /** Lanza el siguiente resumen pendiente o, si no queda ninguno, muestra el resultado. */
+  private fun next(jobs: MutableList<() -> Unit>, results: List<String>) {
+    if (jobs.isEmpty()) finishSummaries(results) else jobs.removeAt(0)()
   }
 
   private fun finishSummaries(results: List<String>) {
@@ -1130,7 +1133,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         ytRun { token ->
           val o = JSONObject(json)
           val st = YouTubeClient.ensureStream(token)
-          val id = YouTubeClient.createBroadcast(token, o.getString("title"), o.optString("desc"), o.getString("when"), o.optString("privacy", "unlisted"), st.id)
+          val id = YouTubeClient.createBroadcast(token, o.getString("title"), o.optString("desc"), o.getString("when"), o.optString("privacy", "unlisted"), st.id, o.optBoolean("kids"))
           prefs.platform = Prefs.PLATFORM_YOUTUBE; prefs.youtubeKey = st.key; prefs.ytBroadcastId = id
           var extra = ""
           coverJpeg()?.let { jpg ->

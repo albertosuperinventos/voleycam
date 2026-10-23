@@ -80,10 +80,10 @@ object YouTubeClient {
   }
 
   /** Crea la emisión programada y la asocia a la emisión SportCam. Devuelve el id (también es el id del vídeo). */
-  fun createBroadcast(token: String, title: String, desc: String, startIso: String, privacy: String, streamId: String): String {
+  fun createBroadcast(token: String, title: String, desc: String, startIso: String, privacy: String, streamId: String, forKids: Boolean = false): String {
     val body = JSONObject()
       .put("snippet", JSONObject().put("title", clean(title, 100)).put("description", clean(desc, 5000)).put("scheduledStartTime", startIso))
-      .put("status", JSONObject().put("privacyStatus", privacy).put("selfDeclaredMadeForKids", false))
+      .put("status", JSONObject().put("privacyStatus", privacy).put("selfDeclaredMadeForKids", forKids))
       .put("contentDetails", JSONObject().put("enableAutoStart", true).put("enableAutoStop", true).put("enableDvr", true))
     val id = call(token, "POST", "liveBroadcasts?part=snippet,status,contentDetails", body).optString("id")
     bind(token, id, streamId)

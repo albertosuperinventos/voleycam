@@ -537,10 +537,19 @@ function start() {
   const opt = (label, on, act, attrs) => `<div class="optrow"><span>${label}</span>${sw(on, act, attrs)}</div>`;
   const tmDots = side => '●'.repeat(live.to[side]) + '○'.repeat(2 - live.to[side]);
   const sideTeam = side => teamView(side === 'h' ? live.homeId : live.awayId, side === 'h' ? 'LOCAL' : 'VISITANTE');
+  /** Pantalla completa puesta y sin caducar (tiempo muerto 30 s, fin de set 2 min). */
+  const brkActive = () => live.brk.show && (!live.brk.until || now() < live.brk.until);
+  const BRK_AUTO = { tm: 30000, set: 120000 };
+  const fmtLeft = ms => { const t = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  const backLabel = scr => scr && scr.until ? `Volver al partido <span class="brkLeft">(${fmtLeft(scr.until - now())})</span>` : (scr ? 'Volver al partido' : 'Quitar');
+  function showBreak(text, kind) {
+    const until = BRK_AUTO[kind] ? now() + BRK_AUTO[kind] : 0;
+    return liveRef.update({ brk: { show: true, text, kind, until }, 'spFull/show': false });
+  }
   /** Qué pantalla completa se ve ahora en el vídeo (solo puede haber una). */
   function onScreen() {
     if (live.spFull.show && sponsors[live.spFull.id]) return { kind: 'sp', text: 'Patrocinador: ' + (sponsors[live.spFull.id].name || 'logo') };
-    if (live.brk.show) return { kind: 'brk', text: live.brk.text };
+    if (brkActive()) return { kind: 'brk', text: live.brk.text, until: live.brk.until || 0 };
     return null;
   }
 
@@ -591,7 +600,7 @@ function start() {
         <button data-act="markc">💜 ${esc(hlName())}</button>
         ${replayBtn()}
         <button data-act="undo">Deshacer</button>
-        ${scr ? `<button class="sun" data-act="allHide">Quitar</button>`
+        ${scr ? `<button class="sun" data-act="allHide">${scr.until ? `Volver <span class="brkLeft">(${fmtLeft(scr.until - now())})</span>` : 'Quitar'}</button>`
               : `<button data-act="brkq" data-v="${quick[0]}" data-k="${quick[1]}">${quick[2]}</button>`}
         <button class="primary" data-act="expand">Más ⤢</button>
       </div>`;
@@ -654,8 +663,9 @@ function start() {
         <button class="${live.muted ? 'danger' : ''}" data-act="muteToggle">${live.muted ? '🔇 Sin micro' : '🎙 Micro'}</button>
       </div>`;
     const quick = volley ? [['TIEMPO MUERTO', 'tm', 'Tiempo muerto'], ['FIN DE SET', 'set', 'Fin de set']] : [['DESCANSO', 'half', 'Descanso'], ['FIN DEL PARTIDO', 'end', 'Final']];
-    h += sec('Pantalla rápida', `<div class="grid3">${quick.map(([v, k, t]) => `<button class="${live.brk.show && live.brk.text === v ? 'on' : ''}" data-act="brkq" data-v="${v}" data-k="${k}">${t}</button>`).join('')}
-        <button class="${scr ? 'sun' : 'ghost'}" data-act="allHide" ${scr ? '' : 'disabled'}>Quitar</button></div>`,
+    h += sec('Pantalla rápida', `<div class="grid3">${quick.map(([v, k, t]) => `<button class="${brkActive() && live.brk.text === v ? 'on' : ''}" data-act="brkq" data-v="${v}" data-k="${k}">${t}</button>`).join('')}
+        <button class="${scr ? 'sun' : 'ghost'}" data-act="allHide" ${scr ? '' : 'disabled'}>${backLabel(scr)}</button></div>
+        ${volley ? '<p class="muted small" style="margin:0 2px">Tiempo muerto: 30 s con patrocinadores y vuelve solo. Fin de set: hasta "Volver al partido" (máx. 2 min). Al tocar TM de un equipo también sale.</p>' : ''}`,
       scr ? '● ' + esc(scr.text) : 'se ve la cámara');
     if (volley) {
       h += sec('Temporizador', `<div class="card"><div class="tline"><span class="t" id="clk">00:00</span>
@@ -680,8 +690,8 @@ function start() {
     return `
       <div class="nowbar ${scr ? 'full' : ''}"><span class="ld"></span>
         <b>${scr ? esc(scr.text) : live.board.show ? 'Cámara con marcador' : 'Cámara sin marcador'}</b>
-        ${scr ? '<button class="sun" data-act="allHide">Quitar</button>' : ''}</div>
-      ${sec('Pantalla completa', `<div class="grid2">${presets.map(([p, k]) => `<button class="${live.brk.show && live.brk.text === p ? 'on' : ''}" data-act="brkq" data-v="${p}" data-k="${k}">${p}</button>`).join('')}</div>
+        ${scr ? `<button class="sun" data-act="allHide">${backLabel(scr)}</button>` : ''}</div>
+      ${sec('Pantalla completa', `<div class="grid2">${presets.map(([p, k]) => `<button class="${brkActive() && live.brk.text === p ? 'on' : ''}" data-act="brkq" data-v="${p}" data-k="${k}">${p}</button>`).join('')}</div>
         <div class="row"><input id="brkText" placeholder="Texto propio, ej: CALENTAMIENTO"><button style="flex:0 0 auto" data-act="brkCustom">Mostrar</button></div>`, 'solo una a la vez')}
       ${sec('Patrocinadores', `<div class="sptiles">${sp.map(([id, s]) => `<button class="sptile ${live.spFull.show && live.spFull.id === id ? 'on' : ''}" data-act="spFull" data-id="${id}">
             <i style="background-image:url('${s.full || s.logo}')"></i>${esc(s.name || 'Patrocinador')}</button>`).join('')}
@@ -757,6 +767,7 @@ function start() {
           : '<p class="muted" style="margin:0">Ninguna elegida: crea una o pulsa "Usar esta" en una próxima.</p>'}
         <label>Crear nueva</label>
         <div class="grid3">${pbtn('public', 'Pública')}${pbtn('unlisted', 'Oculta')}${pbtn('private', 'Privada')}</div>
+        <div class="optrow" style="border-top:0;margin-top:4px"><span>Contenido para niños<br><span class="muted small">Si lo activas, YouTube quita el chat y los comentarios</span></span>${sw(!!live.info.kids, 'ytKids')}</div>
         <p class="muted small">Título, descripción y fecha salen de "Datos del partido"${cover ? '; la portada se pone como miniatura' : ''}.</p>
         <button class="primary" style="width:100%" data-act="ytCreate">📅 Crear emisión programada</button>
         ${upcoming.length ? `<label>Próximas</label>${upcoming.map(b => row(b, `<button data-act="ytUse" data-id="${esc(b.id)}">Usar esta</button>`)).join('')}` : ''}
@@ -820,7 +831,6 @@ function start() {
       ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resúmenes</button></p>
         <p><button style="width:100%" data-act="videoHl">🎞 Resumen desde un vídeo de la galería</button></p>`
                   : `<p class="muted small">El resumen se crea desde la app del móvil cámara (botón 🎬 o al parar la grabación).</p>`}
-      ${list.length ? `<button class="danger" style="width:100%" data-act="marksClear">Borrar todas las marcas</button>` : ''}
     </div>`;
   }
 
@@ -1015,9 +1025,16 @@ function start() {
     toast('Imagen descargada');
   }
 
+  let brkExpiring = 0;
   function tickClock() {
     const el = document.getElementById('clk');
     if (el) el.textContent = SC.fmtClock(SC.clockDisplayMs(live.clock, now()));
+    if (live.brk.show && live.brk.until) {
+      const left = live.brk.until - now();
+      document.querySelectorAll('.brkLeft').forEach(e => e.textContent = '(' + fmtLeft(left) + ')');
+      // Caducada: se quita (la cámara ya la había quitado por su cuenta)
+      if (left < -1000 && Date.now() - brkExpiring > 5000) { brkExpiring = Date.now(); liveRef.child('brk/show').set(false); }
+    }
   }
   setInterval(tickClock, 250);
 
@@ -1079,11 +1096,11 @@ function start() {
       case 'sport': return setField('sport', v);
       case 'bestOf': return setField('rules/bestOf', +v);
       case 'newMatch':
-        if (!confirm('¿Empezar un partido nuevo? Se pone el marcador a cero.')) return;
-        if (hasData(live) && confirm('¿Guardar el partido actual en el historial antes de borrarlo?')) await matchesRef.push(matchRecord());
+        if (!confirm('¿Empezar un partido nuevo? El partido actual se guarda en el historial con sus jugadas y el marcador se pone a cero.')) return;
+        if (hasData(live) || Object.keys(marks).length) await matchesRef.push(matchRecord());
         act(L => SC.newMatch(L));
-        if (Object.keys(marks).length && confirm('¿Borrar también las jugadas marcadas?')) marksRef.remove();
-        return;
+        marksRef.remove();
+        return toast('Partido guardado en el historial');
       case 'mark': return addMark();
       case 'markc': return addMark(null, 'carmen');
       case 'markKind': { const m = marks[d.id]; if (!m) return; return marksRef.child(d.id).update({ kind: m.kind === 'carmen' ? null : 'carmen' }); }
@@ -1096,6 +1113,7 @@ function start() {
       }
       case 'spFullDel': await sponsRef.child(d.id).update({ full: '' }); return toast('Imagen quitada');
       case 'ytPriv': return setField('info/privacy', v);
+      case 'ytKids': return setField('info/kids', !live.info.kids);
       case 'ytOld': ytShowOld = !ytShowOld; return render();
       case 'coverPick': {
         const img = await pickImage(1280, true); if (!img) return;
@@ -1106,7 +1124,7 @@ function start() {
       case 'ytCreate': {
         if (!live.info.when) return toast('Pon la fecha y hora en la tarjeta de título y descripción');
         const t = ytTexts();
-        try { window.SportCamNative.ytCreate(JSON.stringify({ title: t.title, desc: t.desc, when: new Date(live.info.when).toISOString(), privacy: live.info.privacy || 'unlisted' })); } catch (e) {}
+        try { window.SportCamNative.ytCreate(JSON.stringify({ title: t.title, desc: t.desc, when: new Date(live.info.when).toISOString(), privacy: live.info.privacy || 'unlisted', kids: !!live.info.kids })); } catch (e) {}
         return toast('Creando emisión…');
       }
       case 'ytUse': try { window.SportCamNative.ytUse(d.id); } catch (e) {} return;
@@ -1123,16 +1141,20 @@ function start() {
       case 'shareCurrent': return shareRecord(matchRecord());
       case 'shareMatch': return matches[d.id] && shareRecord(matches[d.id]);
       case 'delMatch': if (confirm('¿Borrar este partido del historial?')) matchesRef.child(d.id).remove(); return;
-      case 'tmCycle': return act(L => SC.cycleTimeout(L, s));
+      case 'tmCycle': {
+        const used = live.to[s];
+        act(L => SC.cycleTimeout(L, s));
+        if (used < 2) showBreak('TIEMPO MUERTO', 'tm');   // tiempo muerto pedido: pantalla 30 s
+        return;
+      }
       case 'muteToggle': return setField('muted', !live.muted);
       // Solo una pantalla completa a la vez: al poner una se quita la otra
-      case 'brkq': {
-        const show = !(live.brk.show && live.brk.text === v);
-        return liveRef.update({ brk: { show, text: v, kind: d.k || 'custom' }, 'spFull/show': false });
-      }
+      case 'brkq':
+        if (brkActive() && live.brk.text === v) return liveRef.update({ 'brk/show': false });
+        return showBreak(v, d.k || 'custom');
       case 'brkCustom': {
         const t = val('brkText').trim(); if (!t) return toast('Escribe un texto');
-        return liveRef.update({ brk: { show: true, text: t.toUpperCase(), kind: 'custom' }, 'spFull/show': false });
+        return liveRef.update({ brk: { show: true, text: t.toUpperCase(), kind: 'custom', until: 0 }, 'spFull/show': false });
       }
       case 'brkHide': return setField('brk/show', false);
       case 'allHide': return liveRef.update({ 'brk/show': false, 'spFull/show': false });

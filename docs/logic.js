@@ -17,7 +17,7 @@
       rules: { bestOf: 5, setPts: 25, tiePts: 15 },
       clock: { running: false, baseMs: 0, startedAt: 0, dir: 'up', durMs: 40 * 60000, period: '1ª PARTE' },
       banner: { show: false, text: '' },
-      brk: { show: false, text: 'TIEMPO MUERTO', kind: 'tm' },  // kind: pre | tm | set | end | half | custom
+      brk: { show: false, text: 'TIEMPO MUERTO', kind: 'tm', until: 0 },  // kind: pre | tm | set | end | half | custom
       spons: { show: true, sec: 10, carousel: false },
       board: { show: true, pos: 'tl' },   // tl | tr | bl | br
       spFull: { show: false, id: '' },     // patrocinador a pantalla completa

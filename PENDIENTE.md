@@ -49,7 +49,7 @@
 - ~~Rediseño del mando~~ (hecho en 1.6.0) por momento de uso: Juego · Pantalla · Partido · Después · Ajustes (boceto antes de programar). Mini mando con nombres completos y botones con texto.
 - Opcional: firma de la app como secreto de GitHub (requiere reinstalar y nueva SHA-1 en Google Cloud).
 
-## Próxima versión (1.8.0) — acordado, sin compilar
+## Versión 1.8.0
 - Resumen del partido y de Carmen: fundido encadenado entre jugadas (una se funde sobre la siguiente, no a negro), sonido también fundido.
 - Portada del resumen del partido con "MEJORES JUGADAS" en letra grande y gruesa, apareciendo con fundido.
 - Sin rótulos "JUGADA 1, 2…". El de Carmen sin títulos (ni portada ni patrocinadores).

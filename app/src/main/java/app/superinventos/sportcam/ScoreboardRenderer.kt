@@ -48,12 +48,15 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   private fun screen(s: OverlayState, now: Long): Screen {
     s.fullSponsor?.let { return Screen.Spons(it) }
-    if (!s.breakShow) return Screen.None
-    // Ciclo: pantalla elegida, portada (en prepartido), patrocinadores (si hay carrusel)
-    val slots = mutableListOf<Screen>(Screen.Break)
+    if (!s.breakActive(now)) return Screen.None
+    // Ciclo. Prepartido: portada, escudos, patrocinadores. Tiempo muerto y fin de set: pantalla y patrocinadores
+    // (siempre con carrusel). El resto: carrusel solo si está activado.
+    val forced = s.breakKind == "pre" || s.breakKind == "tm" || s.breakKind == "set"
+    val slots = mutableListOf<Screen>()
     if (s.breakKind == "pre" && cover.isNotBlank()) slots += Screen.Cover
-    if (s.sponsCarousel) s.sponsors.forEach { slots += Screen.Spons(it) }
-    if (slots.size == 1) return Screen.Break
+    slots += Screen.Break
+    if (forced || s.sponsCarousel) s.sponsors.forEach { slots += Screen.Spons(it) }
+    if (slots.size == 1) return slots[0]
     return slots[((now / 1000 / s.sponsSec) % slots.size).toInt()]
   }
 
@@ -62,7 +65,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     if (s == null) return "none"
     val clockSec = if (!s.isVolley || s.timerShow) s.clockMs(now) / 1000 else 0
     val tick = if (s.sponsors.size > 1 || s.breakShow) now / 1000 / s.sponsSec else 0
-    return "$version|$clockSec|$tick|${cover.length}"
+    return "$version|$clockSec|$tick|${cover.length}|${s.breakActive(now)}"
   }
 
   /** Pinta sobre [bmp] (se borra antes). */
@@ -390,16 +393,40 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
 
   /* ---------------- Vídeo resumen y repetición ---------------- */
 
-  /** Portada del vídeo resumen (opaca): título, resultado por sets y una línea con fecha y competición. */
-  fun renderIntro(s: OverlayState, subtitle: String, bmp: Bitmap): Bitmap {
+  /** Letra del título del resumen (Barlow Condensed Black). */
+  var titleFont: Typeface? = null
+
+  /** Portada del vídeo resumen (opaca): resultado por sets y una línea con fecha y competición; con o sin título. */
+  fun renderIntro(s: OverlayState, subtitle: String, bmp: Bitmap, withTitle: Boolean = true): Bitmap {
     bmp.eraseColor(ink)
     val c = Canvas(bmp)
     withShadow {
-      label(c, "RESUMEN DEL PARTIDO", width / 2f, d(50f), d(130f), d(64f), accent, 0, width - d(120f))
       if (s.isVolley && s.history.isNotEmpty()) drawSetTable(c, s, true) else drawResult(c, s)
       if (subtitle.isNotBlank()) label(c, subtitle, width / 2f, height - d(90f), height - d(40f), d(30f), Color.argb(220, 255, 255, 255), 0, width - d(120f))
     }
+    if (withTitle) drawTitle(c)
     return bmp
+  }
+
+  /** Solo el título "MEJORES JUGADAS" sobre transparente, del tamaño del vídeo (para animarlo). */
+  fun renderTitle(bmp: Bitmap): Bitmap {
+    bmp.eraseColor(Color.TRANSPARENT)
+    drawTitle(Canvas(bmp))
+    return bmp
+  }
+
+  private fun drawTitle(c: Canvas) {
+    val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      typeface = titleFont ?: condensed; textSize = d(104f); color = accent; textAlign = Paint.Align.CENTER
+      letterSpacing = 0.02f
+      setShadowLayer(d(10f), 0f, d(4f), Color.argb(230, 0, 0, 0))
+    }
+    val str = "MEJORES JUGADAS"
+    val w = p.measureText(str)
+    if (w > width - d(80f)) p.textSize = p.textSize * (width - d(80f)) / w
+    val fm = p.fontMetrics
+    val base = d(105f) - (fm.ascent + fm.descent) / 2
+    c.drawText(str, width / 2f, base, p)
   }
 
   /** Diapositiva de patrocinador para el final del vídeo resumen (opaca). */

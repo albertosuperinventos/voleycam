@@ -30,6 +30,8 @@ data class OverlayState(
   val breakText: String,
   /** pre | tm | set | end | half | custom */
   val breakKind: String,
+  /** Hora del servidor (ms) a la que la pantalla completa se quita sola; 0 = no se quita sola. */
+  val breakUntil: Long,
   val sponsShow: Boolean,
   val sponsSec: Int,
   val sponsors: List<Sponsor>,
@@ -58,6 +60,10 @@ data class OverlayState(
   val serverOffset: Long,
 ) {
   val isVolley get() = sport != "football"
+
+  /** La pantalla completa está puesta y no ha caducado. */
+  fun breakActive(nowLocal: Long = System.currentTimeMillis()) =
+    breakShow && (breakUntil <= 0 || nowLocal + serverOffset < breakUntil)
 
   /** Milisegundos a mostrar en el reloj en este instante. */
   fun clockMs(nowLocal: Long = System.currentTimeMillis()): Long {
@@ -121,6 +127,7 @@ data class OverlayState(
         breakShow = brk.optBoolean("show"),
         breakText = brk.optString("text", ""),
         breakKind = brk.optString("kind", "custom"),
+        breakUntil = brk.optLong("until"),
         sponsShow = spons.optBoolean("show", true),
         sponsSec = spons.optInt("sec", 10).coerceIn(3, 120),
         sponsors = sponsors,
