@@ -22,15 +22,25 @@ object Highlights {
     val isPlayer get() = kind == "carmen"
   }
 
-  /** Grabación terminada: dónde está y cuándo empezó/acabó (hora del servidor, ms). */
-  data class Recording(val uri: Uri, val startTs: Long, val endTs: Long)
+  /** Trozo de una grabación: hora del servidor de inicio y fin (ms) y dónde empieza dentro del vídeo (µs). */
+  data class Segment(val startTs: Long, val endTs: Long, val offsetUs: Long)
+
+  /**
+   * Grabación terminada: dónde está y cuándo empezó/acabó (hora del servidor, ms).
+   * Un vídeo unido tiene varios trozos (con huecos entre ellos).
+   */
+  data class Recording(val uri: Uri, val startTs: Long, val endTs: Long,
+                       val segments: List<Segment> = listOf(Segment(startTs, endTs, 0L))) {
+    fun contains(ts: Long) = segments.any { ts in it.startTs..it.endTs }
+  }
 
   /** Tramos en microsegundos dentro del vídeo, ordenados y sin solaparse. */
   fun ranges(rec: Recording, marks: List<Mark>, beforeSec: Int, afterSec: Int): List<LongRange> {
-    val dur = (rec.endTs - rec.startTs) * 1000
-    val raw = marks.filter { it.ts in rec.startTs..rec.endTs }.map {
-      val t = (it.ts - rec.startTs) * 1000
-      maxOf(0L, t - beforeSec * 1_000_000L)..minOf(dur, t + afterSec * 1_000_000L)
+    val raw = marks.mapNotNull { m ->
+      val seg = rec.segments.firstOrNull { m.ts in it.startTs..it.endTs } ?: return@mapNotNull null
+      val segEnd = seg.offsetUs + (seg.endTs - seg.startTs) * 1000
+      val t = seg.offsetUs + (m.ts - seg.startTs) * 1000
+      maxOf(seg.offsetUs, t - beforeSec * 1_000_000L)..minOf(segEnd, t + afterSec * 1_000_000L)
     }.sortedBy { it.first }
     val merged = mutableListOf<LongRange>()
     for (r in raw) {
@@ -110,6 +120,85 @@ object Highlights {
     }
     if (written == 0) out.delete()
     return written
+  }
+
+  /**
+   * Une varios vídeos (mismo formato, como los de la app) uno detrás de otro sin volver a codificar.
+   * Devuelve dónde empieza cada vídeo dentro del resultado (µs), o null si falla. [onProgress] 0-100.
+   */
+  @SuppressLint("WrongConstant")
+  fun concat(context: Context, srcs: List<Uri>, out: File, onProgress: (Int) -> Unit = {}): List<Long>? {
+    if (srcs.isEmpty()) return null
+    val muxer = MediaMuxer(out.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+    val dstByMime = HashMap<String, Int>()   // "video" / "audio" -> pista destino
+    // Las pistas se crean con el formato del primer vídeo
+    MediaExtractor().apply {
+      setDataSource(context, srcs[0], null)
+      for (i in 0 until trackCount) {
+        val f = getTrackFormat(i); val mime = f.getString(MediaFormat.KEY_MIME) ?: continue
+        val kind = if (mime.startsWith("video/")) "video" else if (mime.startsWith("audio/")) "audio" else continue
+        if (kind !in dstByMime) dstByMime[kind] = muxer.addTrack(f)
+      }
+      release()
+    }
+    if ("video" !in dstByMime) { muxer.release(); out.delete(); return null }
+    muxer.start()
+    val buf = ByteBuffer.allocate(4 shl 20)
+    val info = MediaCodec.BufferInfo()
+    val lastPts = HashMap<Int, Long>()
+    val offsets = mutableListOf<Long>()
+    var offset = 0L
+    try {
+      srcs.forEachIndexed { idx, uri ->
+        offsets += offset
+        val ex = MediaExtractor()
+        ex.setDataSource(context, uri, null)
+        val map = HashMap<Int, Int>()
+        var durUs = 0L
+        for (i in 0 until ex.trackCount) {
+          val f = ex.getTrackFormat(i); val mime = f.getString(MediaFormat.KEY_MIME) ?: continue
+          val kind = if (mime.startsWith("video/")) "video" else if (mime.startsWith("audio/")) "audio" else continue
+          val dst = dstByMime[kind] ?: continue
+          if (map.containsValue(dst)) continue
+          map[i] = dst; ex.selectTrack(i)
+          if (f.containsKey(MediaFormat.KEY_DURATION)) durUs = maxOf(durUs, f.getLong(MediaFormat.KEY_DURATION))
+        }
+        var first = -1L
+        var maxT = 0L
+        var lastReport = 0L
+        while (true) {
+          val track = ex.sampleTrackIndex
+          if (track < 0) break
+          val dst = map[track]
+          val size = ex.readSampleData(buf, 0)
+          if (size < 0) break
+          val t = ex.sampleTime
+          if (first < 0) first = t
+          if (dst != null) {
+            var pts = offset + (t - first).coerceAtLeast(0)
+            val prev = lastPts[dst]
+            if (prev != null && pts <= prev) pts = prev + 1
+            lastPts[dst] = pts
+            info.set(0, size, pts, if ((ex.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
+            muxer.writeSampleData(dst, buf, info)
+            maxT = maxOf(maxT, t - first)
+          }
+          if (durUs > 0 && t - lastReport > 2_000_000) {
+            lastReport = t
+            onProgress(((idx + (t - first).toFloat() / durUs) * 100 / srcs.size).toInt().coerceIn(0, 100))
+          }
+          ex.advance()
+        }
+        ex.release()
+        offset += maxT + 40_000
+      }
+    } catch (e: Exception) {
+      try { muxer.stop() } catch (_: Exception) {}
+      muxer.release(); out.delete(); return null
+    }
+    try { muxer.stop() } catch (_: Exception) { muxer.release(); out.delete(); return null }
+    muxer.release()
+    return offsets
   }
 
   /** Capítulos para la descripción de YouTube (el primero debe ser 00:00). */

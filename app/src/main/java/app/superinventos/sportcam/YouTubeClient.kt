@@ -60,6 +60,16 @@ object YouTubeClient {
     }.filter { it.status != "revoked" }
   }
 
+  /** Una emisión concreta (o null si ya no existe). */
+  fun getBroadcast(token: String, id: String): Broadcast? {
+    val b = call(token, "GET", "liveBroadcasts?part=snippet,status,contentDetails&id=${enc(id)}").optJSONArray("items")?.optJSONObject(0) ?: return null
+    val sn = b.optJSONObject("snippet") ?: JSONObject()
+    val st = b.optJSONObject("status") ?: JSONObject()
+    val cd = b.optJSONObject("contentDetails") ?: JSONObject()
+    return Broadcast(b.optString("id"), sn.optString("title"), sn.optString("scheduledStartTime"),
+      st.optString("privacyStatus"), st.optString("lifeCycleStatus"), cd.optString("boundStreamId"))
+  }
+
   /** Emisión reutilizable "SportCam": la crea si no existe. */
   fun ensureStream(token: String): Stream {
     val items = call(token, "GET", "liveStreams?part=id,snippet,cdn&mine=true&maxResults=50").optJSONArray("items") ?: JSONArray()
@@ -110,6 +120,17 @@ object YouTubeClient {
       val msg = try { JSONObject(text).getJSONObject("error").optString("message") } catch (_: Exception) { text.take(200) }
       throw ApiException(msg)
     }
+  }
+
+  /** Cambia la privacidad de una emisión (public, unlisted, private) manteniendo el resto. */
+  fun setPrivacy(token: String, broadcastId: String, privacy: String) {
+    val b = call(token, "GET", "liveBroadcasts?part=status&id=${enc(broadcastId)}").optJSONArray("items")?.optJSONObject(0)
+      ?: throw ApiException("No se encontró la emisión en YouTube")
+    val st = b.optJSONObject("status") ?: JSONObject()
+    val body = JSONObject().put("id", broadcastId).put("status", JSONObject()
+      .put("privacyStatus", privacy)
+      .put("selfDeclaredMadeForKids", st.optBoolean("selfDeclaredMadeForKids", st.optBoolean("madeForKids", false))))
+    call(token, "PUT", "liveBroadcasts?part=status", body)
   }
 
   /** Cambia la descripción del vídeo manteniendo título y categoría. */

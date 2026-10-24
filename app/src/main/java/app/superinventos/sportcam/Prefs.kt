@@ -46,6 +46,22 @@ class Prefs(context: Context) {
     get() = sp.getString("ytBroadcastId", "") ?: ""
     set(v) = sp.edit().putString("ytBroadcastId", v).apply()
 
+  /** Título, privacidad y estado (de YouTube) de la emisión seleccionada, para el aviso al emitir. */
+  var ytBroadcastTitle: String
+    get() = sp.getString("ytBroadcastTitle", "") ?: ""
+    set(v) = sp.edit().putString("ytBroadcastTitle", v).apply()
+  var ytBroadcastPrivacy: String
+    get() = sp.getString("ytBroadcastPrivacy", "") ?: ""
+    set(v) = sp.edit().putString("ytBroadcastPrivacy", v).apply()
+  var ytBroadcastStatus: String
+    get() = sp.getString("ytBroadcastStatus", "") ?: ""
+    set(v) = sp.edit().putString("ytBroadcastStatus", v).apply()
+
+  /** Últimas grabaciones con su hora de inicio y fin (JSON), para unirlas y hacer resúmenes. */
+  var recordingsJson: String
+    get() = sp.getString("recordingsJson", "[]") ?: "[]"
+    set(v) = sp.edit().putString("recordingsJson", v).apply()
+
   /** URL pública de la web de control (GitHub Pages), para el QR del segundo móvil. */
   var remoteUrl: String
     get() = sp.getString("remoteUrl", DEFAULT_REMOTE) ?: DEFAULT_REMOTE

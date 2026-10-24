@@ -55,6 +55,10 @@ data class OverlayState(
   val infoComp: String,
   val infoCat: String,
   val ytDesc: String,
+  val ytTitle: String,
+  /** public | unlisted | private (lo elegido en el mando para crear emisiones). */
+  val ytPrivacy: String,
+  val ytKids: Boolean,
   /** Partidos con marcas para el resumen desde vídeo (JSON tal cual). */
   val savedMatchesJson: String,
   val serverOffset: Long,
@@ -150,6 +154,9 @@ data class OverlayState(
         infoComp = o.optJSONObject("info")?.optString("comp").orEmpty(),
         infoCat = o.optJSONObject("info")?.optString("cat").orEmpty(),
         ytDesc = o.optString("ytDesc", ""),
+        ytTitle = o.optString("ytTitle", ""),
+        ytPrivacy = o.optString("ytPrivacy", "unlisted"),
+        ytKids = o.optJSONObject("info")?.optBoolean("kids") ?: false,
         savedMatchesJson = o.optJSONArray("savedMatches")?.toString() ?: "[]",
         serverOffset = o.optLong("serverOffset"),
       )

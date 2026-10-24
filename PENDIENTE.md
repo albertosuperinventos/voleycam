@@ -61,3 +61,7 @@
 - YouTube: interruptor "Contenido para niños" al crear la emisión (por defecto NO).
 - PREPARTIDO siempre con carrusel en este orden: portada → escudos → patrocinadores (sin depender del interruptor).
 - "Nuevo partido": guarda siempre el partido con sus jugadas en el historial y vacía la lista de jugadas, sin preguntar (sigue preguntando confirmación de poner a cero). Quitar botón "Borrar todas las marcas".
+
+## Versión 1.8.1
+- Al pulsar EN DIRECTO: comprueba la emisión de YouTube y dice dónde y con qué privacidad se emite; deja cambiar la privacidad o crear la emisión al momento si no hay ninguna.
+- Unir grabaciones (Después y menú de resúmenes): une vídeos en orden de hora sin recodificar; si son grabaciones de la app, los resúmenes usan el vídeo unido con todas las jugadas.

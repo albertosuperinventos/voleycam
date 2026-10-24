@@ -13,6 +13,7 @@ import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
+import android.provider.OpenableColumns
 import android.graphics.BitmapFactory
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -154,6 +155,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
     fileCallback?.onReceiveValue(if (uri != null) arrayOf(uri) else null)
     fileCallback = null
+  }
+  private val pickVideos = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+    if (uris.size >= 2) joinRecordings(uris) else if (uris.size == 1) toast("Elige al menos dos vídeos")
   }
   private val askPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
     if (hasPerms()) setupStream()
@@ -359,7 +363,97 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         .setNegativeButton("Seguir emitiendo", null).show()
       return
     }
-    startLive(fromRemote = false)
+    confirmLive()
+  }
+
+  private fun privacyName(p: String) = when (p) { "public" -> "Pública"; "unlisted" -> "Oculta"; "private" -> "Privada"; else -> p }
+
+  /** Comprueba en YouTube cómo está la emisión elegida (máx. 6 s) y luego pregunta. */
+  private fun confirmLive() {
+    if (prefs.platform != Prefs.PLATFORM_YOUTUBE || prefs.ytBroadcastId.isBlank()) return confirmLiveDialog()
+    var shown = false
+    fun show() { if (!shown) { shown = true; confirmLiveDialog() } }
+    toast("Comprobando la emisión de YouTube…")
+    ui.postDelayed({ show() }, 6000)
+    withYtToken { token ->
+      Thread {
+        try {
+          val b = YouTubeClient.getBroadcast(token, prefs.ytBroadcastId)
+          if (b == null) prefs.ytBroadcastStatus = "revoked"
+          else { prefs.ytBroadcastTitle = b.title; prefs.ytBroadcastPrivacy = b.privacy; prefs.ytBroadcastStatus = b.status }
+        } catch (_: Exception) {}
+        runOnUiThread { show() }
+      }.start()
+    }
+  }
+
+  /** Antes de emitir: dice en qué emisión de YouTube y con qué privacidad; deja cambiarla o crear una al momento. */
+  private fun confirmLiveDialog() {
+    val usable = prefs.ytBroadcastId.isNotBlank() && prefs.ytBroadcastStatus !in setOf("complete", "revoked")
+    if (prefs.platform != Prefs.PLATFORM_YOUTUBE) {
+      AlertDialog.Builder(this).setTitle("¿Empezar el directo?")
+        .setMessage(if (prefs.platform == Prefs.PLATFORM_FACEBOOK) "Se emitirá en Facebook con la clave de Ajustes." else "Se emitirá a la dirección RTMP de Ajustes.")
+        .setPositiveButton("Emitir") { _, _ -> startLive(false) }
+        .setNegativeButton("Cancelar", null).show()
+      return
+    }
+    if (usable) {
+      AlertDialog.Builder(this).setTitle("Vas a emitir en YouTube")
+        .setMessage("${prefs.ytBroadcastTitle.ifBlank { "Emisión elegida" }}\n\nPrivacidad: ${privacyName(prefs.ytBroadcastPrivacy).ifBlank { "?" }}")
+        .setPositiveButton("Emitir") { _, _ -> startLive(false) }
+        .setNeutralButton("Cambiar privacidad") { _, _ -> changePrivacy() }
+        .setNegativeButton("Cancelar", null).show()
+      return
+    }
+    val st = overlayState
+    val pv = st?.ytPrivacy ?: "unlisted"
+    AlertDialog.Builder(this).setTitle("No hay emisión de YouTube elegida")
+      .setMessage("Si emites así, puede que no se vea en tu canal.\n\n\"Crear ahora\" crea la emisión con los datos del partido (${privacyName(pv)}) y empieza a emitir.")
+      .setPositiveButton("Crear ahora y emitir") { _, _ -> createNowAndGoLive() }
+      .setNeutralButton("Emitir igualmente") { _, _ -> startLive(false) }
+      .setNegativeButton("Cancelar", null).show()
+  }
+
+  private fun changePrivacy() {
+    val opts = arrayOf("public", "unlisted", "private")
+    AlertDialog.Builder(this).setTitle("Privacidad de la emisión")
+      .setItems(opts.map { privacyName(it) }.toTypedArray()) { _, i ->
+        val id = prefs.ytBroadcastId
+        toast("Cambiando a ${privacyName(opts[i])}…")
+        withYtToken { token ->
+          Thread {
+            val err = try { YouTubeClient.setPrivacy(token, id, opts[i]); null } catch (e: Exception) { e.message ?: "error" }
+            if (err == null) prefs.ytBroadcastPrivacy = opts[i]
+            runOnUiThread {
+              if (err != null) toast("No se pudo cambiar: $err") else confirmLiveDialog()
+            }
+          }.start()
+        }
+      }.setNegativeButton("Cancelar", null).show()
+  }
+
+  /** Crea una emisión que empieza ya, con el título y la descripción del mando, y empieza a emitir. */
+  private fun createNowAndGoLive() {
+    val st = overlayState ?: return toast("El mando aún no ha cargado")
+    val title = st.ytTitle.ifBlank { "${st.home.name} - ${st.away.name}" }
+    val startIso = java.time.Instant.now().plusSeconds(60).toString()
+    toast("Creando la emisión en YouTube…")
+    withYtToken { token ->
+      Thread {
+        val err = try {
+          val s = YouTubeClient.ensureStream(token)
+          val id = YouTubeClient.createBroadcast(token, title, st.ytDesc, startIso, st.ytPrivacy, s.id, st.ytKids)
+          prefs.platform = Prefs.PLATFORM_YOUTUBE; prefs.youtubeKey = s.key; prefs.ytBroadcastId = id
+          prefs.ytBroadcastTitle = title; prefs.ytBroadcastPrivacy = st.ytPrivacy; prefs.ytBroadcastStatus = "created"
+          coverJpeg()?.let { j -> try { YouTubeClient.setThumbnail(token, id, j) } catch (_: Exception) {} }
+          null
+        } catch (e: Exception) { e.message ?: "error" }
+        runOnUiThread {
+          if (err != null) toast("No se pudo crear la emisión: $err")
+          else { toast("Emisión creada (${privacyName(st.ytPrivacy)}). Empezando…"); startLive(false) }
+        }
+      }.start()
+    }
   }
 
   private fun startLive(fromRemote: Boolean) {
@@ -426,7 +520,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     Thread {
       Thread.sleep(600)
       val uri = RecordingSaver.moveToGallery(applicationContext, f)
-      if (uri != null) lastRecording = Highlights.Recording(uri, start, end)
+      if (uri != null) { lastRecording = Highlights.Recording(uri, start, end); rememberRecording(uri, start, end) }
       runOnUiThread {
         toast(if (uri != null) "Vídeo guardado en Películas/VoleyCam" else "El vídeo se guardará al volver a abrir la app")
         val n = overlayState?.marks?.count { it.ts in start..end } ?: 0
@@ -615,6 +709,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private fun ytPublish(connected: Boolean = false, account: String = "", broadcasts: List<YouTubeClient.Broadcast> = emptyList(), message: String = "") {
     val arr = JSONArray()
     val selected = prefs.ytBroadcastId
+    broadcasts.firstOrNull { it.id == selected }?.let { b ->
+      prefs.ytBroadcastTitle = b.title; prefs.ytBroadcastPrivacy = b.privacy; prefs.ytBroadcastStatus = b.status
+    }
     broadcasts.forEach { b ->
       arr.put(JSONObject().put("id", b.id).put("title", b.title).put("when", prettyDate(b.start))
         .put("startIso", b.start).put("raw", b.status)
@@ -748,7 +845,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private fun showHighlightsMenu() {
     val rec = lastRecording
     val marks = overlayState?.marks.orEmpty()
-    val inRec = if (rec != null) marks.filter { it.ts in rec.startTs..rec.endTs } else emptyList()
+    val inRec = if (rec != null) marks.filter { rec.contains(it.ts) } else emptyList()
     val nGame = inRec.count { !it.isPlayer }; val nPlayer = inRec.count { it.isPlayer }
     val items = mutableListOf<Pair<String, () -> Unit>>()
     if (rec != null && inRec.isNotEmpty()) {
@@ -762,6 +859,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     lastPlayerUri?.let { u -> items += "📤 Compartir resumen de $playerName" to { shareVideo(u) } }
     if (prefs.ytBroadcastId.isNotBlank()) items += "⬆ Subir descripción y capítulos a YouTube" to { uploadDescription(prefs.ytBroadcastId, overlayState?.ytDesc.orEmpty()) }
     items += "📋 Copiar descripción + capítulos" to { copyChapters() }
+    items += "🔗 Unir grabaciones (elegir vídeos)" to { pickVideos.launch("video/*") }
     val msg = when {
       rec == null && stream?.isRecording == true -> "Para la grabación para poder crear los resúmenes."
       rec == null -> "Aún no hay grabación terminada."
@@ -888,6 +986,70 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val text = if (desc.isBlank()) chapters else "$desc\n\nMOMENTOS DEL PARTIDO\n$chapters"
     copyToClipboard(text)
     toast("Copiado: pégalo en la descripción del vídeo en YouTube Studio")
+  }
+
+  /* ======================= Unir grabaciones ======================= */
+
+  /** Guarda la hora de inicio y fin de cada grabación (para unirlas y hacer resúmenes después). */
+  private fun rememberRecording(uri: Uri, start: Long, end: Long) {
+    val arr = try { JSONArray(prefs.recordingsJson) } catch (_: Exception) { JSONArray() }
+    val keep = JSONArray()
+    val from = maxOf(0, arr.length() - 29)
+    for (i in from until arr.length()) keep.put(arr.get(i))
+    keep.put(JSONObject().put("uri", uri.toString()).put("start", start).put("end", end))
+    prefs.recordingsJson = keep.toString()
+  }
+
+  private fun knownRecording(uri: Uri): Pair<Long, Long>? {
+    val arr = try { JSONArray(prefs.recordingsJson) } catch (_: Exception) { return null }
+    for (i in 0 until arr.length()) {
+      val o = arr.getJSONObject(i)
+      if (o.optString("uri") == uri.toString()) return o.optLong("start") to o.optLong("end")
+    }
+    return null
+  }
+
+  private fun displayName(uri: Uri): String = try {
+    contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+      if (c.moveToFirst()) c.getString(0) else null
+    } ?: uri.lastPathSegment.orEmpty()
+  } catch (_: Exception) { uri.lastPathSegment.orEmpty() }
+
+  /** Une los vídeos elegidos en orden de hora (por el nombre, que lleva fecha y hora) sin perder calidad. */
+  private fun joinRecordings(picked: List<Uri>) {
+    if (makingHighlights) return toast("Espera a que termine lo que se está creando")
+    makingHighlights = true
+    progress("Uniendo ${picked.size} vídeos… 0 %")
+    Thread {
+      val uris = picked.map { it to displayName(it) }.sortedBy { it.second }.map { it.first }
+      val out = File(cacheDir, "unido.mp4").apply { delete() }
+      val offsets = try { Highlights.concat(applicationContext, uris, out) { p -> runOnUiThread { progress("Uniendo ${uris.size} vídeos… $p %") } } } catch (_: Exception) { null }
+      val name = "VoleyCam_unido_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".mp4"
+      val u = if (offsets != null) RecordingSaver.moveToGallery(applicationContext, out, name) else null
+      var forSummary = false
+      if (u != null && offsets != null) {
+        // Si todas las grabaciones son de esta app, el vídeo unido sirve para los resúmenes
+        val times = uris.map { knownRecording(it) }
+        if (times.all { it != null }) {
+          val segs = times.mapIndexed { i, t -> Highlights.Segment(t!!.first, t.second, offsets[i]) }
+          lastRecording = Highlights.Recording(u, segs.first().startTs, segs.last().endTs, segs)
+          forSummary = true
+        }
+      }
+      runOnUiThread {
+        makingHighlights = false
+        progress(null)
+        if (u == null) { toast("No se pudieron unir. ¿Son vídeos grabados con la app y con la misma calidad?"); return@runOnUiThread }
+        AlertDialog.Builder(this)
+          .setTitle("Vídeos unidos")
+          .setMessage("Guardado en Películas/VoleyCam como $name." +
+            if (forSummary) "\n\nLos resúmenes usarán este vídeo, con las jugadas de todas las partes." else "")
+          .setPositiveButton("Compartir / subir") { _, _ -> shareVideo(u) }
+          .setNeutralButton(if (forSummary) "Resúmenes" else "Cerrar") { _, _ -> if (forSummary) showHighlightsMenu() }
+          .setNegativeButton("Cerrar", null)
+          .show()
+      }
+    }.start()
   }
 
   /* ======================= Repetición en directo ======================= */
@@ -1135,6 +1297,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
           val st = YouTubeClient.ensureStream(token)
           val id = YouTubeClient.createBroadcast(token, o.getString("title"), o.optString("desc"), o.getString("when"), o.optString("privacy", "unlisted"), st.id, o.optBoolean("kids"))
           prefs.platform = Prefs.PLATFORM_YOUTUBE; prefs.youtubeKey = st.key; prefs.ytBroadcastId = id
+          prefs.ytBroadcastTitle = o.getString("title"); prefs.ytBroadcastPrivacy = o.optString("privacy", "unlisted"); prefs.ytBroadcastStatus = "created"
           var extra = ""
           coverJpeg()?.let { jpg ->
             extra = try { YouTubeClient.setThumbnail(token, id, jpg); " Portada puesta como miniatura." }
@@ -1149,6 +1312,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     fun ytUse(id: String) {
       ui.post { ytRun { token -> ytSelect(token, id); "Emisión seleccionada: la app emitirá en ella." } }
     }
+
+    @JavascriptInterface
+    fun joinRecordings() { ui.post { pickVideos.launch("video/*") } }
 
     @JavascriptInterface
     fun ytUpdateDesc(id: String, desc: String) {

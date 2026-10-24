@@ -829,6 +829,8 @@ function start() {
         <button class="danger" data-act="markDel" data-id="${id}">✕</button></div>`).join('') || '<p class="muted">Sin jugadas marcadas.</p>'}</div>
       ${list.length ? '<p class="muted small" style="margin:4px 0 0">Toca ⭐ / 💜 para cambiar una jugada de resumen.</p>' : ''}
       ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resúmenes</button></p>
+        <p><button style="width:100%" data-act="joinRec">🔗 Unir grabaciones</button></p>
+        <p class="muted small" style="margin-top:-6px">Si el directo se cortó y la grabación quedó en varios vídeos, únelos en uno (para subirlo y para los resúmenes).</p>
         <p><button style="width:100%" data-act="videoHl">🎞 Resumen desde un vídeo de la galería</button></p>`
                   : `<p class="muted small">El resumen se crea desde la app del móvil cámara (botón 🎬 o al parar la grabación).</p>`}
     </div>`;
@@ -1106,6 +1108,7 @@ function start() {
       case 'markKind': { const m = marks[d.id]; if (!m) return; return marksRef.child(d.id).update({ kind: m.kind === 'carmen' ? null : 'carmen' }); }
       case 'replay': return replayCmd();
       case 'hlSlow': return setField('hl/slow', !live.hl.slow);
+      case 'joinRec': try { window.SportCamNative.joinRecordings(); } catch (e) { toast('Actualiza la app'); } return;
       case 'videoHl': try { window.SportCamNative.openVideoHighlights(); } catch (e) { toast('Solo desde la app'); } return;
       case 'spFullPick': {
         const img = await pickImage(1280, true); if (!img) return;
