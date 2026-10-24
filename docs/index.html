@@ -337,7 +337,7 @@ function start() {
   function savedMatchesForNative() {
     const cur = { title: 'Partido actual', liveStart: (status && status.liveStartTs) || 0,
                   marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '', kind: m.kind || '' })) };
-    const old = Object.values(matches).filter(m => m.liveStart && m.marks).sort((a, b) => b.ts - a.ts).map(m => ({
+    const old = Object.values(matches).filter(m => m.marks).sort((a, b) => b.ts - a.ts).map(m => ({
       title: `${m.home.short} - ${m.away.short} · ${new Date(m.ts).toLocaleDateString('es-ES')}`,
       liveStart: m.liveStart, marks: (Array.isArray(m.marks) ? m.marks : Object.values(m.marks)).map(x => ({ ts: x.ts, label: x.label || '', kind: x.kind || '' }))
     }));
@@ -831,6 +831,8 @@ function start() {
       ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resúmenes</button></p>
         <p><button style="width:100%" data-act="joinRec">🔗 Unir grabaciones</button></p>
         <p class="muted small" style="margin-top:-6px">Si el directo se cortó y la grabación quedó en varios vídeos, únelos en uno (para subirlo y para los resúmenes).</p>
+        <p><button style="width:100%" data-act="oldHl">🗂 Resúmenes de grabaciones anteriores</button></p>
+        <p class="muted small" style="margin-top:-6px">Elige los vídeos originales de Películas/VoleyCam de un partido ya jugado: la app coloca sola las jugadas marcadas.</p>
         <p><button style="width:100%" data-act="videoHl">🎞 Resumen desde un vídeo de la galería</button></p>`
                   : `<p class="muted small">El resumen se crea desde la app del móvil cámara (botón 🎬 o al parar la grabación).</p>`}
     </div>`;
@@ -1108,6 +1110,7 @@ function start() {
       case 'markKind': { const m = marks[d.id]; if (!m) return; return marksRef.child(d.id).update({ kind: m.kind === 'carmen' ? null : 'carmen' }); }
       case 'replay': return replayCmd();
       case 'hlSlow': return setField('hl/slow', !live.hl.slow);
+      case 'oldHl': try { window.SportCamNative.oldSummaries(); } catch (e) { toast('Actualiza la app'); } return;
       case 'joinRec': try { window.SportCamNative.joinRecordings(); } catch (e) { toast('Actualiza la app'); } return;
       case 'videoHl': try { window.SportCamNative.openVideoHighlights(); } catch (e) { toast('Solo desde la app'); } return;
       case 'spFullPick': {

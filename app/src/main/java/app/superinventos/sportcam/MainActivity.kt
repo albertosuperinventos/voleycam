@@ -159,6 +159,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private val pickVideos = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
     if (uris.size >= 2) joinRecordings(uris) else if (uris.size == 1) toast("Elige al menos dos vídeos")
   }
+  private val pickOldVideos = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+    if (uris.isNotEmpty()) summariesFromOld(uris)
+  }
   private val askPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
     if (hasPerms()) setupStream()
     else toast("VoleyCam necesita la cámara y el micrófono para funcionar")
@@ -844,7 +847,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   /** Menú de resúmenes y YouTube (al terminar la grabación, botón 🎬 del mando o pulsación larga en ⭐). */
   private fun showHighlightsMenu() {
     val rec = lastRecording
-    val marks = overlayState?.marks.orEmpty()
+    val marks = allMarks()
     val inRec = if (rec != null) marks.filter { rec.contains(it.ts) } else emptyList()
     val nGame = inRec.count { !it.isPlayer }; val nPlayer = inRec.count { it.isPlayer }
     val items = mutableListOf<Pair<String, () -> Unit>>()
@@ -860,6 +863,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     if (prefs.ytBroadcastId.isNotBlank()) items += "⬆ Subir descripción y capítulos a YouTube" to { uploadDescription(prefs.ytBroadcastId, overlayState?.ytDesc.orEmpty()) }
     items += "📋 Copiar descripción + capítulos" to { copyChapters() }
     items += "🔗 Unir grabaciones (elegir vídeos)" to { pickVideos.launch("video/*") }
+    items += "🗂 Resúmenes de grabaciones anteriores" to { pickOldVideos.launch("video/*") }
     val msg = when {
       rec == null && stream?.isRecording == true -> "Para la grabación para poder crear los resúmenes."
       rec == null -> "Aún no hay grabación terminada."
@@ -901,7 +905,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val rec = lastRecording ?: return
     if (makingHighlights) return toast("Ya se están creando los resúmenes…")
     val st = overlayState ?: return toast("El mando aún no ha cargado")
-    val marks = st.marks
+    val marks = allMarks()
     val gameRanges = if (game) Highlights.ranges(rec, marks.filter { !it.isPlayer }, st.hlBefore, st.hlAfter) else emptyList()
     val playerRanges = if (player) Highlights.ranges(rec, marks.filter { it.isPlayer }, st.hlBefore, st.hlAfter) else emptyList()
     if (gameRanges.isEmpty() && playerRanges.isEmpty()) return toast("No hay jugadas marcadas en la última grabación")
@@ -1009,6 +1013,72 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     return null
   }
 
+  /** Jugadas de la lista actual y de los partidos guardados en el historial (sin repetir). */
+  private fun allMarks(): List<Highlights.Mark> {
+    val st = overlayState ?: return emptyList()
+    val out = LinkedHashMap<String, Highlights.Mark>()
+    st.marks.forEach { out["${it.ts}|${it.kind}"] = it }
+    try {
+      val arr = JSONArray(st.savedMatchesJson)
+      for (i in 0 until arr.length()) {
+        val ms = arr.getJSONObject(i).optJSONArray("marks") ?: continue
+        for (j in 0 until ms.length()) {
+          val m = ms.getJSONObject(j)
+          val mk = Highlights.Mark(m.optLong("ts"), m.optString("label"), m.optString("kind"))
+          out.putIfAbsent("${mk.ts}|${mk.kind}", mk)
+        }
+      }
+    } catch (_: Exception) {}
+    return out.values.sortedBy { it.ts }
+  }
+
+  /** Hora de inicio y fin de un vídeo de la app sacadas de su nombre (VoleyCam_AAAAMMDD_HHMMSS) y su duración. */
+  private fun timesFromName(uri: Uri): Pair<Long, Long>? {
+    val m = Regex("VoleyCam_(\\d{8})_(\\d{6})").find(displayName(uri)) ?: return null
+    return try {
+      val local = java.time.LocalDateTime.parse(m.groupValues[1] + m.groupValues[2], java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+      val start = local.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() + (overlayState?.serverOffset ?: 0L)
+      val r = android.media.MediaMetadataRetriever()
+      val dur = try { r.setDataSource(this, uri); r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L } finally { r.release() }
+      if (dur <= 0) null else start to start + dur
+    } catch (_: Exception) { null }
+  }
+
+  /** Resúmenes de vídeos ya grabados: coloca las jugadas por la hora del nombre del archivo, une si hay varios y abre el menú. */
+  private fun summariesFromOld(picked: List<Uri>) {
+    if (makingHighlights) return toast("Espera a que termine lo que se está creando")
+    makingHighlights = true
+    progress("Preparando vídeos…")
+    Thread {
+      val uris = picked.map { it to displayName(it) }.sortedBy { it.second }.map { it.first }
+      val times = uris.map { knownRecording(it) ?: timesFromName(it) }
+      var msg: String? = null
+      if (times.any { it == null }) msg = "No se sabe a qué hora empezó algún vídeo. Elige los vídeos originales de Películas/VoleyCam (los que se llaman VoleyCam_fecha_hora)."
+      else if (uris.size == 1) {
+        lastRecording = Highlights.Recording(uris[0], times[0]!!.first, times[0]!!.second)
+      } else {
+        val out = File(cacheDir, "unido.mp4").apply { delete() }
+        val offsets = try { Highlights.concat(applicationContext, uris, out) { p -> runOnUiThread { progress("Uniendo ${uris.size} vídeos… $p %") } } } catch (_: Exception) { null }
+        val name = "VoleyCam_unido_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".mp4"
+        val u = if (offsets != null) RecordingSaver.moveToGallery(applicationContext, out, name) else null
+        if (u == null || offsets == null) msg = "No se pudieron unir los vídeos."
+        else {
+          val segs = times.mapIndexed { i, t -> Highlights.Segment(t!!.first, t.second, offsets[i]) }
+          lastRecording = Highlights.Recording(u, segs.first().startTs, segs.last().endTs, segs)
+        }
+      }
+      runOnUiThread {
+        makingHighlights = false
+        progress(null)
+        if (msg != null) { toast(msg); return@runOnUiThread }
+        val rec = lastRecording ?: return@runOnUiThread
+        val n = allMarks().count { rec.contains(it.ts) }
+        if (n == 0) toast("No hay jugadas marcadas a la hora de estos vídeos")
+        else showHighlightsMenu()
+      }
+    }.start()
+  }
+
   private fun displayName(uri: Uri): String = try {
     contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
       if (c.moveToFirst()) c.getString(0) else null
@@ -1029,7 +1099,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       var forSummary = false
       if (u != null && offsets != null) {
         // Si todas las grabaciones son de esta app, el vídeo unido sirve para los resúmenes
-        val times = uris.map { knownRecording(it) }
+        val times = uris.map { knownRecording(it) ?: timesFromName(it) }
         if (times.all { it != null }) {
           val segs = times.mapIndexed { i, t -> Highlights.Segment(t!!.first, t.second, offsets[i]) }
           lastRecording = Highlights.Recording(u, segs.first().startTs, segs.last().endTs, segs)
@@ -1315,6 +1385,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     @JavascriptInterface
     fun joinRecordings() { ui.post { pickVideos.launch("video/*") } }
+
+    @JavascriptInterface
+    fun oldSummaries() { ui.post { pickOldVideos.launch("video/*") } }
 
     @JavascriptInterface
     fun ytUpdateDesc(id: String, desc: String) {
