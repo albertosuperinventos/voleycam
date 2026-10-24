@@ -1032,17 +1032,17 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     return out.values.sortedBy { it.ts }
   }
 
-  /** Hora de inicio y fin de un vídeo de la app sacadas de su nombre (VoleyCam_AAAAMMDD_HHMMSS) y su duración. */
+  /** Hora de inicio y fin (hora del servidor) de un vídeo de la app: por su nombre o por la fecha guardada dentro. */
   private fun timesFromName(uri: Uri): Pair<Long, Long>? {
-    val m = Regex("VoleyCam_(\\d{8})_(\\d{6})").find(displayName(uri)) ?: return null
-    return try {
-      val local = java.time.LocalDateTime.parse(m.groupValues[1] + m.groupValues[2], java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
-      val start = local.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() + (overlayState?.serverOffset ?: 0L)
-      val r = android.media.MediaMetadataRetriever()
-      val dur = try { r.setDataSource(this, uri); r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L } finally { r.release() }
-      if (dur <= 0) null else start to start + dur
-    } catch (_: Exception) { null }
+    val t = VideoTimes.times(this, uri) ?: return null
+    val off = overlayState?.serverOffset ?: 0L
+    return t.first + off to t.second + off
   }
+
+  /** Ordena por hora de inicio (o por nombre si no se sabe). */
+  private fun sortByTime(picked: List<Uri>): List<Uri> =
+    picked.map { u -> Triple(u, knownRecording(u)?.first ?: timesFromName(u)?.first ?: Long.MAX_VALUE, VideoTimes.bestName(this, u)) }
+      .sortedWith(compareBy({ it.second }, { it.third })).map { it.first }
 
   /** Resúmenes de vídeos ya grabados: coloca las jugadas por la hora del nombre del archivo, une si hay varios y abre el menú. */
   private fun summariesFromOld(picked: List<Uri>) {
@@ -1050,7 +1050,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     makingHighlights = true
     progress("Preparando vídeos…")
     Thread {
-      val uris = picked.map { it to displayName(it) }.sortedBy { it.second }.map { it.first }
+      val uris = sortByTime(picked)
       val times = uris.map { knownRecording(it) ?: timesFromName(it) }
       var msg: String? = null
       if (times.any { it == null }) msg = "No se sabe a qué hora empezó algún vídeo. Elige los vídeos originales de Películas/VoleyCam (los que se llaman VoleyCam_fecha_hora)."
@@ -1091,7 +1091,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     makingHighlights = true
     progress("Uniendo ${picked.size} vídeos… 0 %")
     Thread {
-      val uris = picked.map { it to displayName(it) }.sortedBy { it.second }.map { it.first }
+      val uris = sortByTime(picked)
       val out = File(cacheDir, "unido.mp4").apply { delete() }
       val offsets = try { Highlights.concat(applicationContext, uris, out) { p -> runOnUiThread { progress("Uniendo ${uris.size} vídeos… $p %") } } } catch (_: Exception) { null }
       val name = "VoleyCam_unido_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".mp4"
@@ -1350,7 +1350,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       ui.post {
         val st = overlayState
         startActivity(Intent(this@MainActivity, VideoHighlightsActivity::class.java)
-          .putExtra("playerName", overlayState?.hlName ?: "Carmen").putExtra("matches", st?.savedMatchesJson ?: "[]")
+          .putExtra("playerName", overlayState?.hlName ?: "Carmen").putExtra("serverOffset", overlayState?.serverOffset ?: 0L).putExtra("matches", st?.savedMatchesJson ?: "[]")
           .putExtra("before", st?.hlBefore ?: 10)
           .putExtra("after", st?.hlAfter ?: 3))
       }

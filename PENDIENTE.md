@@ -68,3 +68,7 @@
 
 ## Versión 1.8.2
 - Resúmenes de grabaciones anteriores: eliges los vídeos originales, la hora sale del nombre del archivo (VoleyCam_fecha_hora), se unen si hay varios y se colocan las jugadas (lista actual + historial).
+
+## Versión 1.8.3
+- La hora de los vídeos se saca aunque el selector esconda el nombre (nombre real en la galería o fecha interna del vídeo). Orden por hora.
+- "Resumen desde un vídeo de la galería" también coloca las marcas por la hora real del vídeo (o por el inicio del directo si es de YouTube; el que más cuadre).

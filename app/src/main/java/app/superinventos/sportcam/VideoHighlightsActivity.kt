@@ -193,8 +193,8 @@ class VideoHighlightsActivity : AppCompatActivity() {
     if (durationMs == 0) return toast("Espera a que cargue el vídeo")
     val arr = try { JSONArray(intent.getStringExtra("matches") ?: "[]") } catch (_: Exception) { JSONArray() }
     val options = (0 until arr.length()).map { arr.getJSONObject(it) }
-      .filter { it.optLong("liveStart") > 0 && (it.optJSONArray("marks")?.length() ?: 0) > 0 }
-    if (options.isEmpty()) return toast("No hay partidos con marcas y hora de inicio del directo guardadas")
+      .filter { (it.optJSONArray("marks")?.length() ?: 0) > 0 }
+    if (options.isEmpty()) return toast("No hay partidos con jugadas marcadas guardados")
     AlertDialog.Builder(this)
       .setTitle("Marcas de qué partido")
       .setItems(options.map { "${it.optString("title")} (${it.optJSONArray("marks")?.length()} marcas)" }.toTypedArray()) { _, which ->
@@ -214,21 +214,23 @@ class VideoHighlightsActivity : AppCompatActivity() {
 
   /** [player]: true solo 💜, false solo ⭐, null todas. */
   private fun applyMarks(m: org.json.JSONObject, player: Boolean?) {
-      run {
-        val start = m.optLong("liveStart")
-        val offset = (etOffset.text.toString().toIntOrNull() ?: 0)
-        getSharedPreferences("sportcam", MODE_PRIVATE).edit().putInt("hlOffset", offset).apply()
-        val ms = m.getJSONArray("marks")
-        var added = 0
-        for (i in 0 until ms.length()) {
-          val mk = ms.getJSONObject(i)
-          if (player != null && (mk.optString("kind") == "carmen") != player) continue
-          val p = (mk.optLong("ts") - start + offset * 1000L).toInt()
-          if (p in 0..durationMs) { marks += p; labels[p] = mk.optString("label"); added++ }
-        }
-        refreshMarks()
-        toast(if (added > 0) "$added marcas añadidas. Revisa alguna y ajusta el desfase si no cuadran." else "Ninguna marca cae dentro de este vídeo")
-      }
+    val offset = (etOffset.text.toString().toIntOrNull() ?: 0)
+    getSharedPreferences("sportcam", MODE_PRIVATE).edit().putInt("hlOffset", offset).apply()
+    val ms = m.getJSONArray("marks")
+    val list = (0 until ms.length()).map { ms.getJSONObject(it) }
+      .filter { player == null || (it.optString("kind") == "carmen") == player }
+    fun positions(start: Long) = list.mapNotNull { mk ->
+      val p = (mk.optLong("ts") - start + offset * 1000L).toInt()
+      if (start > 0 && p in 0..durationMs) p to mk.optString("label") else null
+    }
+    // Vídeo grabado por la app: por su hora real. Vídeo bajado de YouTube: desde el inicio del directo. Se usa el que más cuadre.
+    val vt = uri?.let { VideoTimes.times(this, it) }
+    val byTime = if (vt != null) positions(vt.first + intent.getLongExtra("serverOffset", 0L)) else emptyList()
+    val byLive = positions(m.optLong("liveStart"))
+    val chosen = if (byTime.size >= byLive.size) byTime else byLive
+    chosen.forEach { (p, l) -> marks += p; labels[p] = l }
+    refreshMarks()
+    toast(if (chosen.isNotEmpty()) "${chosen.size} marcas añadidas. Revisa alguna y ajusta el desfase si no cuadran." else "Ninguna marca cae dentro de este vídeo")
   }
 
   private fun create() {
