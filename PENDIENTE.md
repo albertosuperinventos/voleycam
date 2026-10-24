@@ -78,3 +78,4 @@
 - Si el montaje con fundidos falla: reintentar con portada y patrocinadores sin fundidos (como 1.7.0) antes de cortes normales.
 - Ventana final con el error completo del montaje.
 - Revisar por qué el resumen del 24/10 salió con 81 jugadas (¿marcas de más?).
+- Idea (sin confirmar): música de fondo en el resumen del partido (MP3 del móvil, pabellón bajo, fundido al final).
