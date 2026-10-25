@@ -79,3 +79,5 @@
 - Ventana final con el error completo del montaje.
 - Revisar por qué el resumen del 24/10 salió con 81 jugadas (¿marcas de más?).
 - Idea (sin confirmar): música de fondo en el resumen del partido (MP3 del móvil, pabellón bajo, fundido al final).
+- Grabación con calidad propia (segundo codificador de RootEncoder: recordWidth/recordHeight/recordBitrate), independiente del bitrate adaptativo del directo. Ajuste "Calidad de la grabación": Normal 720p 4 Mbps / Alta 1080p 6 Mbps (por defecto) / Máxima 1080p 10 Mbps.
+- Resúmenes montados (Transformer) a ~8 Mbps.
