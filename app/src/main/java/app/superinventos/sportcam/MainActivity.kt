@@ -1035,9 +1035,17 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val marks = overlayState?.marks.orEmpty()
     val start = if (liveStartTs > 0) liveStartTs else lastRecording?.startTs ?: 0L
     val ch = if (start > 0) Highlights.chapters(start, marks) else ""
-    val full = if (ch.contains('\n')) "$desc\n\nMOMENTOS DEL PARTIDO\n$ch" else desc
+    val full = if (ch.contains('\n')) withChapters(desc, ch) else desc
     toast("Subiendo descripción a YouTube…")
     ytRun { token -> YouTubeClient.updateDescription(token, id, full); "Descripción actualizada en YouTube." }
+  }
+
+  /** Mete los capítulos en la descripción, antes del aviso de contenido promocional (que va al final). */
+  private fun withChapters(desc: String, ch: String): String {
+    val promo = "Esta retransmisión incluye contenido promocional."
+    val i = desc.lastIndexOf(promo)
+    return if (i > 0) desc.substring(0, i).trimEnd() + "\n\nMOMENTOS DEL PARTIDO\n" + ch + "\n\n" + promo
+    else "$desc\n\nMOMENTOS DEL PARTIDO\n$ch"
   }
 
   private fun copyChapters() {
@@ -1047,7 +1055,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val start = if (liveStartTs > 0) liveStartTs else rec?.startTs ?: return toast("No hay directo ni grabación de referencia")
     val chapters = Highlights.chapters(start, marks)
     val desc = overlayState?.ytDesc.orEmpty()
-    val text = if (desc.isBlank()) chapters else "$desc\n\nMOMENTOS DEL PARTIDO\n$chapters"
+    val text = if (desc.isBlank()) chapters else withChapters(desc, chapters)
     copyToClipboard(text)
     toast("Copiado: pégalo en la descripción del vídeo en YouTube Studio")
   }

@@ -108,3 +108,6 @@
 - OJO 1.8.4 (app y mando): las jugadas pueden traer kind con varias etiquetas separadas por "+" (p. ej. "carmen+bloqueo", "jugada+carmen"); el mando y la app deben tratarlas como etiquetas.
 - Estudio 1.1.1: cuatro botones ⭐ 💜 🧱 🛡 para añadir jugadas en la vista previa (se juntan si se pulsan seguidos, como en la app).
 - Estudio 1.1.2: botón 🗑 Quitar jugadas (selección múltiple); al guardar se borran del canal.
+
+## Próxima versión (1.8.5) — hecho en local, sin compilar
+- Descripción de YouTube: "Retransmisión NO OFICIAL, ofrecida por:" y al final "Esta retransmisión incluye contenido promocional." (sin patrocinadores: "Retransmisión NO OFICIAL."). Los capítulos se meten antes del aviso final.

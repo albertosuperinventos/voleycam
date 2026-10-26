@@ -217,6 +217,7 @@
   }
 
   /** Descripción para YouTube con el formato del canal. sponsors: [{name, desc, link}] */
+  const PROMO_LINE = 'Esta retransmisión incluye contenido promocional.';
   function ytDescription(L, home, away, sponsors, dateObj) {
     const d = L.info.when ? new Date(L.info.when) : (dateObj || new Date());
     const out = [];
@@ -238,13 +239,16 @@
     }
     const sp = (sponsors || []).filter(s => s.name || s.desc || s.link);
     if (sp.length) {
-      out.push('', 'Retransmisión ofrecida por:');
+      out.push('', 'Retransmisión NO OFICIAL, ofrecida por:');
       for (const s of sp) {
         if (s.name) out.push(s.name);
         for (const line of String(s.desc || '').split('\n').map(x => x.trim()).filter(Boolean)) out.push('• ' + line);
         for (const line of String(s.link || '').split('\n').map(x => x.trim()).filter(Boolean)) out.push(line);
         out.push('******************************');
       }
+      out.push('', PROMO_LINE);
+    } else {
+      out.push('', 'Retransmisión NO OFICIAL.');
     }
     return out.join('\n');
   }
