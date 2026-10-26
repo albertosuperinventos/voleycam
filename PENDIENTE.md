@@ -89,3 +89,10 @@
 - "Crear resúmenes": Partido (todas: ⭐🧱🛡, con portada y patrocinadores), Carmen (sus jugadas de cualquier tipo), Bloqueos y Recepciones (vídeos aparte, sin portada, con fundidos). Solo se crean los que tengan jugadas.
 - Botones en Juego, mando pequeño y cámara SIN desplazar: en la cámara, segunda columna a la izquierda de la actual con ⭐ Jugada · 💜 Carmen · 🧱 Bloqueo · 🛡 Recepción · ⏪ Repetir (botones grandes con icono y nombre); la columna de siempre: EN DIRECTO, REC, MANDO, −/+, 🎙/🌙, ⟲/⚙ (sin ScrollView). Aprobado boceto_camara.png.
 - Formulario "Añadir patrocinador" con las dos imágenes: "Logo para la esquina (obligatorio)" y "Diapositiva para pantalla completa (opcional, 16:9)". En Editar, los mismos nombres.
+
+## Ideas acordadas para más adelante (sin compilar)
+- Cuenta atrás en PREPARTIDO hasta la hora del partido ("Empezamos en 4:59").
+- Compartir el enlace del directo por WhatsApp con un botón; QR al vídeo en el cartel del resultado.
+- Alineación opcional (por confirmar cómo): jugadoras por equipo con número y nombre; elegir convocadas antes del partido.
+- Más adelante quizá: MVP con QR para votar.
+- Descartadas por ahora: rótulo de jugadora (2), estadísticas (5: ya usa otra app).
