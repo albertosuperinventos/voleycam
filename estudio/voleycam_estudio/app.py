@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -186,6 +186,7 @@ class Main(QMainWindow):
         hh.setSectionResizeMode(6, QHeaderView.Stretch)
         self.tblMk.verticalHeader().setVisible(False)
         self.tblMk.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tblMk.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.tblMk.cellDoubleClicked.connect(lambda r, c: c != 1 and self.preview(r))
         self.tblMk.cellClicked.connect(lambda r, c: c == 1 and self.type_menu(r))
         self.tblMk.itemChanged.connect(self.on_mark_edit)
@@ -195,6 +196,8 @@ class Main(QMainWindow):
         b = QPushButton("▶ Ver jugada"); b.clicked.connect(lambda: self.preview(self.tblMk.currentRow())); hb.addWidget(b)
         b = QPushButton("Marcar todas"); b.clicked.connect(lambda: self.check_all(True)); hb.addWidget(b)
         b = QPushButton("Ninguna"); b.clicked.connect(lambda: self.check_all(False)); hb.addWidget(b)
+        b = QPushButton("🗑 Quitar"); b.setToolTip("Borra las jugadas seleccionadas (al guardar, también del canal)")
+        b.clicked.connect(self.delete_marks); hb.addWidget(b)
         self.btnSave = QPushButton("💾 Guardar cambios en el canal"); self.btnSave.setEnabled(False)
         self.btnSave.setToolTip("Guarda en el canal los tipos cambiados y las jugadas añadidas (también se ven en la app)")
         self.btnSave.clicked.connect(self.save_marks); hb.addWidget(self.btnSave)
@@ -451,7 +454,7 @@ class Main(QMainWindow):
         self.tblMk.horizontalHeader().setSectionResizeMode(6, QHeaderView.Stretch)
         self.tblMk.blockSignals(False)
         self.lblMk.setText(f"{len(marks)} jugadas · {inside} caen dentro de los vídeos" if self.videos else f"{len(marks)} jugadas · añade los vídeos del partido")
-        dirty = sum(1 for x in marks if x.dirty)
+        dirty = sum(1 for x in marks if x.dirty) + len(m.removed)
         self.btnSave.setEnabled(dirty > 0)
         self.btnSave.setText(f"💾 Guardar cambios en el canal ({dirty})" if dirty else "💾 Guardar cambios en el canal")
         self.update_counts()
@@ -578,11 +581,28 @@ class Main(QMainWindow):
             mk.dirty = True
             self.refresh_marks()
 
+    def delete_marks(self):
+        if not self.match:
+            return
+        marks = getattr(self, "_sorted_marks", [])
+        rows = sorted({i.row() for i in self.tblMk.selectedIndexes()})
+        sel = [marks[r] for r in rows if r < len(marks)]
+        if not sel:
+            return QMessageBox.information(self, APP, "Selecciona en la lista la jugada o jugadas que quieres quitar.")
+        if QMessageBox.question(self, APP, f"¿Quitar {len(sel)} jugada(s)? Al pulsar «Guardar cambios en el canal» se borrarán también del canal.") != QMessageBox.Yes:
+            return
+        for mk in sel:
+            self.match.marks.remove(mk)
+            if mk.key:
+                self.match.removed.append(mk.key)
+        self.refresh_marks()
+
     def save_marks(self):
         if not self.match:
             return
         try:
-            n = core.save_marks(self.key.text(), self.match.path, self.match.marks)
+            n = core.save_marks(self.key.text(), self.match.path, self.match.marks, self.match.removed)
+            self.match.removed.clear()
             self.btnSave.setEnabled(False)
             self.lblMk.setText(f"Guardadas {n} jugadas en el canal")
         except Exception as e:

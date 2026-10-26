@@ -69,11 +69,11 @@ def fetch_channel(key: str, timeout: int = 30) -> dict:
     return data
 
 
-def save_marks(key: str, path: str, marks: list, timeout: int = 30) -> int:
-    """Guarda en el canal las jugadas cambiadas o añadidas. Devuelve cuántas."""
+def save_marks(key: str, path: str, marks: list, removed: list = (), timeout: int = 30) -> int:
+    """Guarda en el canal las jugadas cambiadas, añadidas o quitadas. Devuelve cuántos cambios."""
     import requests
     import time
-    upd = {}
+    upd = {k: None for k in removed}
     for mk in marks:
         if not mk.dirty:
             continue
@@ -184,6 +184,7 @@ class Match:
     marks: list
     info: dict = field(default_factory=dict)
     path: str = "marks"   # dónde están sus jugadas dentro del canal
+    removed: list = field(default_factory=list)   # claves de jugadas quitadas, pendientes de borrar en el canal
 
 
 def _team(d: dict, teams: dict, fb: str) -> Team:
