@@ -114,3 +114,9 @@
 
 ## Estudio 1.2 — aprobado (boceto_estudio.png), sin hacer
 - Tres pestañas: 1 Preparar (canal, partido, vídeos) · 2 Ver y marcar (vídeo grande, línea de tiempo con marcas de colores clicables, ⏮ −10 −5 ▶ +5 +10 ⏭, velocidad, botones ⭐💜🧱🛡, jugada seleccionada con tipos/segundos/quitar, lista con filtros, teclado: Espacio, ←→, 1-4, Supr, N/P, guardar en el canal) · 3 Crear resúmenes.
+
+## Plan para poder vender en el futuro (planteado 26/10)
+Fase 0 · Proteger (ya): repo privado + mando en Firebase Hosting + repo público solo con descargas; firma fuera del repo (secreto); R8 en la app, PyArmor en Estudio, mando minificado; aviso de derechos.
+Fase 1 · Hacerla genérica: sin "Carmen" por defecto, ligas/equipos por club, primera configuración guiada; imágenes a Firebase Storage (no en la base de datos); política de privacidad y términos; verificación de Google (OAuth YouTube) y cuota de la API; Google Play.
+Fase 2 · Licencias: código por club en Firebase (club, caducidad, dispositivos), comprobación al abrir con margen sin conexión, panel web de administración, pagos (Stripe o factura), reglas de Firebase ligadas a la licencia.
+Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso, RGPD (grabación de menores: consentimiento de familias/club), facturación como Superinventos, costes (Firebase Blaze, Play 25 $, Apple 99 $/año si Mac/iOS).
