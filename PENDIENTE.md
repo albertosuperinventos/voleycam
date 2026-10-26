@@ -81,3 +81,4 @@
 - Idea (sin confirmar): música de fondo en el resumen del partido (MP3 del móvil, pabellón bajo, fundido al final).
 - Grabación con calidad propia (segundo codificador de RootEncoder: recordWidth/recordHeight/recordBitrate), independiente del bitrate adaptativo del directo. Ajuste "Calidad de la grabación": Normal 720p 4 Mbps / Alta 1080p 6 Mbps (por defecto) / Máxima 1080p 10 Mbps.
 - Resúmenes montados (Transformer) a ~8 Mbps.
+- Calidad de la repetición en Ajustes: Baja (640x360, 15 fps, actual) / Media (960x540, 20 fps, por defecto) / Alta (1280x720, 25 fps).
