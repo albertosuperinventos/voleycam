@@ -85,6 +85,24 @@
         android:layout_marginTop="16dp"
         android:text="Grabar también en el móvil al emitir"
         android:textColor="@color/text" />
+
+      <TextView style="@style/FormLabel" android:text="Calidad de la grabación en el móvil" />
+      <RadioGroup
+        android:id="@+id/rgRecQ"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <RadioButton android:id="@+id/rbRecQ0" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Normal" android:textColor="@color/text" />
+        <RadioButton android:id="@+id/rbRecQ1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:text="Alta" android:textColor="@color/text" />
+        <RadioButton android:id="@+id/rbRecQ2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:text="Máxima" android:textColor="@color/text" />
+      </RadioGroup>
+      <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Normal 720p 4 Mbps (≈2 GB/h) · Alta 1080p 6 Mbps (≈3 GB/h) · Máxima 1080p 10 Mbps (≈5 GB/h). No baja aunque la conexión vaya justa."
+        android:textColor="@color/muted"
+        android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Columna derecha: mando -->

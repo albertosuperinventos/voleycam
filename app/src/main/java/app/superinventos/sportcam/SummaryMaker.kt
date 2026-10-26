@@ -21,6 +21,8 @@ import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.OverlaySettings
 import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultEncoderFactory
+import androidx.media3.transformer.VideoEncoderSettings
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
@@ -200,7 +202,7 @@ object SummaryMaker {
    * Prepara la lista de tramos (en hilo de fondo: saca los fotogramas de los fundidos).
    * [ranges] en microsegundos dentro de [src]. [slides] solo para el resumen del partido.
    */
-  fun prepare(context: Context, src: Uri, ranges: List<LongRange>, slides: Slides?, w: Int, h: Int): List<EditedMediaItem> {
+  fun prepare(context: Context, src: Uri, ranges: List<LongRange>, slides: Slides?, w: Int, h: Int, fades: Boolean = true): List<EditedMediaItem> {
     val present: Effect = Presentation.createForWidthAndHeight(w, h, Presentation.LAYOUT_SCALE_TO_FIT)
     fun effects(extra: List<Effect>, audio: List<AudioProcessor> = emptyList()) = Effects(audio, listOf(present) + extra)
     fun overlay(o: BitmapOverlay): Effect = OverlayEffect(ImmutableList.of(o))
@@ -211,25 +213,25 @@ object SummaryMaker {
     val items = mutableListOf<EditedMediaItem>()
     var prev: Tail? = null
     if (slides != null) {
-      items += image(slides.introNoTitle, listOf(overlay(TitleOverlay(slides.title))))
-      prev = Tail.Still(slides.intro)
+      items += if (fades) image(slides.introNoTitle, listOf(overlay(TitleOverlay(slides.title)))) else image(slides.intro, emptyList())
+      if (fades) prev = Tail.Still(slides.intro)
     }
     ranges.forEachIndexed { i, r ->
       val last = i == ranges.size - 1
       val hasNext = !last || (slides != null && slides.sponsors.isNotEmpty())
       // El tramo termina antes del fundido; ese final se superpone al principio del siguiente
       val len = r.last - r.first
-      val fade = if (hasNext && len > FADE_US * 3) FADE_US else 0L
+      val fade = if (fades && hasNext && len > FADE_US * 3) FADE_US else 0L
       val endUs = r.last - fade
       val clip = MediaItem.ClippingConfiguration.Builder().setStartPositionMs(r.first / 1000).setEndPositionMs(endUs / 1000).build()
       val fx = prev?.let { listOf(overlay(TailOverlay(it, w, h))) } ?: emptyList()
       items += EditedMediaItem.Builder(MediaItem.Builder().setUri(src).setClippingConfiguration(clip).build())
-        .setEffects(effects(fx, listOf(FadeAudio(endUs - r.first)))).build()
+        .setEffects(if (fades) effects(fx, listOf(FadeAudio(endUs - r.first))) else effects(emptyList())).build()
       prev = if (fade > 0) tailFrames(context, src, endUs, r.last).takeIf { it.isNotEmpty() }?.let { Tail.Frames(it) } else null
     }
     slides?.sponsors?.forEach { f ->
-      items += image(f, prev?.let { listOf(overlay(TailOverlay(it, w, h))) } ?: emptyList())
-      prev = Tail.Still(f)
+      items += image(f, if (fades) prev?.let { listOf(overlay(TailOverlay(it, w, h))) } ?: emptyList() else emptyList())
+      prev = if (fades) Tail.Still(f) else null
     }
     return items
   }
@@ -254,6 +256,9 @@ object SummaryMaker {
     transformer = Transformer.Builder(context)
       .setVideoMimeType(MimeTypes.VIDEO_H264)
       .setAudioMimeType(MimeTypes.AUDIO_AAC)
+      .setEncoderFactory(DefaultEncoderFactory.Builder(context)
+        .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(8_000_000).build())
+        .build())
       .addListener(object : Transformer.Listener {
         override fun onCompleted(composition: Composition, exportResult: ExportResult) {
           finished = true; onDone(out.length() > 0, "")

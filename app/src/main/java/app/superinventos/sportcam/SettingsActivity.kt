@@ -65,6 +65,7 @@ class SettingsActivity : AppCompatActivity() {
     rgFps.check(if (prefs.fps == 25) R.id.rb25 else R.id.rb30)
     etBitrate.setText(prefs.bitrateKbps.toString())
     swRecord.isChecked = prefs.recordLocal
+    findViewById<RadioGroup>(R.id.rgRecQ).check(when (prefs.recordQuality) { 0 -> R.id.rbRecQ0; 2 -> R.id.rbRecQ2; else -> R.id.rbRecQ1 })
     etRemote.setText(prefs.remoteUrl)
     tvKey.text = prefs.channelKey
 
@@ -126,6 +127,7 @@ class SettingsActivity : AppCompatActivity() {
     prefs.fps = if (rgFps.checkedRadioButtonId == R.id.rb25) 25 else 30
     prefs.bitrateKbps = etBitrate.text.toString().toIntOrNull()?.coerceIn(300, 12000) ?: 3000
     prefs.recordLocal = swRecord.isChecked
+    prefs.recordQuality = when (findViewById<RadioGroup>(R.id.rgRecQ).checkedRadioButtonId) { R.id.rbRecQ0 -> 0; R.id.rbRecQ2 -> 2; else -> 1 }
     prefs.remoteUrl = etRemote.text.toString()
   }
 

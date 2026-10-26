@@ -24,7 +24,7 @@
       timer: { show: false },              // temporizador visible en voleibol
       to: { h: 0, a: 0 },                  // tiempos muertos usados en el set (máx. 2)
       muted: false,                        // micrófono silenciado
-      hl: { before: 10, after: 3, auto: true, name: 'Carmen', slow: false }, // resumen: segundos antes/después de cada marca, marca automática fin de set
+      hl: { before: 10, after: 3, auto: true, name: 'Carmen', slow: false, bb: 5, ba: 2, rb: 4, ra: 1, rq: 'mid', rep: 'cut' }, // resumen: segundos antes/después de cada marca, marca automática fin de set
       info: { when: '', venue: '', comp: '', cat: '', season: '' } // datos del partido para YouTube
     };
   }

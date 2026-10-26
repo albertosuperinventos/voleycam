@@ -73,7 +73,7 @@
 - La hora de los vídeos se saca aunque el selector esconda el nombre (nombre real en la galería o fecha interna del vídeo). Orden por hora.
 - "Resumen desde un vídeo de la galería" también coloca las marcas por la hora real del vídeo (o por el inicio del directo si es de YouTube; el que más cuadre).
 
-## Próxima versión (1.8.4) — acordado, sin compilar
+## Versión 1.8.4
 - Cortes normales: el audio de cada tramo empieza donde empieza la imagen (fotograma clave); hoy el desfase va a más en cada jugada.
 - Si el montaje con fundidos falla: reintentar con portada y patrocinadores sin fundidos (como 1.7.0) antes de cortes normales.
 - Ventana final con el error completo del montaje.

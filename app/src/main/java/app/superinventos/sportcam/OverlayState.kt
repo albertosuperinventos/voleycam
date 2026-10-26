@@ -50,6 +50,13 @@ data class OverlayState(
   /** Nombre del botón 💜 (jugadora). */
   val hlName: String,
   val replaySlow: Boolean,
+  /** Segundos antes/después de bloqueos y recepciones. */
+  val blockBefore: Int, val blockAfter: Int,
+  val recBefore: Int, val recAfter: Int,
+  /** low | mid | high */
+  val replayQuality: String,
+  /** Repeticiones en el resumen: false = quitar, true = incluir enteras. */
+  val replaysInSummary: Boolean,
   /** Datos del partido (fecha ISO local, competición, categoría) para la portada del resumen. */
   val infoWhen: String,
   val infoComp: String,
@@ -64,6 +71,13 @@ data class OverlayState(
   val serverOffset: Long,
 ) {
   val isVolley get() = sport != "football"
+
+  /** Segundos (antes, después) de una jugada según sus etiquetas: el más largo si tiene varias. */
+  fun window(m: Highlights.Mark): Pair<Int, Int> {
+    val w = m.tags.map { when (it) { "bloqueo" -> blockBefore to blockAfter; "recepcion" -> recBefore to recAfter; else -> hlBefore to hlAfter } }
+      .ifEmpty { listOf(hlBefore to hlAfter) }
+    return w.maxOf { it.first } to w.maxOf { it.second }
+  }
 
   /** La pantalla completa está puesta y no ha caducado. */
   fun breakActive(nowLocal: Long = System.currentTimeMillis()) =
@@ -150,6 +164,12 @@ data class OverlayState(
         hlAfter = o.optJSONObject("hl")?.optInt("after", 3) ?: 3,
         hlName = o.optJSONObject("hl")?.optString("name", "Carmen")?.ifBlank { "Carmen" } ?: "Carmen",
         replaySlow = o.optJSONObject("hl")?.optBoolean("slow") ?: false,
+        blockBefore = o.optJSONObject("hl")?.optInt("bb", 5) ?: 5,
+        blockAfter = o.optJSONObject("hl")?.optInt("ba", 2) ?: 2,
+        recBefore = o.optJSONObject("hl")?.optInt("rb", 4) ?: 4,
+        recAfter = o.optJSONObject("hl")?.optInt("ra", 1) ?: 1,
+        replayQuality = o.optJSONObject("hl")?.optString("rq", "mid")?.ifBlank { "mid" } ?: "mid",
+        replaysInSummary = o.optJSONObject("hl")?.optString("rep") == "full",
         infoWhen = o.optJSONObject("info")?.optString("when").orEmpty(),
         infoComp = o.optJSONObject("info")?.optString("comp").orEmpty(),
         infoCat = o.optJSONObject("info")?.optString("cat").orEmpty(),

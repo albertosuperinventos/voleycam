@@ -11,6 +11,21 @@
     <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
   </style>
 
+  <style name="MarkBtn">
+    <item name="android:layout_width">64dp</item>
+    <item name="android:layout_height">50dp</item>
+    <item name="android:layout_marginTop">5dp</item>
+    <item name="android:gravity">center</item>
+    <item name="android:background">@drawable/bg_btn</item>
+    <item name="android:textColor">@color/text</item>
+    <item name="android:textSize">10sp</item>
+    <item name="android:textStyle">bold</item>
+    <item name="android:lineSpacingExtra">-2sp</item>
+    <item name="android:maxLines">2</item>
+    <item name="android:clickable">true</item>
+    <item name="android:focusable">true</item>
+  </style>
+
   <style name="CamBtn">
     <item name="android:layout_width">52dp</item>
     <item name="android:layout_height">40dp</item>

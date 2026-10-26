@@ -200,7 +200,7 @@ class VideoHighlightsActivity : AppCompatActivity() {
       .setItems(options.map { "${it.optString("title")} (${it.optJSONArray("marks")?.length()} marcas)" }.toTypedArray()) { _, which ->
         val m = options[which]
         val ms0 = m.getJSONArray("marks")
-        val nPlayer = (0 until ms0.length()).count { ms0.getJSONObject(it).optString("kind") == "carmen" }
+        val nPlayer = (0 until ms0.length()).count { ms0.getJSONObject(it).optString("kind").split("+").contains("carmen") }
         if (nPlayer == 0) { applyMarks(m, null); return@setItems }
         val name = intent.getStringExtra("playerName") ?: "Carmen"
         AlertDialog.Builder(this)
@@ -218,7 +218,7 @@ class VideoHighlightsActivity : AppCompatActivity() {
     getSharedPreferences("sportcam", MODE_PRIVATE).edit().putInt("hlOffset", offset).apply()
     val ms = m.getJSONArray("marks")
     val list = (0 until ms.length()).map { ms.getJSONObject(it) }
-      .filter { player == null || (it.optString("kind") == "carmen") == player }
+      .filter { player == null || (it.optString("kind").split("+").contains("carmen")) == player }
     fun positions(start: Long) = list.mapNotNull { mk ->
       val p = (mk.optLong("ts") - start + offset * 1000L).toInt()
       if (start > 0 && p in 0..durationMs) p to mk.optString("label") else null

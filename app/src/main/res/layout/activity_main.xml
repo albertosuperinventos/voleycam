@@ -57,61 +57,54 @@
     android:textStyle="bold"
     android:visibility="gone" />
 
-  <!-- Botonera derecha -->
-  <ScrollView
+  <!-- Botonera derecha: columna de jugadas y columna de la cámara (cabe sin desplazar) -->
+  <LinearLayout
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:layout_gravity="end|center_vertical"
-    android:layout_marginEnd="12dp"
-    android:scrollbars="none"
-    android:overScrollMode="never">
-  <LinearLayout
-    android:id="@+id/controls"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:paddingBottom="5dp"
-    android:gravity="center_horizontal"
-    android:orientation="vertical">
-
-    <TextView android:id="@+id/btnLive" style="@style/CamBtn" android:layout_width="64dp" android:layout_height="52dp" android:text="EN\nDIRECTO" android:textSize="11sp" android:background="@drawable/bg_btn_live" />
-    <TextView android:id="@+id/btnRec" style="@style/CamBtn" android:text="REC" />
-    <TextView android:id="@+id/btnRemote" style="@style/CamBtn" android:text="MANDO" android:textSize="11sp" />
+    android:layout_marginEnd="10dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
 
     <LinearLayout
+      android:id="@+id/marksCol"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:orientation="horizontal">
-      <TextView android:id="@+id/btnZoomOut" style="@style/CamBtn" android:layout_width="36dp" android:text="−" android:textSize="18sp" />
-      <TextView android:id="@+id/btnZoomIn" style="@style/CamBtn" android:layout_width="36dp" android:layout_marginStart="4dp" android:text="+" android:textSize="18sp" />
+      android:layout_marginEnd="8dp"
+      android:gravity="center_horizontal"
+      android:orientation="vertical">
+      <TextView android:id="@+id/btnMark" style="@style/MarkBtn" android:text="⭐\nJugada" />
+      <TextView android:id="@+id/btnMarkC" style="@style/MarkBtn" android:text="💜\nCarmen" />
+      <TextView android:id="@+id/btnMarkB" style="@style/MarkBtn" android:text="🧱\nBloqueo" />
+      <TextView android:id="@+id/btnMarkR" style="@style/MarkBtn" android:text="🛡\nRecepción" />
+      <TextView android:id="@+id/btnReplay" style="@style/MarkBtn" android:text="⏪\nRepetir" />
     </LinearLayout>
 
     <LinearLayout
+      android:id="@+id/controls"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:orientation="horizontal">
-      <TextView android:id="@+id/btnMute" style="@style/CamBtn" android:layout_width="36dp" android:text="🎙" android:textSize="16sp" />
-      <TextView android:id="@+id/btnDim" style="@style/CamBtn" android:layout_width="36dp" android:layout_marginStart="4dp" android:text="🌙" android:textSize="16sp" />
-    </LinearLayout>
+      android:gravity="center_horizontal"
+      android:orientation="vertical">
 
-    <LinearLayout
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:orientation="horizontal">
-      <TextView android:id="@+id/btnMark" style="@style/CamBtn" android:layout_width="36dp" android:text="⭐" android:textSize="16sp" />
-      <TextView android:id="@+id/btnMarkC" style="@style/CamBtn" android:layout_width="36dp" android:layout_marginStart="4dp" android:text="💜" android:textSize="16sp" />
-    </LinearLayout>
+      <TextView android:id="@+id/btnLive" style="@style/CamBtn" android:layout_width="64dp" android:layout_height="50dp" android:text="EN\nDIRECTO" android:textSize="11sp" android:background="@drawable/bg_btn_live" />
+      <TextView android:id="@+id/btnRec" style="@style/CamBtn" android:layout_width="64dp" android:text="REC" />
+      <TextView android:id="@+id/btnRemote" style="@style/CamBtn" android:layout_width="64dp" android:text="MANDO" android:textSize="11sp" />
 
-    <LinearLayout
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:orientation="horizontal">
-      <TextView android:id="@+id/btnReplay" style="@style/CamBtn" android:layout_width="36dp" android:text="⏪" android:textSize="16sp" />
-      <TextView android:id="@+id/btnSwitch" style="@style/CamBtn" android:layout_width="36dp" android:layout_marginStart="4dp" android:text="⟲" android:textSize="18sp" />
+      <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
+        <TextView android:id="@+id/btnZoomOut" style="@style/CamBtn" android:layout_width="30dp" android:text="−" android:textSize="18sp" />
+        <TextView android:id="@+id/btnZoomIn" style="@style/CamBtn" android:layout_width="30dp" android:layout_marginStart="4dp" android:text="+" android:textSize="18sp" />
+      </LinearLayout>
+      <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
+        <TextView android:id="@+id/btnMute" style="@style/CamBtn" android:layout_width="30dp" android:text="🎙" android:textSize="15sp" />
+        <TextView android:id="@+id/btnDim" style="@style/CamBtn" android:layout_width="30dp" android:layout_marginStart="4dp" android:text="🌙" android:textSize="15sp" />
+      </LinearLayout>
+      <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
+        <TextView android:id="@+id/btnSwitch" style="@style/CamBtn" android:layout_width="30dp" android:text="⟲" android:textSize="17sp" />
+        <TextView android:id="@+id/btnSettings" style="@style/CamBtn" android:layout_width="30dp" android:layout_marginStart="4dp" android:text="⚙" android:textSize="17sp" />
+      </LinearLayout>
     </LinearLayout>
-
-    <TextView android:id="@+id/btnSettings" style="@style/CamBtn" android:text="⚙" android:textSize="18sp" />
   </LinearLayout>
-  </ScrollView>
 
   <!-- Ahorro de batería: pantalla negra encima de todo; toca para volver -->
   <FrameLayout

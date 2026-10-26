@@ -17,10 +17,25 @@ import java.util.Locale
  */
 object Highlights {
 
-  /** kind "" = jugada del partido (⭐), "carmen" = jugada de la jugadora (💜). */
+  /**
+   * Jugada marcada. kind lleva las etiquetas separadas por "+": "" (⭐ jugada), "carmen" (💜),
+   * "bloqueo" (🧱), "recepcion" (🛡) o combinaciones como "carmen+bloqueo".
+   */
   data class Mark(val ts: Long, val label: String, val kind: String = "") {
-    val isPlayer get() = kind == "carmen"
+    val tags: Set<String> = kind.split('+').map { it.trim() }.filter { it.isNotEmpty() }.toSet().ifEmpty { setOf("jugada") }
+    /** Solo de la jugadora (no va al resumen del partido). */
+    val isPlayer get() = tags == setOf("carmen")
+    val inGame get() = !isPlayer
+    fun has(t: String) = t in tags
   }
+
+  /** Tipos de resumen: clave, filtro. */
+  val SUMMARY_FILTERS: Map<String, (Mark) -> Boolean> = linkedMapOf(
+    "partido" to { m -> m.inGame },
+    "carmen" to { m -> m.has("carmen") },
+    "bloqueo" to { m -> m.has("bloqueo") },
+    "recepcion" to { m -> m.has("recepcion") },
+  )
 
   /** Trozo de una grabación: hora del servidor de inicio y fin (ms) y dónde empieza dentro del vídeo (µs). */
   data class Segment(val startTs: Long, val endTs: Long, val offsetUs: Long)
@@ -34,13 +49,32 @@ object Highlights {
     fun contains(ts: Long) = segments.any { ts in it.startTs..it.endTs }
   }
 
-  /** Tramos en microsegundos dentro del vídeo, ordenados y sin solaparse. */
-  fun ranges(rec: Recording, marks: List<Mark>, beforeSec: Int, afterSec: Int): List<LongRange> {
-    val raw = marks.mapNotNull { m ->
-      val seg = rec.segments.firstOrNull { m.ts in it.startTs..it.endTs } ?: return@mapNotNull null
-      val segEnd = seg.offsetUs + (seg.endTs - seg.startTs) * 1000
-      val t = seg.offsetUs + (m.ts - seg.startTs) * 1000
-      maxOf(seg.offsetUs, t - beforeSec * 1_000_000L)..minOf(segEnd, t + afterSec * 1_000_000L)
+  /** Tramos en microsegundos dentro del vídeo, ordenados y sin solaparse (mismos segundos para todas). */
+  fun ranges(rec: Recording, marks: List<Mark>, beforeSec: Int, afterSec: Int): List<LongRange> =
+    ranges(rec, marks, { beforeSec to afterSec })
+
+  /**
+   * Tramos con segundos por jugada ([window]: antes, después) y teniendo en cuenta las repeticiones
+   * ([replays], hora del servidor ms): con [includeReplays] = false el tramo acaba justo antes de la repetición;
+   * con true se alarga hasta que termina. Una marca pulsada durante una repetición cuenta desde su inicio.
+   */
+  fun ranges(rec: Recording, marks: List<Mark>, window: (Mark) -> Pair<Int, Int>,
+             replays: List<LongRange> = emptyList(), includeReplays: Boolean = false): List<LongRange> {
+    val raw = marks.mapNotNull { m0 ->
+      val inRep = replays.firstOrNull { m0.ts in it }
+      val ts = inRep?.first ?: m0.ts
+      val seg = rec.segments.firstOrNull { ts in it.startTs..it.endTs } ?: return@mapNotNull null
+      val (b, a) = window(m0)
+      var startTs = maxOf(seg.startTs, ts - b * 1000L)
+      var endTs = minOf(seg.endTs, ts + a * 1000L)
+      // Repeticiones que empiezan dentro del tramo
+      replays.filter { it.first > ts - 500 && it.first < endTs }.minByOrNull { it.first }?.let { r ->
+        endTs = if (includeReplays) minOf(seg.endTs, maxOf(endTs, r.last)) else maxOf(ts + 300, r.first)
+      }
+      // Si el principio cae dentro de una repetición anterior, empieza cuando termina
+      replays.firstOrNull { startTs in it && it.last < ts }?.let { r -> if (!includeReplays) startTs = r.last }
+      if (endTs <= startTs) return@mapNotNull null
+      (seg.offsetUs + (startTs - seg.startTs) * 1000)..(seg.offsetUs + (endTs - seg.startTs) * 1000)
     }.sortedBy { it.first }
     val merged = mutableListOf<LongRange>()
     for (r in raw) {
@@ -81,8 +115,17 @@ object Highlights {
     muxer.start()
     try {
       for (r in ranges) {
-        // Salta al fotograma clave anterior al inicio del tramo
+        // Salta al fotograma clave anterior al inicio del tramo y vuelve a saltar a esa hora exacta,
+        // para que el sonido empiece a la vez que la imagen (si no, el sonido se adelanta en cada corte)
         ex.seekTo(r.first, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+        var key = -1L
+        while (ex.sampleTrackIndex >= 0) {
+          if (ex.sampleTrackIndex == videoTrack && (ex.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) { key = ex.sampleTime; break }
+          if (ex.sampleTime > r.last) break
+          ex.advance()
+        }
+        if (key < 0) continue
+        ex.seekTo(key, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
         var segStart = -1L
         var segEnd = 0L
         while (true) {
@@ -90,11 +133,8 @@ object Highlights {
           if (track < 0) break
           val t = ex.sampleTime
           if (t > r.last + 300_000) break
-          if (segStart < 0) {
-            // El tramo empieza en el primer fotograma clave de vídeo
-            if (track != videoTrack || (ex.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) == 0) { ex.advance(); continue }
-            segStart = t
-          }
+          if (segStart < 0) segStart = key
+          if (t < key - 30_000) { ex.advance(); continue }
           if (t < segStart || t > r.last) { ex.advance(); continue }
           val size = ex.readSampleData(buf, 0)
           if (size < 0) break
@@ -205,7 +245,7 @@ object Highlights {
   fun chapters(startTs: Long, marks: List<Mark>): String {
     val sb = StringBuilder("00:00 Inicio\n")
     var lastSec = 0L
-    marks.filter { it.ts > startTs && !it.isPlayer }.sortedBy { it.ts }.forEach { m ->
+    marks.filter { it.ts > startTs && it.inGame }.sortedBy { it.ts }.forEach { m ->
       val sec = (m.ts - startTs) / 1000
       if (sec - lastSec < 10) return@forEach   // YouTube exige 10 s entre capítulos
       lastSec = sec

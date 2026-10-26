@@ -62,6 +62,16 @@ class Prefs(context: Context) {
     get() = sp.getString("recordingsJson", "[]") ?: "[]"
     set(v) = sp.edit().putString("recordingsJson", v).apply()
 
+  /** Repeticiones lanzadas (JSON [{s,e}], hora del servidor), para quitarlas de los resúmenes. */
+  var replaysJson: String
+    get() = sp.getString("replaysJson", "[]") ?: "[]"
+    set(v) = sp.edit().putString("replaysJson", v).apply()
+
+  /** Calidad de la grabación: 0 normal (720p 4 Mbps), 1 alta (1080p 6 Mbps), 2 máxima (1080p 10 Mbps). */
+  var recordQuality: Int
+    get() = sp.getInt("recordQuality", 1)
+    set(v) = sp.edit().putInt("recordQuality", v).apply()
+
   /** URL pública de la web de control (GitHub Pages), para el QR del segundo móvil. */
   var remoteUrl: String
     get() = sp.getString("remoteUrl", DEFAULT_REMOTE) ?: DEFAULT_REMOTE
