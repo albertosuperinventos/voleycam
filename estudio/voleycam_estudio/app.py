@@ -13,13 +13,13 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
     QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit,
     QProgressBar, QPushButton, QSlider, QSplitter, QTableWidget, QTableWidgetItem, QTimeEdit, QVBoxLayout,
-    QWidget,
+    QWidget, QMenu, QScrollArea,
 )
 
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -186,7 +186,8 @@ class Main(QMainWindow):
         hh.setSectionResizeMode(6, QHeaderView.Stretch)
         self.tblMk.verticalHeader().setVisible(False)
         self.tblMk.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tblMk.cellDoubleClicked.connect(lambda r, c: self.preview(r))
+        self.tblMk.cellDoubleClicked.connect(lambda r, c: c != 1 and self.preview(r))
+        self.tblMk.cellClicked.connect(lambda r, c: c == 1 and self.type_menu(r))
         self.tblMk.itemChanged.connect(self.on_mark_edit)
         v3.addWidget(self.tblMk, 1)
         hb = QHBoxLayout()
@@ -194,7 +195,11 @@ class Main(QMainWindow):
         b = QPushButton("▶ Ver jugada"); b.clicked.connect(lambda: self.preview(self.tblMk.currentRow())); hb.addWidget(b)
         b = QPushButton("Marcar todas"); b.clicked.connect(lambda: self.check_all(True)); hb.addWidget(b)
         b = QPushButton("Ninguna"); b.clicked.connect(lambda: self.check_all(False)); hb.addWidget(b)
+        self.btnSave = QPushButton("💾 Guardar cambios en el canal"); self.btnSave.setEnabled(False)
+        self.btnSave.setToolTip("Guarda en el canal los tipos cambiados y las jugadas añadidas (también se ven en la app)")
+        self.btnSave.clicked.connect(self.save_marks); hb.addWidget(self.btnSave)
         v3.addLayout(hb)
+        v3.addWidget(QLabel("Toca la columna «Tipo» para cambiarla (⭐ jugada, 💜 jugadora, 🧱 bloqueo, 🛡 recepción). Doble clic para ver la jugada.", objectName="muted"))
         ll.addWidget(g3, 1)
         split.addWidget(left)
 
@@ -215,26 +220,41 @@ class Main(QMainWindow):
             self.player.setVideoOutput(self.vw)
             self.player.positionChanged.connect(self.on_pos)
             self.play_end = 0
+            self.cur_video = -1
             hb = QHBoxLayout()
-            b = QPushButton("■ Parar"); b.clicked.connect(self.player.stop); hb.addWidget(b)
-            self.lblPrev = QLabel("Doble clic en una jugada para verla", objectName="muted"); hb.addWidget(self.lblPrev, 1)
+            b = QPushButton("−5 s"); b.clicked.connect(lambda: self.seek_rel(-5000)); hb.addWidget(b)
+            self.btnPlay = QPushButton("▶"); self.btnPlay.clicked.connect(self.toggle_play); hb.addWidget(self.btnPlay)
+            b = QPushButton("+5 s"); b.clicked.connect(lambda: self.seek_rel(5000)); hb.addWidget(b)
+            self.lblPos = QLabel("", objectName="muted"); hb.addWidget(self.lblPos)
+            hb.addStretch(1)
             vp.addLayout(hb)
+            ha = QHBoxLayout()
+            self.cmbNew = QComboBox()
+            self.cmbNew.addItems(["⭐ Jugada", "💜 Jugadora", "🧱 Bloqueo", "🛡 Recepción"])
+            ha.addWidget(self.cmbNew)
+            b = QPushButton("＋ Añadir jugada aquí"); b.clicked.connect(self.add_mark_here); ha.addWidget(b)
+            ha.addStretch(1)
+            vp.addLayout(ha)
+            self.lblPrev = QLabel("Doble clic en una jugada para verla", objectName="muted"); vp.addWidget(self.lblPrev)
         else:
             vp.addWidget(QLabel("La vista previa no está disponible en este equipo.", objectName="muted"))
         rl.addWidget(gp)
 
         g4 = QGroupBox("4 · Crear resúmenes")
         f = QFormLayout(g4)
+        f.setVerticalSpacing(8)
         self.chk = {}
-        boxes = QVBoxLayout()
+        boxw = QWidget()
+        boxes = QVBoxLayout(boxw)
+        boxes.setContentsMargins(0, 0, 0, 0); boxes.setSpacing(6)
         for key, title, _, _ in core.SUMMARIES:
             c = QCheckBox(title); c.setChecked(True); c.toggled.connect(self.update_counts)
             self.chk[key] = c
             boxes.addWidget(c)
-        f.addRow(boxes)
+        f.addRow(boxw)
         self.chkSlides = QCheckBox("Portada «MEJORES JUGADAS» y patrocinadores (solo el del partido)"); self.chkSlides.setChecked(True)
         f.addRow(self.chkSlides)
-        self.spFade = QDoubleSpinBox(); self.spFade.setRange(0, 2); self.spFade.setSingleStep(0.1); self.spFade.setValue(self.cfg.get("fade", 0.6)); self.spFade.setSuffix(" s")
+        self.spFade = QDoubleSpinBox(); self.spFade.setRange(0, 2); self.spFade.setSingleStep(0.1); self.spFade.setValue(self.cfg.get("fade", 0.6)); self.spFade.setSuffix(" s"); self.spFade.setMinimumWidth(110)
         f.addRow("Fundido entre jugadas:", self.spFade)
         self.cmbQ = QComboBox(); self.cmbQ.addItems(["Normal (más rápido)", "Alta", "Máxima"]); self.cmbQ.setCurrentIndex(self.cfg.get("quality", 1))
         f.addRow("Calidad:", self.cmbQ)
@@ -266,8 +286,11 @@ class Main(QMainWindow):
         f.addRow(self.prog)
         self.log = QPlainTextEdit(); self.log.setReadOnly(True); self.log.setMaximumHeight(140)
         f.addRow(self.log)
-        rl.addWidget(g4, 1)
-        split.addWidget(right)
+        rl.addWidget(g4)
+        rl.addStretch(1)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(right)
+        split.addWidget(scroll)
         split.setSizes([800, 560])
 
     # ------------------------------------------------------------ canal y partido
@@ -333,6 +356,9 @@ class Main(QMainWindow):
         self.refresh_marks()
 
     def refresh_videos(self):
+        if HAS_MM:
+            self.cur_video = -1
+            self.player.stop()
         self.tblVid.setRowCount(len(self.videos))
         for r, v in enumerate(self.videos):
             self.tblVid.setItem(r, 0, QTableWidgetItem(os.path.basename(v.path)))
@@ -420,6 +446,9 @@ class Main(QMainWindow):
         self.tblMk.horizontalHeader().setSectionResizeMode(6, QHeaderView.Stretch)
         self.tblMk.blockSignals(False)
         self.lblMk.setText(f"{len(marks)} jugadas · {inside} caen dentro de los vídeos" if self.videos else f"{len(marks)} jugadas · añade los vídeos del partido")
+        dirty = sum(1 for x in marks if x.dirty)
+        self.btnSave.setEnabled(dirty > 0)
+        self.btnSave.setText(f"💾 Guardar cambios en el canal ({dirty})" if dirty else "💾 Guardar cambios en el canal")
         self.update_counts()
 
     def on_mark_edit(self, item):
@@ -468,7 +497,9 @@ class Main(QMainWindow):
                 b, a = core.mark_window(mk, self.sec())
                 t = (mk.ts - v.start_ms) / 1000
                 self.play_end = int((t + a) * 1000)
-                self.player.setSource(QUrl.fromLocalFile(v.path))
+                if self.cur_video != self.videos.index(v):
+                    self.player.setSource(QUrl.fromLocalFile(v.path))
+                    self.cur_video = self.videos.index(v)
                 self.player.setPosition(int(max(0, t - b) * 1000))
                 self.player.play()
                 self.lblPrev.setText(f"{mk.icon} {mk.label}")
@@ -478,6 +509,72 @@ class Main(QMainWindow):
     def on_pos(self, p):
         if self.play_end and p >= self.play_end:
             self.player.pause(); self.play_end = 0
+        if 0 <= self.cur_video < len(self.videos):
+            v = self.videos[self.cur_video]
+            self.lblPos.setText(f"{fmt_dur(p / 1000)}  ·  {fmt_time(v.start_ms + p) if v.start_ms else ''}")
+        self.btnPlay.setText("❚❚" if self.player.playbackState() == QMediaPlayer.PlayingState else "▶")
+
+    def toggle_play(self):
+        if self.cur_video < 0 and self.videos:
+            self.player.setSource(QUrl.fromLocalFile(self.videos[0].path)); self.cur_video = 0
+        self.play_end = 0
+        if self.player.playbackState() == QMediaPlayer.PlayingState:
+            self.player.pause()
+        else:
+            self.player.play()
+
+    def seek_rel(self, ms):
+        self.play_end = 0
+        self.player.setPosition(max(0, self.player.position() + ms))
+
+    def add_mark_here(self):
+        if not self.match or self.cur_video < 0:
+            return QMessageBox.information(self, APP, "Primero pon un vídeo en la vista previa (doble clic en una jugada o ▶).")
+        v = self.videos[self.cur_video]
+        if not v.start_ms:
+            return QMessageBox.information(self, APP, "Ese vídeo no tiene hora de inicio. Ponla en la columna «Empieza».")
+        kind = ["jugada", "carmen", "bloqueo", "recepcion"][self.cmbNew.currentIndex()]
+        ts = v.start_ms + self.player.position()
+        name = core.player_name(self.channel) if kind == "carmen" else core.TYPES[kind][1]
+        mk = core.Mark(int(ts), f"{name} · añadida en Estudio", {kind}, dirty=True)
+        self.match.marks.append(mk)
+        self.refresh_marks()
+        self.lblPrev.setText(f"Añadida: {mk.icon} {fmt_time(mk.ts)} (pulsa «Guardar cambios en el canal» para conservarla)")
+
+    def type_menu(self, r):
+        marks = getattr(self, "_sorted_marks", [])
+        if r >= len(marks):
+            return
+        mk = marks[r]
+        menu = QMenu(self)
+        tags = set(mk.tags) or {"jugada"}
+        acts = {}
+        for k in ("jugada", "carmen", "bloqueo", "recepcion"):
+            icon, name = core.TYPES[k][0], core.TYPES[k][1]
+            if k == "carmen":
+                name = core.player_name(self.channel)
+            a = menu.addAction(f"{icon} {name}"); a.setCheckable(True); a.setChecked(k in tags)
+            acts[a] = k
+        rect = self.tblMk.visualItemRect(self.tblMk.item(r, 1))
+        chosen = menu.exec(self.tblMk.viewport().mapToGlobal(rect.bottomLeft()))
+        if chosen in acts:
+            k = acts[chosen]
+            tags = tags ^ {k}
+            if not tags:
+                tags = {"jugada"}
+            mk.tags = tags
+            mk.dirty = True
+            self.refresh_marks()
+
+    def save_marks(self):
+        if not self.match:
+            return
+        try:
+            n = core.save_marks(self.key.text(), self.match.path, self.match.marks)
+            self.btnSave.setEnabled(False)
+            self.lblMk.setText(f"Guardadas {n} jugadas en el canal")
+        except Exception as e:
+            QMessageBox.warning(self, APP, f"No se pudo guardar:\n{e}")
 
     # ------------------------------------------------------------ crear
     def pick_music(self):

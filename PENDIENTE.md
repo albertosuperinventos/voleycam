@@ -101,3 +101,8 @@
 - Programa de PC (carpeta estudio/): clave del canal → partido (actual o historial) → vídeos (hora por nombre, fecha interna, inicio del directo o a mano) → lista de jugadas revisable (activar, segundos antes/después, vista previa) → resúmenes con FFmpeg: partido (portada MEJORES JUGADAS + patrocinadores), jugadora, bloqueos, recepciones; fundido encadenado, música opcional, calidad y resolución.
 - Instalador: release "estudio-latest" (VoleyCamEstudio-Setup.exe y versión portable .zip), compilado en GitHub Actions (windows-latest).
 - Siguiente versión: estadísticas e importar Voley Stats Pro.
+
+## VoleyCam Estudio 1.1.0
+- Cambiar el tipo de cada jugada (columna Tipo: ⭐/💜/🧱/🛡, varias a la vez), añadir jugadas desde la vista previa ("＋ Añadir jugada aquí"), controles −5 s / ▶ / +5 s, y "Guardar cambios en el canal" (PATCH de las jugadas cambiadas).
+- Arreglo de la columna derecha en pantallas con letra grande (desplazable, casillas separadas).
+- OJO 1.8.4 (app y mando): las jugadas pueden traer kind con varias etiquetas separadas por "+" (p. ej. "carmen+bloqueo", "jugada+carmen"); el mando y la app deben tratarlas como etiquetas.

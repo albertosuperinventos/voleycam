@@ -69,6 +69,26 @@ def fetch_channel(key: str, timeout: int = 30) -> dict:
     return data
 
 
+def save_marks(key: str, path: str, marks: list, timeout: int = 30) -> int:
+    """Guarda en el canal las jugadas cambiadas o añadidas. Devuelve cuántas."""
+    import requests
+    import time
+    upd = {}
+    for mk in marks:
+        if not mk.dirty:
+            continue
+        if not mk.key:
+            mk.key = f"e{int(time.time() * 1000)}{len(upd)}"
+        upd[mk.key] = mk.to_json()
+    if not upd:
+        return 0
+    r = requests.patch(f"{DB_URL}/c/{key.strip()}/{path}.json", data=json.dumps(upd), timeout=timeout)
+    r.raise_for_status()
+    for mk in marks:
+        mk.dirty = False
+    return len(upd)
+
+
 def _vals(x):
     if isinstance(x, list):
         return [v for v in x if v is not None]
@@ -93,6 +113,23 @@ class Mark:
     enabled: bool = True
     before: float | None = None   # segundos propios de esta jugada (si se han cambiado)
     after: float | None = None
+    key: str = ""                 # clave en el canal (para guardar cambios)
+    dirty: bool = False           # cambiada o añadida en Estudio, pendiente de guardar
+
+    @property
+    def kind(self) -> str:
+        """Cómo se guarda en el canal: '' (jugada), 'carmen', 'bloqueo+carmen', 'jugada+carmen'…"""
+        t = set(self.tags) or {"jugada"}
+        if t == {"jugada"}:
+            return ""
+        order = ["jugada", "carmen", "bloqueo", "recepcion"]
+        return "+".join(x for x in order if x in t)
+
+    def to_json(self) -> dict:
+        d = {"ts": self.ts, "label": self.label}
+        if self.kind:
+            d["kind"] = self.kind
+        return d
 
     @property
     def main(self) -> str:
@@ -115,12 +152,21 @@ def mark_window(mk: Mark, sec: dict) -> tuple:
     return (mk.before if mk.before is not None else b, mk.after if mk.after is not None else a)
 
 
-def mark_from(d: dict) -> Mark:
+def mark_from(d: dict, key: str = "") -> Mark:
     tags = set(d.get("tags") or [])
     k = (d.get("kind") or "").strip()
     if k:
         tags |= set(k.split("+"))
-    return Mark(int(d.get("ts") or 0), d.get("label") or "Jugada", tags)
+    return Mark(int(d.get("ts") or 0), d.get("label") or "Jugada", tags, key=str(key))
+
+
+def _items(x):
+    """(clave, valor) de una lista o un objeto del canal."""
+    if isinstance(x, list):
+        return [(str(i), v) for i, v in enumerate(x) if v is not None]
+    if isinstance(x, dict):
+        return [(str(k), v) for k, v in x.items() if v is not None]
+    return []
 
 
 @dataclass
@@ -137,6 +183,7 @@ class Match:
     live_start: int
     marks: list
     info: dict = field(default_factory=dict)
+    path: str = "marks"   # dónde están sus jugadas dentro del canal
 
 
 def _team(d: dict, teams: dict, fb: str) -> Team:
@@ -150,7 +197,7 @@ def matches_from(ch: dict) -> list:
     teams = ch.get("teams") or {}
     out = []
     live = ch.get("live") or {}
-    cur_marks = [mark_from(m) for m in _vals(ch.get("marks"))]
+    cur_marks = [mark_from(m, k) for k, m in _items(ch.get("marks"))]
     status = ch.get("status") or {}
     if live:
         h = teams.get(live.get("homeId") or "", {})
@@ -162,8 +209,8 @@ def matches_from(ch: dict) -> list:
             ((live.get("sets") or {}).get("h", 0), (live.get("sets") or {}).get("a", 0)),
             ((live.get("score") or {}).get("h", 0), (live.get("score") or {}).get("a", 0)),
             [(x.get("h", 0), x.get("a", 0)) for x in _vals(live.get("history"))],
-            bool(live.get("finished")), int(status.get("liveStartTs") or 0), cur_marks, live.get("info") or {}))
-    for m in sorted(_vals(ch.get("matches")), key=lambda m: -(m.get("ts") or 0)):
+            bool(live.get("finished")), int(status.get("liveStartTs") or 0), cur_marks, live.get("info") or {}, "marks"))
+    for mid, m in sorted(_items(ch.get("matches")), key=lambda km: -(km[1].get("ts") or 0)):
         home, away = _team(m.get("home"), teams, "LOCAL"), _team(m.get("away"), teams, "VISITANTE")
         date = datetime.fromtimestamp((m.get("ts") or 0) / 1000).strftime("%d/%m/%Y")
         sets = m.get("sets") or {}
@@ -172,8 +219,8 @@ def matches_from(ch: dict) -> list:
             m.get("sport", "volley"), home, away, (sets.get("h", 0), sets.get("a", 0)),
             ((m.get("score") or {}).get("h", 0), (m.get("score") or {}).get("a", 0)),
             [(x.get("h", 0), x.get("a", 0)) for x in _vals(m.get("history"))],
-            bool(m.get("finished")), int(m.get("liveStart") or 0), [mark_from(x) for x in _vals(m.get("marks"))],
-            m.get("info") or {}))
+            bool(m.get("finished")), int(m.get("liveStart") or 0), [mark_from(x, k) for k, x in _items(m.get("marks"))],
+            m.get("info") or {}, f"matches/{mid}/marks"))
     return out
 
 
