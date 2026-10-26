@@ -96,3 +96,8 @@
 - Alineación opcional (por confirmar cómo): jugadoras por equipo con número y nombre; elegir convocadas antes del partido.
 - Más adelante quizá: MVP con QR para votar.
 - Descartadas por ahora: rótulo de jugadora (2), estadísticas (5: ya usa otra app).
+
+## VoleyCam Estudio (Windows) 1.0.0
+- Programa de PC (carpeta estudio/): clave del canal → partido (actual o historial) → vídeos (hora por nombre, fecha interna, inicio del directo o a mano) → lista de jugadas revisable (activar, segundos antes/después, vista previa) → resúmenes con FFmpeg: partido (portada MEJORES JUGADAS + patrocinadores), jugadora, bloqueos, recepciones; fundido encadenado, música opcional, calidad y resolución.
+- Instalador: release "estudio-latest" (VoleyCamEstudio-Setup.exe y versión portable .zip), compilado en GitHub Actions (windows-latest).
+- Siguiente versión: estadísticas e importar Voley Stats Pro.

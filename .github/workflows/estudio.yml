@@ -1,0 +1,79 @@
+name: Compilar VoleyCam Estudio (Windows)
+
+on:
+  push:
+    branches: [main]
+    paths: ['estudio/**', '.github/workflows/estudio.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: estudio
+    env:
+      APP_VERSION: "1.0.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencias
+        run: pip install -r requirements.txt
+
+      - name: Descargar FFmpeg
+        shell: pwsh
+        run: |
+          $urls = @(
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-7.1.zip",
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          )
+          foreach ($u in $urls) {
+            try { Invoke-WebRequest $u -OutFile ffmpeg.zip; break } catch { Write-Host "Falló $u" }
+          }
+          Expand-Archive ffmpeg.zip -DestinationPath ffx
+          $bin = Get-ChildItem ffx -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          New-Item -ItemType Directory -Force ffbin | Out-Null
+          Copy-Item $bin.FullName ffbin\
+          Copy-Item (Join-Path $bin.DirectoryName "ffprobe.exe") ffbin\
+          .\ffbin\ffmpeg.exe -version | Select-Object -First 1
+
+      - name: Empaquetar con PyInstaller
+        run: >
+          pyinstaller --noconfirm --windowed --name VoleyCamEstudio --icon icon.ico
+          --add-data "voleycam_estudio/fonts;fonts" --add-data "icon.ico;."
+          --add-binary "ffbin/ffmpeg.exe;ffmpeg" --add-binary "ffbin/ffprobe.exe;ffmpeg"
+          main.py
+
+      - name: Prueba rápida del paquete
+        shell: pwsh
+        run: |
+          if (!(Test-Path dist\VoleyCamEstudio\VoleyCamEstudio.exe)) { throw "No se generó el .exe" }
+          if (!(Test-Path dist\VoleyCamEstudio\_internal\ffmpeg\ffmpeg.exe)) { throw "Falta ffmpeg" }
+          if (!(Test-Path dist\VoleyCamEstudio\_internal\fonts\BarlowCondensed-Black.ttf)) { throw "Faltan las fuentes" }
+
+      - name: Instalador (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc installer.iss
+          Compress-Archive -Path dist\VoleyCamEstudio\* -DestinationPath ..\dist\VoleyCamEstudio-portable.zip
+          Get-ChildItem ..\dist
+
+      - name: Publicar
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: estudio-latest
+          name: VoleyCam Estudio (Windows)
+          prerelease: false
+          make_latest: false
+          files: |
+            dist/VoleyCamEstudio-Setup.exe
+            dist/VoleyCamEstudio-portable.zip

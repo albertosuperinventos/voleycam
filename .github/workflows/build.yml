@@ -3,6 +3,7 @@ name: Compilar APK
 on:
   push:
     branches: [main]
+    paths-ignore: ['estudio/**', '.github/workflows/estudio.yml', 'PENDIENTE.md']
   workflow_dispatch:
 
 permissions:
