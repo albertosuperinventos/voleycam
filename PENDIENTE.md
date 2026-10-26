@@ -82,3 +82,6 @@
 - Grabación con calidad propia (segundo codificador de RootEncoder: recordWidth/recordHeight/recordBitrate), independiente del bitrate adaptativo del directo. Ajuste "Calidad de la grabación": Normal 720p 4 Mbps / Alta 1080p 6 Mbps (por defecto) / Máxima 1080p 10 Mbps.
 - Resúmenes montados (Transformer) a ~8 Mbps.
 - Calidad de la repetición en Ajustes: Baja (640x360, 15 fps, actual) / Media (960x540, 20 fps, por defecto) / Alta (1280x720, 25 fps).
+- La calidad de la repetición se cambia en el mando: Ajustes → Resumen de jugadas (junto a "Repetición a cámara lenta").
+- Barra de estado de la cámara con el tipo de conexión (5G / 4G / WiFi) y aviso si se empieza el directo en WiFi.
+- Repeticiones en el resumen: la app guarda cuándo empieza y acaba cada repetición. Opción en Ajustes "Repeticiones en el resumen": Quitar (por defecto: el tramo acaba justo antes de la repetición; si una marca cae dentro de una repetición, cuenta desde su inicio) / Incluir enteras (el tramo se alarga hasta el final de la repetición).
