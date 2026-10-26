@@ -106,3 +106,4 @@
 - Cambiar el tipo de cada jugada (columna Tipo: ⭐/💜/🧱/🛡, varias a la vez), añadir jugadas desde la vista previa ("＋ Añadir jugada aquí"), controles −5 s / ▶ / +5 s, y "Guardar cambios en el canal" (PATCH de las jugadas cambiadas).
 - Arreglo de la columna derecha en pantallas con letra grande (desplazable, casillas separadas).
 - OJO 1.8.4 (app y mando): las jugadas pueden traer kind con varias etiquetas separadas por "+" (p. ej. "carmen+bloqueo", "jugada+carmen"); el mando y la app deben tratarlas como etiquetas.
+- Estudio 1.1.1: cuatro botones ⭐ 💜 🧱 🛡 para añadir jugadas en la vista previa (se juntan si se pulsan seguidos, como en la app).

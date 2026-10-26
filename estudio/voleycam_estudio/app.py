@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -229,12 +229,17 @@ class Main(QMainWindow):
             hb.addStretch(1)
             vp.addLayout(hb)
             ha = QHBoxLayout()
-            self.cmbNew = QComboBox()
-            self.cmbNew.addItems(["⭐ Jugada", "💜 Jugadora", "🧱 Bloqueo", "🛡 Recepción"])
-            ha.addWidget(self.cmbNew)
-            b = QPushButton("＋ Añadir jugada aquí"); b.clicked.connect(self.add_mark_here); ha.addWidget(b)
+            ha.addWidget(QLabel("Añadir aquí:"))
+            self.addBtns = {}
+            for k in ("jugada", "carmen", "bloqueo", "recepcion"):
+                b = QPushButton(f"{core.TYPES[k][0]} {core.TYPES[k][1]}")
+                b.setToolTip("Añade una jugada en el momento que se ve ahora. Si pulsas otro botón enseguida, se juntan en la misma jugada.")
+                b.clicked.connect(lambda _=False, kk=k: self.add_mark_here(kk))
+                ha.addWidget(b)
+                self.addBtns[k] = b
             ha.addStretch(1)
             vp.addLayout(ha)
+            self.last_added = None
             self.lblPrev = QLabel("Doble clic en una jugada para verla", objectName="muted"); vp.addWidget(self.lblPrev)
         else:
             vp.addWidget(QLabel("La vista previa no está disponible en este equipo.", objectName="muted"))
@@ -527,19 +532,26 @@ class Main(QMainWindow):
         self.play_end = 0
         self.player.setPosition(max(0, self.player.position() + ms))
 
-    def add_mark_here(self):
+    def add_mark_here(self, kind: str):
         if not self.match or self.cur_video < 0:
             return QMessageBox.information(self, APP, "Primero pon un vídeo en la vista previa (doble clic en una jugada o ▶).")
         v = self.videos[self.cur_video]
         if not v.start_ms:
             return QMessageBox.information(self, APP, "Ese vídeo no tiene hora de inicio. Ponla en la columna «Empieza».")
-        kind = ["jugada", "carmen", "bloqueo", "recepcion"][self.cmbNew.currentIndex()]
-        ts = v.start_ms + self.player.position()
-        name = core.player_name(self.channel) if kind == "carmen" else core.TYPES[kind][1]
-        mk = core.Mark(int(ts), f"{name} · añadida en Estudio", {kind}, dirty=True)
-        self.match.marks.append(mk)
+        ts = int(v.start_ms + self.player.position())
+        last = self.last_added
+        if last is not None and last in self.match.marks and abs(ts - last.ts) < 5000:
+            # Otro botón justo después: misma jugada con otra etiqueta
+            last.tags = set(last.tags or {"jugada"}) | {kind}
+            last.dirty = True
+            mk = last
+        else:
+            name = core.player_name(self.channel) if kind == "carmen" else core.TYPES[kind][1]
+            mk = core.Mark(ts, f"{name} · añadida en Estudio", {kind}, dirty=True)
+            self.match.marks.append(mk)
+            self.last_added = mk
         self.refresh_marks()
-        self.lblPrev.setText(f"Añadida: {mk.icon} {fmt_time(mk.ts)} (pulsa «Guardar cambios en el canal» para conservarla)")
+        self.lblPrev.setText(f"Añadida: {mk.icon} {fmt_time(mk.ts)}  (pulsa «Guardar cambios en el canal» para conservarla)")
 
     def type_menu(self, r):
         marks = getattr(self, "_sorted_marks", [])
