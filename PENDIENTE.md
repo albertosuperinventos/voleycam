@@ -84,3 +84,7 @@
 - La calidad de la repetición se cambia en el mando: Ajustes → Resumen de jugadas (junto a "Repetición a cámara lenta").
 - Barra de estado de la cámara con el tipo de conexión (5G / 4G / WiFi) y aviso si se empieza el directo en WiFi.
 - Repeticiones en el resumen: la app guarda cuándo empieza y acaba cada repetición. Opción en Ajustes "Repeticiones en el resumen": Quitar (por defecto: el tramo acaba justo antes de la repetición; si una marca cae dentro de una repetición, cuenta desde su inicio) / Incluir enteras (el tramo se alarga hasta el final de la repetición).
+- Nuevos tipos de jugada: 🧱 Bloqueo (5 s antes, 2 después) y 🛡 Recepción (4 antes, 1 después); ⭐ Jugada 7/3. Segundos de cada tipo editables en Ajustes.
+- Botones pulsados con menos de 5 s de diferencia se juntan en una sola jugada con varias etiquetas (p. ej. 🧱+💜 = bloqueo de Carmen). Si junta tipos, usa la ventana más larga.
+- "Crear resúmenes": Partido (todas: ⭐🧱🛡, con portada y patrocinadores), Carmen (sus jugadas de cualquier tipo), Bloqueos y Recepciones (vídeos aparte, sin portada, con fundidos). Solo se crean los que tengan jugadas.
+- Botones en Juego, mando pequeño y cámara SIN desplazar: en la cámara, fila horizontal abajo a la derecha (⭐ 💜 🧱 🛡 ⏪) y la columna se queda sin ⭐/💜/⏪.
