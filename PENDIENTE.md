@@ -121,3 +121,10 @@ Fase 1 · Hacerla genérica: sin "Carmen" por defecto, ligas/equipos por club, p
 Fase 2 · Licencias: código por club en Firebase (club, caducidad, dispositivos), comprobación al abrir con margen sin conexión, panel web de administración, pagos (Stripe o factura), reglas de Firebase ligadas a la licencia.
 Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso, RGPD (grabación de menores: consentimiento de familias/club), facturación como Superinventos, costes (Firebase Blaze, Play 25 $, Apple 99 $/año si Mac/iOS).
 - Estudio 1.2 también: al abrir, conecta solo y abre el último partido con jugadas (si "Partido actual" está vacío, el último del historial); recuerda los vídeos añadidos a cada partido y los vuelve a cargar si siguen en el disco; si hay cambios sin guardar al cerrar, pregunta.
+
+## IDEA PENDIENTE 1.9 (recordar a Albert ANTES DE CADA COMPILACIÓN) — Familias marcan jugadas de su hija
+- Lista de jugadoras en Ajustes (nombre, dorsal); Carmen pasa a ser una más.
+- QR por familia con clave propia (no la del canal) → mando sencillo: ⭐ Jugada de X · 🧱 · 🛡 y marcador solo para ver. Se puede anular cada QR.
+- Hora con la del servidor (ServerValue.TIMESTAMP) para que cuadre con la grabación.
+- "Crear resúmenes": un vídeo por jugadora con jugadas; también Estudio.
+- Preguntas abiertas: ¿enlace al directo en ese mando?, ¿las jugadas de familias entran en el resumen del partido o solo en el suyo?, ¿cuántas jugadoras (equipo ~12)?
