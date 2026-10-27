@@ -133,3 +133,11 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Hora con la del servidor (ServerValue.TIMESTAMP) para que cuadre con la grabación.
 - "Crear resúmenes": un vídeo por jugadora con jugadas; también Estudio.
 - Preguntas abiertas: ¿enlace al directo en ese mando?, ¿las jugadas de familias entran en el resumen del partido o solo en el suyo?, ¿cuántas jugadoras (equipo ~12)?
+
+## Giro motorizado y seguimiento automático (planteado 27/10)
+- Hardware que tiene Albert: Lynxmotion BR-KT (base giratoria) + servo Hitec HS-422; ServoCity SPT200 (pan-tilt, sin servos, de momento no se usa). Pedidas 2 ESP32-WROOM-32 (ELEGOO, USB-C). Falta: condensador 1000 µF 16 V, cables Dupont, soporte móvil 1/4".
+- Fase 1: giro manual ◀ ▶ desde el mando; el móvil cámara manda la orden a la ESP32 por Bluetooth (BLE). Movimiento con rampa suave en la ESP32.
+- Fase 2a: seguimiento automático en voleibol con el HS-422 (MediaPipe Object Detector / YOLO TFLite en el móvil, 5-10 fps a baja resolución, filtro de Kalman).
+- Fase 2b: fútbol con motor paso a paso NEMA17 + driver TMC2209 (suave y silencioso); seguir al centro del grupo de jugadores, el balón solo como ayuda.
+- Descartado: seguimiento virtual (recorte digital) con un móvil fijo: no coge todo el campo.
+- Otras ideas ESP32 para VoleyCam: botonera física inalámbrica (puntos, ⭐, 💜, ⏪), piloto EN DIRECTO en el trípode, marcador LED P10 para el pabellón.
