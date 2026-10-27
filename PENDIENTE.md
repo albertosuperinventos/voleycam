@@ -111,6 +111,11 @@
 
 ## Próxima versión (1.8.5) — hecho en local, sin compilar
 - Descripción de YouTube: "Retransmisión NO OFICIAL, ofrecida por:" y al final "Esta retransmisión incluye contenido promocional." (sin patrocinadores: "Retransmisión NO OFICIAL."). Los capítulos se meten antes del aviso final.
+- Compartir (pestaña Partido): QR a pantalla completa (vídeo de la emisión elegida o, si no, youtube.com/@canal/live), envío por WhatsApp a un número sin guardar, copiar y compartir el mensaje (vídeo + canal).
+- Ajustes → YouTube y compartir: enlace del canal (por defecto youtube.com/@bertoni1313) y mensaje de bienvenida en el chat (activable, editable).
+- Descripción: primera línea "🔔 Suscríbete para no perderte ningún partido: (canal)".
+- App: escribe una vez el mensaje en el chat de YouTube cuando la emisión pasa a directo; publica el id del vídeo en el estado para el QR del mando; puente openUrl y shareText.
+- Diapositiva QR del canal (tomares_C, enlace /live) para subir como patrocinador.
 
 ## Estudio 1.2 — aprobado (boceto_estudio.png), sin hacer
 - Tres pestañas: 1 Preparar (canal, partido, vídeos) · 2 Ver y marcar (vídeo grande, línea de tiempo con marcas de colores clicables, ⏮ −10 −5 ▶ +5 +10 ⏭, velocidad, botones ⭐💜🧱🛡, jugada seleccionada con tipos/segundos/quitar, lista con filtros, teclado: Espacio, ←→, 1-4, Supr, N/P, guardar en el canal) · 3 Crear resúmenes.

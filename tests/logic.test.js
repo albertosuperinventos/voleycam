@@ -91,6 +91,8 @@ L = SC.addSet(L, 25, 20);
 const desc = SC.ytDescription(L, 'Club Voleibol UTRERA', 'EDM Voleibol TOMARES',
   [{ name: 'INSTITUTO TU IMPULSO', desc: 'Técnicas de Estudio\nCoaching', link: 'https://tuimpulso.eu' }, { name: '', desc: '', link: '' }]);
 assert.ok(desc.startsWith('Domingo 18/OCT/2026 · 12:00 h ;'), desc);
+const descCh = SC.ytDescription(L, 'A', 'B', [], null, 'https://youtube.com/@canal');
+assert.ok(descCh.startsWith('🔔 Suscríbete para no perderte ningún partido: https://youtube.com/@canal\n\n'), descCh);
 assert.ok(desc.includes('LIGA ORO PROVINCIAL SEVILLA - GRUPO B ;'));
 assert.ok(desc.includes('Temporada 26-27 ;'));
 assert.ok(desc.includes('Resultado: Club Voleibol UTRERA 1 - 0 EDM Voleibol TOMARES (25-20)'));

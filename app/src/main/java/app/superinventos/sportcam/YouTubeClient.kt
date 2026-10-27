@@ -133,6 +133,21 @@ object YouTubeClient {
     call(token, "PUT", "liveBroadcasts?part=status", body)
   }
 
+  /** Estado de la emisión e id de su chat (vacío si no tiene chat, p. ej. contenido para niños). */
+  fun chatInfo(token: String, broadcastId: String): Pair<String, String> {
+    val b = call(token, "GET", "liveBroadcasts?part=snippet,status&id=${enc(broadcastId)}").optJSONArray("items")?.optJSONObject(0)
+      ?: return "revoked" to ""
+    return (b.optJSONObject("status")?.optString("lifeCycleStatus").orEmpty()) to (b.optJSONObject("snippet")?.optString("liveChatId").orEmpty())
+  }
+
+  /** Escribe un mensaje en el chat del directo. */
+  fun postChat(token: String, liveChatId: String, text: String) {
+    val body = JSONObject().put("snippet", JSONObject()
+      .put("liveChatId", liveChatId).put("type", "textMessageEvent")
+      .put("textMessageDetails", JSONObject().put("messageText", text.take(200))))
+    call(token, "POST", "liveChat/messages?part=snippet", body)
+  }
+
   /** Cambia la descripción del vídeo manteniendo título y categoría. */
   fun updateDescription(token: String, videoId: String, desc: String) {
     val v = call(token, "GET", "videos?part=snippet&id=${enc(videoId)}").optJSONArray("items")?.optJSONObject(0)

@@ -588,7 +588,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   override fun onConnectionSuccess() {
     connected = true; reconnecting = false
-    if (liveSince == 0L) { liveSince = System.currentTimeMillis(); liveStartTs = serverNow() }
+    if (liveSince == 0L) { liveSince = System.currentTimeMillis(); liveStartTs = serverNow(); runOnUiThread { postWelcomeChat() } }
     runOnUiThread { updateButtons() }
   }
 
@@ -656,6 +656,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       .put("muted", muted).put("dim", dimOverlay.visibility == View.VISIBLE)
       .put("liveStartTs", liveStartTs)
       .put("replay", replaying)
+      .put("ytVideoId", if (prefs.platform == Prefs.PLATFORM_YOUTUBE && prefs.ytBroadcastStatus !in setOf("complete", "revoked")) prefs.ytBroadcastId else "")
     web.evaluateJavascript("window.scStatus && scStatus($o)", null)
   }
 
@@ -723,6 +724,37 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       .addOnFailureListener { e ->
         ytPublish(message = "No se pudo conectar con Google (${e.message}). Revisa la configuración de Google Cloud.")
       }
+  }
+
+  /** Como withYtToken, pero sin pedir nada en pantalla: si hace falta permiso, no hace nada. */
+  private fun withYtTokenSilent(action: (String) -> Unit) {
+    val req = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(YouTubeClient.SCOPE))).build()
+    Identity.getAuthorizationClient(this).authorize(req)
+      .addOnSuccessListener { res -> if (!res.hasResolution()) res.accessToken?.let(action) }
+  }
+
+  /** Al empezar el directo escribe una vez el mensaje de bienvenida en el chat de YouTube (cuando la emisión ya está en directo). */
+  private fun postWelcomeChat() {
+    val id = prefs.ytBroadcastId
+    val msg = overlayState?.chatMsg.orEmpty()
+    if (prefs.platform != Prefs.PLATFORM_YOUTUBE || id.isBlank() || msg.isBlank() || prefs.ytChatPostedId == id) return
+    withYtTokenSilent { token ->
+      Thread {
+        for (i in 0 until 15) {
+          if (!wantLive || prefs.ytBroadcastId != id) return@Thread
+          try {
+            val (status, chatId) = YouTubeClient.chatInfo(token, id)
+            if (status in setOf("complete", "revoked")) return@Thread
+            if (status == "live" && chatId.isNotBlank()) {
+              YouTubeClient.postChat(token, chatId, msg)
+              prefs.ytChatPostedId = id
+              return@Thread
+            }
+          } catch (_: Exception) {}
+          Thread.sleep(20_000)
+        }
+      }.start()
+    }
   }
 
   private fun ytPublish(connected: Boolean = false, account: String = "", broadcasts: List<YouTubeClient.Broadcast> = emptyList(), message: String = "") {
@@ -1481,6 +1513,21 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     @JavascriptInterface
     fun ytUpdateDesc(id: String, desc: String) {
       ui.post { uploadDescription(id, desc) }
+    }
+
+    @JavascriptInterface
+    fun openUrl(url: String) {
+      if (!url.startsWith("https://")) return
+      ui.post {
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        catch (_: Exception) { toast("No hay ninguna app para abrir el enlace") }
+      }
+    }
+
+    @JavascriptInterface
+    fun shareText(text: String) {
+      val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+      ui.post { startActivity(Intent.createChooser(send, "Compartir")) }
     }
 
     @JavascriptInterface

@@ -63,6 +63,11 @@ class Prefs(context: Context) {
     set(v) = sp.edit().putString("recordingsJson", v).apply()
 
   /** Repeticiones lanzadas (JSON [{s,e}], hora del servidor), para quitarlas de los resúmenes. */
+  /** Emisión en la que ya se escribió el mensaje del chat (para no repetirlo al reconectar). */
+  var ytChatPostedId: String
+    get() = sp.getString("ytChatPostedId", "") ?: ""
+    set(v) = sp.edit().putString("ytChatPostedId", v).apply()
+
   var replaysJson: String
     get() = sp.getString("replaysJson", "[]") ?: "[]"
     set(v) = sp.edit().putString("replaysJson", v).apply()

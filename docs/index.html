@@ -157,6 +157,19 @@ body.compact main{padding:8px;gap:6px}
 .stgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:12px 0;font-size:15px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
 .stgrid b{color:var(--text)}
 .stgrid span{color:var(--muted)}
+/* Compartir: QR a pantalla completa para enseñarlo en el pabellón */
+#shareOv{position:fixed;inset:0;z-index:60;background:#fff;color:#13233F;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:16px 16px 24px;gap:10px}
+#shareOv h2{margin:4px 0 0;padding:0 44px;font:800 26px/1.1 'Barlow Condensed',sans-serif;text-align:center}
+#shareOv .qr{width:min(82vw,62vh,420px);aspect-ratio:1}
+#shareOv .qr svg{width:100%;height:100%;display:block}
+#shareOv .url{font-weight:700;word-break:break-all;text-align:center}
+#shareOv .wa{display:flex;gap:6px;width:100%;max-width:420px}
+#shareOv .wa input{min-width:0}
+#shareOv .wa .pre{flex:0 0 64px}
+#shareOv .wa .num{flex:1}
+#shareOv .wa .primary{background:#1FA855;border-color:#1FA855}
+#shareOv .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:420px}
+#shareOv .close{position:absolute;top:8px;right:8px}
 </style>
 </head>
 <body>
@@ -164,6 +177,7 @@ body.compact main{padding:8px;gap:6px}
 <script src="config.js"></script>
 <script src="logic.js"></script>
 <script src="presets.js"></script>
+<script src="qrcode.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
@@ -221,6 +235,7 @@ function start() {
   const previewRef = base.child('preview');
   const remoteRef = base.child('remote');
   const coverRef = base.child('cover');
+  const shareRef = base.child('share');   // enlace del canal de YouTube y mensaje del chat
 
   let live = SC.defaultLive();
   let teams = {};
@@ -229,6 +244,8 @@ function start() {
   let marks = {};
   let status = null;          // estado que publica el móvil cámara
   let cover = '';             // imagen de portada (miniatura YouTube y prepartido)
+  let share = {};             // { channel, chatOff, chatMsg }
+  let shareOpen = false;
   let ytShowOld = false;
   let markFlashUntil = 0;
   let remoteOpen = false, remoteTimer = null;
@@ -262,7 +279,7 @@ function start() {
     if (IS_NATIVE) { try { window.SportCamNative.setCover(cover); } catch (e) {} }
     if (tab !== 'juego' && !compact) render();
   });
-  statusRef.on('value', s => { const was = replaying(); status = s.val(); if (was !== replaying() && (tab === 'juego' || compact)) render(); if (!IS_NATIVE) { renderWarn(); if (remoteOpen) renderRemote(); } });
+  statusRef.on('value', s => { const was = replaying(); status = s.val(); if (was !== replaying() && (tab === 'juego' || compact)) render(); if (!IS_NATIVE) { renderWarn(); if (remoteOpen) renderRemote(); } if (shareOpen) renderShare(); });
   if (IS_NATIVE) {
     // Órdenes del mando remoto hacia la cámara
     let lastCmd = ''; try { lastCmd = localStorage.getItem('sc_lastcmd') || ''; } catch (e) {}
@@ -275,6 +292,7 @@ function start() {
     remoteRef.on('value', s => { try { window.SportCamNative.onRemote(s.val() || 0); } catch (e) {} });
   }
   marksRef.on('value', s => { marks = s.val() || {}; if (tab !== 'juego' && !compact) render(); pushNative(); });
+  shareRef.on('value', s => { share = s.val() || {}; if (tab !== 'juego' && !compact) render(); pushNative(); if (shareOpen) renderShare(); });
 
   /* ---------- Acciones ---------- */
   function act(fn) {
@@ -311,6 +329,7 @@ function start() {
         ytWhen: live.info.when || '',
         marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '', kind: m.kind || '' })).sort((a, b) => a.ts - b.ts),
         ytDesc: ytTexts().desc,
+        chatMsg: share.chatOff ? '' : chatMsg(),
         serverOffset: offset
       });
       try { window.SportCamNative.onState(JSON.stringify(model)); } catch (e) {}
@@ -325,7 +344,72 @@ function start() {
   }
   function ytTexts() {
     const [h, a] = namesForYt();
-    return { title: SC.ytTitle(live, h, a), desc: SC.ytDescription(live, h, a, sponsorsForYt()) };
+    return { title: SC.ytTitle(live, h, a), desc: SC.ytDescription(live, h, a, sponsorsForYt(), null, channelUrl()) };
+  }
+
+  /* ---------- Compartir el canal y el directo ---------- */
+  const DEFAULT_CHANNEL = 'https://youtube.com/@bertoni1313';
+  const DEFAULT_CHAT = '¡Bienvenidos al directo! 🏐 Si os gusta, suscribíos al canal para no perderos ningún partido 🔔';
+  const channelUrl = () => String(share.channel || DEFAULT_CHANNEL).trim().replace(/\/+$/, '');
+  const chatMsg = () => String(share.chatMsg || '').trim() || DEFAULT_CHAT;
+  /** Enlace para ver el partido: el vídeo de la emisión elegida en el móvil cámara o, si no se sabe, el directo del canal. */
+  function watchLink() {
+    const fresh = status && now() - (status.ts || 0) < 30000;
+    if (fresh && status.ytVideoId) return { url: 'https://youtu.be/' + status.ytVideoId, video: true, live: !!status.connected };
+    return { url: channelUrl() + '/live', video: false, live: false };
+  }
+  function shareMessage() {
+    const [h, a] = namesForYt(), w = watchLink();
+    const match = (h === 'LOCAL' && a === 'VISITANTE') ? 'el partido' : `${h} – ${a}`;
+    const first = w.video ? (w.live ? `🔴 Ahora en directo ${match}: ${w.url}` : `📅 Aquí podrás ver ${match}: ${w.url}`)
+                          : `🏐 Mira ${match} en directo: ${w.url}`;
+    return first + `\n🔔 Sigue el canal: ${channelUrl()}`;
+  }
+  function openUrl(u) {
+    if (IS_NATIVE && window.SportCamNative.openUrl) { try { window.SportCamNative.openUrl(u); return; } catch (e) {} }
+    window.open(u, '_blank');
+  }
+  function openShare() { shareOpen = true; renderShare(); }
+  function closeShare() { shareOpen = false; const o = document.getElementById('shareOv'); if (o) o.remove(); }
+  function renderShare() {
+    let ov = document.getElementById('shareOv');
+    // No repintar mientras se escribe el número
+    if (ov && ov.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+    const keep = ov ? { pre: (ov.querySelector('.pre') || {}).value, num: (ov.querySelector('.num') || {}).value } : null;
+    if (!ov) { ov = document.createElement('div'); ov.id = 'shareOv'; document.body.appendChild(ov); }
+    const w = watchLink();
+    let svg = '';
+    try { const q = qrcode(0, 'M'); q.addData(w.url); q.make(); svg = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }); } catch (e) {}
+    let pre = '+34'; try { pre = localStorage.getItem('sc_waPre') || '+34'; } catch (e) {}
+    ov.innerHTML = `<button class="ghost close" data-sh="close">✕</button>
+      <h2>${w.live ? '🔴 Escanea y mira el partido en directo' : 'Escanea para ver el partido'}</h2>
+      <div class="qr">${svg}</div>
+      <div class="url">${esc(w.url.replace(/^https:\/\//, ''))}</div>
+      <p class="muted small" style="margin:0;text-align:center">Enviar por WhatsApp sin guardar el número</p>
+      <div class="wa"><input class="pre" type="tel" value="${esc(keep && keep.pre || pre)}"><input class="num" type="tel" inputmode="tel" placeholder="600 123 456" value="${esc(keep && keep.num || '')}">
+        <button class="primary" data-sh="wa">WhatsApp</button></div>
+      <div class="btns"><button data-sh="copy">📋 Copiar mensaje</button><button data-sh="send">📤 Compartir</button></div>`;
+    ov.querySelectorAll('[data-sh]').forEach(b => b.addEventListener('click', () => shareAction(b.dataset.sh, ov)));
+  }
+  function shareAction(a, ov) {
+    const text = shareMessage();
+    if (a === 'close') return closeShare();
+    if (a === 'copy') return copyText(text, 'Mensaje copiado');
+    if (a === 'send') {
+      if (IS_NATIVE && window.SportCamNative.shareText) { try { window.SportCamNative.shareText(text); return; } catch (e) {} }
+      if (navigator.share) return navigator.share({ text }).catch(() => {});
+      return copyText(text, 'Mensaje copiado');
+    }
+    if (a === 'wa') {
+      const preRaw = ov.querySelector('.pre').value.trim(), numRaw = ov.querySelector('.num').value.trim();
+      let digits = numRaw.replace(/\D/g, '');
+      if (numRaw.startsWith('+')) { /* ya lleva prefijo */ }
+      else if (digits.startsWith('00')) digits = digits.slice(2);
+      else digits = preRaw.replace(/\D/g, '') + digits;
+      if (digits.length < 8) return toast('Escribe el número de teléfono');
+      try { localStorage.setItem('sc_waPre', preRaw || '+34'); } catch (e) {}
+      openUrl('https://wa.me/' + digits + '?text=' + encodeURIComponent(text));
+    }
   }
   async function copyText(t, okMsg) {
     if (IS_NATIVE && window.SportCamNative.copyText) { try { window.SportCamNative.copyText(t); return toast(okMsg); } catch (e) {} }
@@ -801,6 +885,8 @@ function start() {
   function viewPartido() {
     const volley = live.sport === 'volley';
     return `
+      ${sec('Compartir', `<div class="card"><button class="primary" style="width:100%" data-act="shareOpen">📱 Enseñar QR / enviar por WhatsApp</button>
+        <p class="muted small" style="margin-bottom:0">QR grande para que lo escaneen desde tu móvil, o envío por WhatsApp a un número que no tienes guardado.</p></div>`)}
       ${sec('Quién juega', `<div class="card">
         <div class="grid2">
           <button class="${volley ? 'on' : ''}" data-act="sport" data-v="volley">Voleibol</button>
@@ -990,6 +1076,14 @@ function start() {
           ${[['low', 'Baja'], ['mid', 'Media'], ['high', 'Alta']].map(([v, t]) => `<button class="${(live.hl.rq || 'mid') === v ? 'on' : ''}" data-act="hlRq" data-v="${v}">${t}</button>`).join('')}</div></div>
         ${opt('Repetición a cámara lenta', live.hl.slow, 'hlSlow')}
         <p class="muted small" style="margin:4px 0 8px">Alta se ve mejor pero exige más al móvil cámara. Si el directo se traba, baja la calidad.</p></div>`)}
+      ${sec('YouTube y compartir', `<div class="card">
+        <label style="margin-top:0">Enlace de tu canal de YouTube</label>
+        <input id="shChannel" value="${esc(share.channel || DEFAULT_CHANNEL)}" placeholder="https://youtube.com/@tucanal">
+        <p class="muted small">Se usa en el QR, en el mensaje de WhatsApp y en la primera línea de la descripción.</p>
+        ${opt('Mensaje en el chat al empezar el directo', !share.chatOff, 'shChat')}
+        ${share.chatOff ? '' : `<textarea id="shChatMsg" rows="3" maxlength="200">${esc(chatMsg())}</textarea>
+        <p class="muted small" style="margin-bottom:0">La app lo escribe una vez en el chat de YouTube cuando empieza la emisión. No se puede si está marcada como contenido para niños.</p>`}
+      </div>`)}
       ${sec('Canal', channelBlock())}`;
   }
 
@@ -1100,6 +1194,8 @@ function start() {
       on(id, 'change', e => setField('hl/' + k, Math.min(60, Math.max(min, +e.target.value || 0)))));
     on('hlName', 'change', e => setField('hl/name', e.target.value.trim() || 'Carmen'));
     on('hlAfter', 'change', e => setField('hl/after', Math.min(30, Math.max(0, +e.target.value || 0))));
+    on('shChannel', 'change', e => shareRef.child('channel').set(e.target.value.trim() || DEFAULT_CHANNEL));
+    on('shChatMsg', 'change', e => shareRef.child('chatMsg').set(e.target.value.trim()));
     on('sponsSec', 'change', e => setField('spons/sec', Math.min(120, Math.max(3, +e.target.value || 10))));
   }
 
@@ -1173,6 +1269,8 @@ function start() {
       case 'ytPriv': return setField('info/privacy', v);
       case 'ytKids': return setField('info/kids', !live.info.kids);
       case 'ytOld': ytShowOld = !ytShowOld; return render();
+      case 'shareOpen': return openShare();
+      case 'shChat': return shareRef.child('chatOff').set(!share.chatOff);
       case 'coverPick': {
         const img = await pickImage(1280, true); if (!img) return;
         await coverRef.set(img); return toast('Portada guardada');

@@ -66,6 +66,8 @@ data class OverlayState(
   /** public | unlisted | private (lo elegido en el mando para crear emisiones). */
   val ytPrivacy: String,
   val ytKids: Boolean,
+  /** Mensaje para el chat de YouTube al empezar (vacío = no escribir). */
+  val chatMsg: String,
   /** Partidos con marcas para el resumen desde vídeo (JSON tal cual). */
   val savedMatchesJson: String,
   val serverOffset: Long,
@@ -177,6 +179,7 @@ data class OverlayState(
         ytTitle = o.optString("ytTitle", ""),
         ytPrivacy = o.optString("ytPrivacy", "unlisted"),
         ytKids = o.optJSONObject("info")?.optBoolean("kids") ?: false,
+        chatMsg = o.optString("chatMsg", ""),
         savedMatchesJson = o.optJSONArray("savedMatches")?.toString() ?: "[]",
         serverOffset = o.optLong("serverOffset"),
       )

@@ -218,9 +218,11 @@
 
   /** Descripción para YouTube con el formato del canal. sponsors: [{name, desc, link}] */
   const PROMO_LINE = 'Esta retransmisión incluye contenido promocional.';
-  function ytDescription(L, home, away, sponsors, dateObj) {
+  /** channel (opcional): enlace del canal para la primera línea de suscripción. */
+  function ytDescription(L, home, away, sponsors, dateObj, channel) {
     const d = L.info.when ? new Date(L.info.when) : (dateObj || new Date());
     const out = [];
+    if (channel) out.push(`🔔 Suscríbete para no perderte ningún partido: ${channel}`, '');
     out.push(`${DIAS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${MESES[d.getMonth()]}/${d.getFullYear()}` +
              (L.info.when ? ` · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} h` : '') + ' ;');
     out.push(`${home} - ${away} ;`);
