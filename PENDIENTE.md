@@ -154,8 +154,10 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Diapositiva: 2 pantallas de 7 (fila de 4 + fila de 3) y en el hueco el escudo del Tomares con "#VAMOSTOMARES"; si son menos, la última fila centrada. Cabecera granate con escudo + "VOLEIBOL TOMARES" + "1/2". Bocetos: cromos_1de2.png / cromos_2de2.png.
 - Orden del carrusel: portada → escudos → plantilla 1/2 → plantilla 2/2 → patrocinadores.
 - Fotos/cromos reducidos al subir (~10-15 KB cada uno).
+- Jugadoras COMPARTIDAS entre plantillas: las juveniles suben con Junior y Senior → una lista única de jugadoras (con su cromo/foto una sola vez) y cada plantilla elige cuáles van. Juvenil solo para datos.
+- Si una plantilla tiene 15-16: 2 pantallas de 8 (o 8+7 con escudo).
+- PRIVACIDAD: el repositorio es público → los datos de las jugadoras (nombres, fotos) NO van al repo; se cargan desde el mando (Firebase) o con un archivo de importación local que no se sube (plantillas/*.json en .gitignore).
 - Pendiente de Albert: listas reales (dorsal, nombre, posición) de Junior y Senior, ¿Carmen o Carmela?, y los cromos como imagen (el artefacto "Voleibol Tomares" no se puede abrir desde aquí: descargar el HTML o mandar capturas).
-- Jugadoras dadas para Junior: Carmen, Carlota, Xana, Julia, Nerea, Irene, Paula, Olga, Lidia, Lola, Martina, Cuenco, Judith, Marina.
 
 ## Montaje del cabezal (29/10)
 - Base Lynxmotion BR-KT montada, servo centrado en 1500 = frente. Prueba con Monitor serie OK ("va perfecto").
