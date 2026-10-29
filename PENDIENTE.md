@@ -141,3 +141,4 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Fase 2b: fútbol con motor paso a paso NEMA17 + driver TMC2209 (suave y silencioso); seguir al centro del grupo de jugadores, el balón solo como ayuda.
 - Descartado: seguimiento virtual (recorte digital) con un móvil fijo: no coge todo el campo.
 - Otras ideas ESP32 para VoleyCam: botonera física inalámbrica (puntos, ⭐, 💜, ⏪), piloto EN DIRECTO en el trípode, marcador LED P10 para el pabellón.
+- Zhiyun Smooth X (aparcado): se conecta por BLE sin emparejar como "SMOOTH-X_9019-1"; ZY Cami escribe órdenes de 10 bytes en el handle 0x2A y recibe respuestas por notificación en el handle 0x2C (MTU 243). El Xiaomi 14T Pro (MediaTek) no guarda el contenido de los paquetes en el informe. Para sacar el protocolo: sniffer BLE nRF52840 (~10-15 €) + Wireshark, o captura HCI con un móvil no MediaTek.
