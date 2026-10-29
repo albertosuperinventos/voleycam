@@ -38,12 +38,20 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
   /** Imagen de portada (data URL). Se alterna en la pantalla PREPARTIDO. */
   var cover: String = ""
 
+  /** Convocatoria (diapositivas de plantilla en el PREPARTIDO). */
+  var squad: Squad? = null
+    private set
+  private var squadSig = 0
+  fun setSquadJson(json: String) { squad = Squad.parse(json); squadSig = json.hashCode() }
+  private val squadSlide by lazy { SquadSlide(width, height, titleFont ?: condensed) { logo(it) } }
+
   /** Qué ocupa la pantalla completa en este instante. */
   private sealed class Screen {
     object None : Screen()
     object Break : Screen()
     object Cover : Screen()
     data class Spons(val sp: Sponsor) : Screen()
+    data class SquadPage(val page: Int) : Screen()
   }
 
   private fun screen(s: OverlayState, now: Long): Screen {
@@ -55,6 +63,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     val slots = mutableListOf<Screen>()
     if (s.breakKind == "pre" && cover.isNotBlank()) slots += Screen.Cover
     slots += Screen.Break
+    if (s.breakKind == "pre") squad?.let { sq -> for (i in 0 until sq.pages) slots += Screen.SquadPage(i) }
     if (forced || s.sponsCarousel) s.sponsors.forEach { slots += Screen.Spons(it) }
     if (slots.size == 1) return slots[0]
     return slots[((now / 1000 / s.sponsSec) % slots.size).toInt()]
@@ -65,7 +74,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     if (s == null) return "none"
     val clockSec = if (!s.isVolley || s.timerShow) s.clockMs(now) / 1000 else 0
     val tick = if (s.sponsors.size > 1 || s.breakShow) now / 1000 / s.sponsSec else 0
-    return "$version|$clockSec|$tick|${cover.length}|${s.breakActive(now)}"
+    return "$version|$clockSec|$tick|${cover.length}|$squadSig|${s.breakActive(now)}"
   }
 
   /** Pinta sobre [bmp] (se borra antes). */
@@ -76,6 +85,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     when (val sc = screen(s, now)) {
       is Screen.Spons -> { drawFullSponsor(c, sc.sp); return bmp }
       Screen.Break -> { drawBreak(c, s); return bmp }
+      is Screen.SquadPage -> { squad?.let { squadSlide.draw(c, it, sc.page) }; return bmp }
       Screen.Cover -> {
         rect(c, 0f, 0f, width.toFloat(), height.toFloat(), Color.BLACK)
         drawLogoFit(c, cover, RectF(0f, 0f, width.toFloat(), height.toFloat()))

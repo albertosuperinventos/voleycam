@@ -98,6 +98,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   // Portada (miniatura de YouTube y prepartido)
   @Volatile private var coverData = ""
+  @Volatile private var squadJson = ""
+  private val barlow: android.graphics.Typeface? by lazy {
+    try { android.graphics.Typeface.createFromAsset(assets, "fonts/BarlowCondensed-Black.ttf") } catch (_: Exception) { null }
+  }
 
   // Cámara a distancia
   @Volatile private var remoteOpenTs = 0L
@@ -382,7 +386,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     if (ok) {
       // El marcador se dibuja al tamaño mayor para que se vea nítido también en la grabación
       val ow = maxOf(w, recSize.first); val oh = maxOf(h, recSize.second)
-      renderer = ScoreboardRenderer(ow, oh).also { it.cover = coverData }
+      renderer = ScoreboardRenderer(ow, oh).also { it.cover = coverData; it.titleFont = barlow; it.setSquadJson(squadJson) }
       for (i in overlayBitmaps.indices) overlayBitmaps[i] = Bitmap.createBitmap(ow, oh, Bitmap.Config.ARGB_8888)
       lastSig = ""
       bitrateAdapter = QueueAwareBitrateAdapter(vBitrate + AUDIO_BITRATE) { b ->
@@ -1512,6 +1516,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     fun setCover(dataUrl: String) {
       coverData = dataUrl
       ui.post { renderer?.cover = dataUrl; stateVersion++; updateOverlay() }
+    }
+
+    @JavascriptInterface
+    fun setSquad(json: String) {
+      squadJson = json
+      ui.post { renderer?.setSquadJson(json); stateVersion++; updateOverlay() }
     }
 
     @JavascriptInterface

@@ -109,13 +109,16 @@
 - Estudio 1.1.1: cuatro botones ⭐ 💜 🧱 🛡 para añadir jugadas en la vista previa (se juntan si se pulsan seguidos, como en la app).
 - Estudio 1.1.2: botón 🗑 Quitar jugadas (selección múltiple); al guardar se borran del canal.
 
-## Próxima versión (1.8.5) — hecho en local, sin compilar
+## Versión 1.8.5
 - Descripción de YouTube: "Retransmisión NO OFICIAL, ofrecida por:" y al final "Esta retransmisión incluye contenido promocional." (sin patrocinadores: "Retransmisión NO OFICIAL."). Los capítulos se meten antes del aviso final.
 - Compartir (pestaña Partido): QR a pantalla completa (vídeo de la emisión elegida o, si no, youtube.com/@canal/live), envío por WhatsApp a un número sin guardar, copiar y compartir el mensaje (vídeo + canal).
 - Ajustes → YouTube y compartir: enlace del canal (por defecto youtube.com/@bertoni1313) y mensaje de bienvenida en el chat (activable, editable).
 - Descripción: primera línea "🔔 Suscríbete para no perderte ningún partido: (canal)".
 - App: escribe una vez el mensaje en el chat de YouTube cuando la emisión pasa a directo; publica el id del vídeo en el estado para el QR del mando; puente openUrl y shareText.
 - Diapositiva QR del canal (tomares_C, enlace /live) para subir como patrocinador.
+- Jugadoras (Ajustes): lista única con dorsal, nombre, posición, capitana, 📷 foto (la app le pone el cromo granate) o 🃏 cromo hecho (tal cual); importar archivo JSON (plantillas/tomares.json, fuera del repo).
+- Convocatoria (Partido): equipo, lema (#VAMOSTOMARES), hasta 16 jugadoras, dorsal por partido, aviso de dorsales repetidos. Se guarda aparte del marcador (no se borra con Nuevo partido).
+- PREPARTIDO: portada → escudos → plantilla (7 por pantalla, 8 si son 15-16, escudo + lema en el hueco) → patrocinadores. SquadSlide.kt.
 - Cabezal de giro (fase 1): app se conecta por BLE a "VoleyCam-Pan" (PanController), permisos Bluetooth al activarlo; órdenes pan_l/pan_r (repetidas cada 300 ms mientras se mantiene), pan_s, pan_c, pan_v1..5, pan_enable/disable; estado en la barra ("Cabezal ✓") y en status.pan para el mando.
 - Mando: pestaña Juego "Cámara motorizada" (◀ Centrar ▶ + velocidad 1-5, solo si el cabezal está activado); Ajustes → "Cabezal de giro" (activar/desactivar).
 - ESP32: esp32/voleycam_pan/voleycam_pan.ino (centro 1500, topes 900-2100, rampa suave, se para solo si deja de recibir órdenes o se pierde la conexión). Sin compilar aquí: compilar en Arduino IDE con esp32 2.0.17 + ESP32Servo.
@@ -143,10 +146,11 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Fase 2a: seguimiento automático en voleibol con el HS-422 (MediaPipe Object Detector / YOLO TFLite en el móvil, 5-10 fps a baja resolución, filtro de Kalman).
 - Fase 2b: fútbol con motor paso a paso NEMA17 + driver TMC2209 (suave y silencioso); seguir al centro del grupo de jugadores, el balón solo como ayuda.
 - Descartado: seguimiento virtual (recorte digital) con un móvil fijo: no coge todo el campo.
+- Opción fase 2: inclinación (▲▼) con el kit ServoCity SPT200 encima de la base Lynxmotion + un segundo servo estándar; útil en fútbol.
 - Otras ideas ESP32 para VoleyCam: botonera física inalámbrica (puntos, ⭐, 💜, ⏪), piloto EN DIRECTO en el trípode, marcador LED P10 para el pabellón.
 - Zhiyun Smooth X (aparcado): se conecta por BLE sin emparejar como "SMOOTH-X_9019-1"; ZY Cami escribe órdenes de 10 bytes en el handle 0x2A y recibe respuestas por notificación en el handle 0x2C (MTU 243). El Xiaomi 14T Pro (MediaTek) no guarda el contenido de los paquetes en el informe. Para sacar el protocolo: sniffer BLE nRF52840 (~10-15 €) + Wireshark, o captura HCI con un móvil no MediaTek.
 
-## Plantillas y diapositiva de plantilla en el PREPARTIDO (acordado 29/10, sin hacer)
+## Plantillas y diapositiva de plantilla en el PREPARTIDO (hecho en 1.8.5; faltan fotos)
 - Solo para el carrusel del PREPARTIDO (de momento NO: marcar por jugadora, resumen por jugadora, QR familias).
 - Varias plantillas en Ajustes (Junior Sevilla, Senior 2ª Andaluza…); en Partido se elige cuál juega. Máximo 14 jugadoras.
 - Cada jugadora: dorsal, nombre, posición, capitana (C) y su CROMO como imagen (los que ya tiene el club). Si no hay cromo, la app genera uno con el mismo estilo.

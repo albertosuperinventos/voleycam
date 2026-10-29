@@ -239,7 +239,9 @@ function start() {
   const previewRef = base.child('preview');
   const remoteRef = base.child('remote');
   const coverRef = base.child('cover');
-  const shareRef = base.child('share');   // enlace del canal de YouTube y mensaje del chat
+  const shareRef = base.child('share');
+  const playersRef = base.child('players'); // jugadoras del club (con foto o cromo opcional)
+  const squadRef = base.child('squad');     // convocatoria del partido: { ids:{id:true}, num:{id:n}, team, tag }   // enlace del canal de YouTube y mensaje del chat
 
   let live = SC.defaultLive();
   let teams = {};
@@ -250,6 +252,9 @@ function start() {
   let cover = '';             // imagen de portada (miniatura YouTube y prepartido)
   let share = {};             // { channel, chatOff, chatMsg }
   let shareOpen = false;
+  let players = {};
+  let squad = {};
+  let editingPl = null;   // id de jugadora en edición o 'new'
   let ytShowOld = false;
   let markFlashUntil = 0;
   let remoteOpen = false, remoteTimer = null;
@@ -275,7 +280,7 @@ function start() {
     if (s.val() == null) { liveRef.set(SC.defaultLive()); return; }
     live = SC.normalize(s.val()); render(); pushNative();
   });
-  teamsRef.on('value', s => { teams = s.val() || {}; render(); pushNative(); });
+  teamsRef.on('value', s => { teams = s.val() || {}; render(); pushNative(); pushSquad(); });
   sponsRef.on('value', s => { sponsors = s.val() || {}; render(); pushNative(); });
   matchesRef.on('value', s => { matches = s.val() || {}; if (tab !== 'juego') render(); });
   coverRef.on('value', s => {
@@ -296,6 +301,8 @@ function start() {
     remoteRef.on('value', s => { try { window.SportCamNative.onRemote(s.val() || 0); } catch (e) {} });
   }
   marksRef.on('value', s => { marks = s.val() || {}; if (tab !== 'juego' && !compact) render(); pushNative(); });
+  playersRef.on('value', s => { players = s.val() || {}; if ((tab === 'ajustes' || tab === 'partido') && !compact) render(); pushSquad(); });
+  squadRef.on('value', s => { squad = s.val() || {}; if (tab === 'partido' && !compact) render(); pushSquad(); });
   shareRef.on('value', s => { share = s.val() || {}; if (tab !== 'juego' && !compact) render(); pushNative(); if (shareOpen) renderShare(); });
 
   /* ---------- Acciones ---------- */
@@ -349,6 +356,84 @@ function start() {
   function ytTexts() {
     const [h, a] = namesForYt();
     return { title: SC.ytTitle(live, h, a), desc: SC.ytDescription(live, h, a, sponsorsForYt(), null, channelUrl()) };
+  }
+
+  /* ---------- Jugadoras y convocatoria (diapositiva de plantilla en el PREPARTIDO) ---------- */
+  const SQUAD_MAX = 16;
+  const plList = () => Object.entries(players).sort((a, b) => (+a[1].dorsal || 99) - (+b[1].dorsal || 99) || String(a[1].nombre).localeCompare(b[1].nombre));
+  const squadIds = () => Object.keys(squad.ids || {}).filter(id => players[id]);
+  const squadNum = id => (squad.num && squad.num[id] != null && squad.num[id] !== '') ? squad.num[id] : (players[id] || {}).dorsal;
+  /** Equipo de la plantilla: el elegido o, si no, el local. */
+  const squadTeam = () => teamView(squad.team && teams[squad.team] ? squad.team : live.homeId, 'LOCAL');
+  let squadTimer = null;
+  /** Manda la convocatoria al móvil cámara (solo cuando cambia; lleva las imágenes). */
+  function pushSquad() {
+    if (!IS_NATIVE || !window.SportCamNative.setSquad) return;
+    clearTimeout(squadTimer);
+    squadTimer = setTimeout(() => {
+      const t = squadTeam();
+      const list = squadIds().map(id => { const p = players[id]; return { d: String(squadNum(id) ?? ''), n: p.nombre || '', p: p.pos || '', c: !!p.cap, img: p.img || '', kind: p.imgKind || 'foto' }; })
+        .sort((a, b) => (+a.d || 99) - (+b.d || 99));
+      const data = list.length ? { name: (t.name || '').toUpperCase(), logo: t.logo || '', tag: squad.tag || '', players: list } : null;
+      try { window.SportCamNative.setSquad(data ? JSON.stringify(data) : ''); } catch (e) {}
+    }, 300);
+  }
+  function playersBlock() {
+    const list = plList();
+    const form = (id) => {
+      const p = id === 'new' ? { dorsal: '', nombre: '', pos: '', cap: false } : (players[id] || {});
+      return `<div class="item" style="flex-direction:column;align-items:stretch">
+        <div class="grid2"><div><label style="margin-top:0">Dorsal</label><input id="plNum" type="number" min="0" max="99" value="${esc(p.dorsal ?? '')}"></div>
+          <div><label style="margin-top:0">Nombre</label><input id="plName" maxlength="20" value="${esc(p.nombre || '')}"></div></div>
+        <label>Posición</label><select id="plPos">${['', 'Colocadora', 'Receptora', 'Opuesta', 'Central', 'Líbero'].map(x => `<option ${x === (p.pos || '') ? 'selected' : ''}>${x}</option>`).join('')}</select>
+        <div class="optrow" style="border-top:0"><span>Capitana (C)</span><input id="plCap" type="checkbox" ${p.cap ? 'checked' : ''} style="width:auto"></div>
+        <div class="row" style="margin-top:6px"><button class="ghost" data-act="plCancel">Cancelar</button><button class="primary" data-act="plSave">Guardar</button></div>
+        ${id !== 'new' ? `<button class="danger" style="margin-top:8px" data-act="plDel" data-id="${id}">Borrar jugadora</button>` : ''}</div>`;
+    };
+    return `<div class="card">
+      ${list.map(([id, p]) => editingPl === id ? form(id) : `<div class="item">
+        <div class="preview-logo" style="width:40px;height:52px;flex-basis:40px;border-radius:6px;background-size:cover;${p.img ? `background-image:url('${p.img}')` : 'background:#7a1020'}"></div>
+        <div class="grow"><b>${esc(String(p.dorsal ?? ''))} · ${esc(p.nombre || '')}</b>${p.cap ? ' <span class="chip">C</span>' : ''}<br><span class="muted small">${esc(p.pos || '')}${p.img ? (p.imgKind === 'cromo' ? ' · cromo' : ' · foto') : ' · sin imagen'}</span></div>
+        <button data-act="plImg" data-id="${id}" data-v="foto" title="Foto de la jugadora">📷</button>
+        <button data-act="plImg" data-id="${id}" data-v="cromo" title="Cromo ya hecho">🃏</button>
+        <button data-act="plEdit" data-id="${id}">✎</button></div>`).join('') || '<p class="muted">Sin jugadoras.</p>'}
+      ${editingPl === 'new' ? form('new') : `<div class="grid2" style="margin-top:8px"><button data-act="plNew">＋ Añadir jugadora</button><button data-act="plImport">📥 Importar archivo</button></div>`}
+      <p class="muted small" style="margin-bottom:0">📷 foto de la jugadora: la app le pone el cromo granate con dorsal y nombre. 🃏 cromo ya hecho: se usa tal cual. Sin imagen, se genera el cromo con silueta.</p></div>`;
+  }
+  function squadBlock() {
+    const list = plList();
+    if (!list.length) return `<div class="card"><p class="muted" style="margin:0">Añade las jugadoras en Ajustes → Jugadoras.</p></div>`;
+    const sel = squad.ids || {};
+    const n = squadIds().length;
+    const teamSel = `<option value="">Equipo local</option>` + Object.entries(teams).map(([id, t]) => `<option value="${id}" ${squad.team === id ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+    return `<div class="card">
+      <div class="grid2"><div><label style="margin-top:0">Equipo</label><select id="sqTeam">${teamSel}</select></div>
+        <div><label style="margin-top:0">Lema (opcional)</label><input id="sqTag" maxlength="24" placeholder="#VAMOSTOMARES" value="${esc(squad.tag || '')}"></div></div>
+      <div style="margin-top:8px">${list.map(([id, p]) => `<div class="optrow" style="padding:6px 0">
+        <label style="margin:0;display:flex;gap:10px;align-items:center;flex:1;font-weight:600;color:var(--text)"><input type="checkbox" data-sq="${id}" ${sel[id] ? 'checked' : ''} style="width:22px;height:22px">${esc(p.nombre || '')}<span class="muted small">${esc(p.pos || '')}</span></label>
+        <input type="number" data-sqnum="${id}" value="${esc(String(squadNum(id) ?? ''))}" title="Dorsal en este partido" style="width:64px" ${sel[id] ? '' : 'disabled'}></div>`).join('')}</div>
+      ${(() => { const nums = squadIds().map(id => String(squadNum(id))); const dup = [...new Set(nums.filter((x, i) => nums.indexOf(x) !== i))]; return dup.length ? `<p class="small" style="color:var(--warn);margin:6px 0 0">⚠ Dorsal repetido: ${dup.join(', ')}. Cambia el número de una de ellas para este partido.</p>` : ''; })()}
+      <div class="row" style="margin-top:6px"><span class="muted small" style="flex:1">${n} convocada${n === 1 ? '' : 's'} (máx. ${SQUAD_MAX}). Sale en el carrusel del PREPARTIDO.</span>
+        ${n ? '<button class="ghost" data-act="sqClear">Quitar todas</button>' : ''}</div></div>`;
+  }
+  async function importPlayers() {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+    inp.onchange = async () => {
+      const f = inp.files[0]; if (!f) return;
+      try {
+        const d = JSON.parse(await f.text());
+        const arr = Array.isArray(d) ? d : (d.jugadoras || []);
+        const have = new Set(Object.values(players).map(p => (p.nombre || '').toLowerCase() + '|' + p.dorsal));
+        let added = 0;
+        for (const j of arr) {
+          const p = { dorsal: +j.dorsal || 0, nombre: String(j.nombre || '').trim(), pos: String(j.pos || j.posicion || '').trim(), cap: !!(j.capitana || j.cap) };
+          if (!p.nombre || have.has(p.nombre.toLowerCase() + '|' + p.dorsal)) continue;
+          await playersRef.push(p); added++;
+        }
+        toast(added ? `${added} jugadoras importadas` : 'No había jugadoras nuevas');
+      } catch (e) { toast('Archivo no válido'); }
+    };
+    inp.click();
   }
 
   /* ---------- Compartir el canal y el directo ---------- */
@@ -673,7 +758,7 @@ function start() {
     if (!loaded) { m.innerHTML = '<p class="muted">Conectando…</p>'; return; }
     // No pisar lo que el usuario está escribiendo: se repinta al salir del campo
     const ae = document.activeElement;
-    if (ae && m.contains(ae) && /INPUT|SELECT|TEXTAREA/.test(ae.tagName) && ae.type !== 'file') {
+    if (ae && m.contains(ae) && /INPUT|SELECT|TEXTAREA/.test(ae.tagName) && ae.type !== 'file' && ae.type !== 'checkbox') {
       ae.addEventListener('blur', () => setTimeout(render, 0), { once: true });
       return;
     }
@@ -951,6 +1036,7 @@ function start() {
           <input type="number" id="durMin" value="${Math.round(live.clock.durMs / 60000)}">`}
         <p class="muted small" style="margin-bottom:0">¿Falta un equipo? Añádelo en Ajustes.</p></div>`)}
       ${sec('Datos del partido', youtubeCard(), 'para el título y la descripción')}
+      ${sec('Convocatoria', squadBlock(), 'plantilla en el prepartido')}
       ${sec('YouTube', ytConnectCard())}
       <button class="danger" style="width:100%" data-act="newMatch">Nuevo partido (pone todo a cero)</button>`;
   }
@@ -1102,6 +1188,7 @@ function start() {
   function viewAjustes() {
     return `
       ${sec('Equipos', teamsBlock())}
+      ${sec('Jugadoras', playersBlock(), Object.keys(players).length ? Object.keys(players).length + '' : '')}
       ${sec('Patrocinadores', sponsorsBlock())}
       ${sec('Portada', coverCard())}
       ${sec('Resumen de jugadas', `<div class="card" style="padding:4px 12px">
@@ -1246,6 +1333,18 @@ function start() {
       ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => el.addEventListener(ev, () => panRelease()));
       el.addEventListener('contextmenu', e => e.preventDefault());
     });
+    m.querySelectorAll('[data-sq]').forEach(el => el.addEventListener('change', () => {
+      const id = el.dataset.sq;
+      if (el.checked && squadIds().length >= SQUAD_MAX) { el.checked = false; return toast('Máximo ' + SQUAD_MAX + ' jugadoras'); }
+      const num = el.closest('.optrow').querySelector('[data-sqnum]'); if (num) num.disabled = !el.checked;
+      squadRef.child('ids/' + id).set(el.checked ? true : null);
+    }));
+    m.querySelectorAll('[data-sqnum]').forEach(el => el.addEventListener('change', () => {
+      const id = el.dataset.sqnum, v = el.value.trim();
+      squadRef.child('num/' + id).set(v === '' || +v === +(players[id] || {}).dorsal ? null : +v);
+    }));
+    on('sqTeam', 'change', e => squadRef.child('team').set(e.target.value || null));
+    on('sqTag', 'change', e => squadRef.child('tag').set(e.target.value.trim() || null));
     on('shChannel', 'change', e => shareRef.child('channel').set(e.target.value.trim() || DEFAULT_CHANNEL));
     on('shChatMsg', 'change', e => shareRef.child('chatMsg').set(e.target.value.trim()));
     on('sponsSec', 'change', e => setField('spons/sec', Math.min(120, Math.max(3, +e.target.value || 10))));
@@ -1322,6 +1421,26 @@ function start() {
       case 'ytKids': return setField('info/kids', !live.info.kids);
       case 'ytOld': ytShowOld = !ytShowOld; return render();
       case 'shareOpen': return openShare();
+      case 'plNew': editingPl = 'new'; return render();
+      case 'plEdit': editingPl = d.id; return render();
+      case 'plCancel': editingPl = null; return render();
+      case 'plImport': return importPlayers();
+      case 'plSave': {
+        const nombre = val('plName').trim();
+        if (!nombre) return toast('Pon el nombre');
+        const data = { dorsal: +val('plNum') || 0, nombre, pos: val('plPos'), cap: !!(document.getElementById('plCap') || {}).checked };
+        if (editingPl === 'new') await playersRef.push(data); else await playersRef.child(editingPl).update(data);
+        editingPl = null; return render();
+      }
+      case 'plDel':
+        if (!confirm('¿Borrar a ' + ((players[d.id] || {}).nombre || 'esta jugadora') + '?')) return;
+        await playersRef.child(d.id).remove(); squadRef.child('ids/' + d.id).remove(); editingPl = null; return render();
+      case 'plImg': {
+        const img = await pickImage(700, true); if (!img) return;
+        await playersRef.child(d.id).update({ img, imgKind: v === 'cromo' ? 'cromo' : 'foto' });
+        return toast(v === 'cromo' ? 'Cromo guardado' : 'Foto guardada');
+      }
+      case 'sqClear': if (confirm('¿Quitar a todas de la convocatoria?')) squadRef.child('ids').remove(); return;
       case 'panC': return panCmd('pan_c');
       case 'panSpeed': panCmd('pan_v' + v); if (status && status.pan) status.pan.speed = +v; return render();
       case 'panToggle': { const p = panInfo(); panCmd(p && p.on ? 'pan_disable' : 'pan_enable'); return toast(p && p.on ? 'Cabezal desactivado' : 'Activando el cabezal…'); }
