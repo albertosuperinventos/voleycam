@@ -1441,7 +1441,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       override fun onShowFileChooser(view: WebView?, callback: ValueCallback<Array<Uri>>?, params: FileChooserParams?): Boolean {
         fileCallback?.onReceiveValue(null)
         fileCallback = callback
-        return try { pickImage.launch("image/*"); true } catch (_: Exception) { fileCallback = null; false }
+        // Imágenes (logos, fotos) o, si la web pide otro tipo (p. ej. el JSON de jugadoras), cualquier archivo
+        val wantsImage = params?.acceptTypes?.any { it.startsWith("image") } ?: true
+        return try { pickImage.launch(if (wantsImage) "image/*" else "*/*"); true } catch (_: Exception) { fileCallback = null; false }
       }
     }
     loadWeb()

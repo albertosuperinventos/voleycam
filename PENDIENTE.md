@@ -109,6 +109,9 @@
 - Estudio 1.1.1: cuatro botones ⭐ 💜 🧱 🛡 para añadir jugadas en la vista previa (se juntan si se pulsan seguidos, como en la app).
 - Estudio 1.1.2: botón 🗑 Quitar jugadas (selección múltiple); al guardar se borran del canal.
 
+## Próxima versión (1.8.6) — hecho en local, sin compilar
+- La app deja elegir el JSON de jugadoras en "Importar archivo" (antes solo imágenes).
+
 ## Versión 1.8.5
 - Descripción de YouTube: "Retransmisión NO OFICIAL, ofrecida por:" y al final "Esta retransmisión incluye contenido promocional." (sin patrocinadores: "Retransmisión NO OFICIAL."). Los capítulos se meten antes del aviso final.
 - Compartir (pestaña Partido): QR a pantalla completa (vídeo de la emisión elegida o, si no, youtube.com/@canal/live), envío por WhatsApp a un número sin guardar, copiar y compartir el mensaje (vídeo + canal).
