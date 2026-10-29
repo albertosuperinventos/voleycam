@@ -37,6 +37,11 @@ class Prefs(context: Context) {
     get() = sp.getInt("fps", 30)
     set(v) = sp.edit().putInt("fps", v).apply()
 
+  /** Usar el cabezal de giro VoleyCam-Pan (ESP32 por Bluetooth). */
+  var panEnabled: Boolean
+    get() = sp.getBoolean("panEnabled", false)
+    set(v) = sp.edit().putBoolean("panEnabled", v).apply()
+
   var recordLocal: Boolean
     get() = sp.getBoolean("recordLocal", true)
     set(v) = sp.edit().putBoolean("recordLocal", v).apply()

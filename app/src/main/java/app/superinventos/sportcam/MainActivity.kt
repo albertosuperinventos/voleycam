@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.BatteryManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
@@ -165,6 +166,51 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private val askPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
     if (hasPerms()) setupStream()
     else toast("VoleyCam necesita la cámara y el micrófono para funcionar")
+    if (prefs.panEnabled) ui.postDelayed({ enablePan() }, 500)
+  }
+  private val askBtPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+    if (hasBtPerms()) startPan() else toast("Sin permiso de Bluetooth no se puede usar el cabezal de giro")
+  }
+
+  /* ======================= Cabezal de giro (ESP32) ======================= */
+
+  private var pan: PanController? = null
+
+  private fun btPerms(): Array<String> = if (Build.VERSION.SDK_INT >= 31)
+    arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+  else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+
+  private fun hasBtPerms() = btPerms().all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
+
+  /** Activa el cabezal: pide permiso de Bluetooth si hace falta y empieza a buscarlo. */
+  private fun enablePan() {
+    prefs.panEnabled = true
+    if (hasBtPerms()) startPan() else askBtPerms.launch(btPerms())
+  }
+
+  private fun startPan() {
+    if (pan == null) pan = PanController(applicationContext) { lastStatusAt = 0L; updateStatus() }
+    pan?.start()
+    lastStatusAt = 0L
+  }
+
+  private fun disablePan() {
+    prefs.panEnabled = false
+    pan?.stop(); pan = null
+    lastStatusAt = 0L; updateStatus()
+  }
+
+  /** Órdenes de giro: pan_l, pan_r (repetidas mientras se mantiene el botón), pan_s, pan_c, pan_v1..pan_v5. */
+  private fun panCommand(action: String) {
+    when {
+      action == "pan_enable" -> enablePan()
+      action == "pan_disable" -> disablePan()
+      action == "pan_l" -> pan?.send("L")
+      action == "pan_r" -> pan?.send("R")
+      action == "pan_s" -> pan?.send("S")
+      action == "pan_c" -> pan?.send("C")
+      action.startsWith("pan_v") -> pan?.send("V" + action.removePrefix("pan_v"))
+    }
   }
 
   /* ======================= Ciclo de vida ======================= */
@@ -261,7 +307,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     replayH.post(captureLoop)
 
-    if (hasPerms()) setupStream()
+    if (hasPerms()) { setupStream(); if (prefs.panEnabled) enablePan() }
     else askPerms.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
   }
 
@@ -286,6 +332,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   }
 
   override fun onDestroy() {
+    pan?.stop(); pan = null
     ui.removeCallbacksAndMessages(null)
     replayH.removeCallbacksAndMessages(null)
     replayThread.quitSafely()
@@ -656,6 +703,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       .put("muted", muted).put("dim", dimOverlay.visibility == View.VISIBLE)
       .put("liveStartTs", liveStartTs)
       .put("replay", replaying)
+      .put("pan", JSONObject().put("on", prefs.panEnabled).put("state", pan?.state ?: "off")
+        .put("pos", pan?.position ?: 1500).put("speed", pan?.speed ?: 3))
       .put("ytVideoId", if (prefs.platform == Prefs.PLATFORM_YOUTUBE && prefs.ytBroadcastStatus !in setOf("complete", "revoked")) prefs.ytBroadcastId else "")
     web.evaluateJavascript("window.scStatus && scStatus($o)", null)
   }
@@ -691,6 +740,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   /** Órdenes que llegan desde la ventana Remoto del mando. */
   private fun remoteCommand(action: String) {
+    if (action.startsWith("pan_")) return panCommand(action)
     when (action) {
       "live_start" -> startLive(fromRemote = true)
       "live_stop" -> if (wantLive) stopLive()
@@ -877,6 +927,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     if (wantLive && connected && currentBitrate > 0) parts += String.format(Locale.US, "%.1f Mb/s", currentBitrate / 1_000_000f)
     if (wantLive && rec) parts += "REC"
     if (muted) parts += "MICRO OFF"
+    pan?.let { p -> when (p.state) { "connected" -> parts += "Cabezal ✓"; "searching" -> parts += "Cabezal…"; "nobt" -> parts += "Cabezal: activa Bluetooth" } }
     val bm = getSystemService(BATTERY_SERVICE) as? BatteryManager
     val battery = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
     val charging = bm?.isCharging ?: false

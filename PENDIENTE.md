@@ -116,6 +116,9 @@
 - Descripción: primera línea "🔔 Suscríbete para no perderte ningún partido: (canal)".
 - App: escribe una vez el mensaje en el chat de YouTube cuando la emisión pasa a directo; publica el id del vídeo en el estado para el QR del mando; puente openUrl y shareText.
 - Diapositiva QR del canal (tomares_C, enlace /live) para subir como patrocinador.
+- Cabezal de giro (fase 1): app se conecta por BLE a "VoleyCam-Pan" (PanController), permisos Bluetooth al activarlo; órdenes pan_l/pan_r (repetidas cada 300 ms mientras se mantiene), pan_s, pan_c, pan_v1..5, pan_enable/disable; estado en la barra ("Cabezal ✓") y en status.pan para el mando.
+- Mando: pestaña Juego "Cámara motorizada" (◀ Centrar ▶ + velocidad 1-5, solo si el cabezal está activado); Ajustes → "Cabezal de giro" (activar/desactivar).
+- ESP32: esp32/voleycam_pan/voleycam_pan.ino (centro 1500, topes 900-2100, rampa suave, se para solo si deja de recibir órdenes o se pierde la conexión). Sin compilar aquí: compilar en Arduino IDE con esp32 2.0.17 + ESP32Servo.
 
 ## Estudio 1.2 — aprobado (boceto_estudio.png), sin hacer
 - Tres pestañas: 1 Preparar (canal, partido, vídeos) · 2 Ver y marcar (vídeo grande, línea de tiempo con marcas de colores clicables, ⏮ −10 −5 ▶ +5 +10 ⏭, velocidad, botones ⭐💜🧱🛡, jugada seleccionada con tipos/segundos/quitar, lista con filtros, teclado: Espacio, ←→, 1-4, Supr, N/P, guardar en el canal) · 3 Crear resúmenes.
