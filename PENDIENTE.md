@@ -145,3 +145,19 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Descartado: seguimiento virtual (recorte digital) con un móvil fijo: no coge todo el campo.
 - Otras ideas ESP32 para VoleyCam: botonera física inalámbrica (puntos, ⭐, 💜, ⏪), piloto EN DIRECTO en el trípode, marcador LED P10 para el pabellón.
 - Zhiyun Smooth X (aparcado): se conecta por BLE sin emparejar como "SMOOTH-X_9019-1"; ZY Cami escribe órdenes de 10 bytes en el handle 0x2A y recibe respuestas por notificación en el handle 0x2C (MTU 243). El Xiaomi 14T Pro (MediaTek) no guarda el contenido de los paquetes en el informe. Para sacar el protocolo: sniffer BLE nRF52840 (~10-15 €) + Wireshark, o captura HCI con un móvil no MediaTek.
+
+## Plantillas y diapositiva de plantilla en el PREPARTIDO (acordado 29/10, sin hacer)
+- Solo para el carrusel del PREPARTIDO (de momento NO: marcar por jugadora, resumen por jugadora, QR familias).
+- Varias plantillas en Ajustes (Junior Sevilla, Senior 2ª Andaluza…); en Partido se elige cuál juega. Máximo 14 jugadoras.
+- Cada jugadora: dorsal, nombre, posición, capitana (C) y su CROMO como imagen (los que ya tiene el club). Si no hay cromo, la app genera uno con el mismo estilo.
+- Estilo del cromo del club: fondo granate con rayas diagonales, borde dorado redondeado, dorsal gigante contorneado en dorado de fondo, foto recortada, escudo arriba a la izquierda, abajo dorsal dorado + nombre blanco + posición dorada, escudo "C" dorado para la capitana. SIN etiqueta de categoría (junior/senior/juvenil).
+- Diapositiva: 2 pantallas de 7 (fila de 4 + fila de 3) y en el hueco el escudo del Tomares con "#VAMOSTOMARES"; si son menos, la última fila centrada. Cabecera granate con escudo + "VOLEIBOL TOMARES" + "1/2". Bocetos: cromos_1de2.png / cromos_2de2.png.
+- Orden del carrusel: portada → escudos → plantilla 1/2 → plantilla 2/2 → patrocinadores.
+- Fotos/cromos reducidos al subir (~10-15 KB cada uno).
+- Pendiente de Albert: listas reales (dorsal, nombre, posición) de Junior y Senior, ¿Carmen o Carmela?, y los cromos como imagen (el artefacto "Voleibol Tomares" no se puede abrir desde aquí: descargar el HTML o mandar capturas).
+- Jugadoras dadas para Junior: Carmen, Carlota, Xana, Julia, Nerea, Irene, Paula, Olga, Lidia, Lola, Martina, Cuenco, Judith, Marina.
+
+## Montaje del cabezal (29/10)
+- Base Lynxmotion BR-KT montada, servo centrado en 1500 = frente. Prueba con Monitor serie OK ("va perfecto").
+- Móvil: tornillo 1/4" por agujero de 6,5 mm a ~3 cm del centro + tuerca; soporte de móvil enroscado.
+- Pendiente: medidas para piezas 3D (tapa inferior con tuerca 1/4" para trípode y hueco ESP32/power bank; adaptador superior centrado). Albert tiene impresora 3D.
