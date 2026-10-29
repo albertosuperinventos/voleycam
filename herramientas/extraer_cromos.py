@@ -1,7 +1,10 @@
 """
 VoleyCam - Extrae todas las fotos y cromos de la web "Voleibol Tomares" a su calidad original.
 
-Uso (en el PC, con Python 3):
+Uso (en el PC, con Python 3) — vale un .html o una carpeta guardada con "Página web completa":
+  python extraer_cromos.py tomares.html
+  python extraer_cromos.py "Voleibol Tomares_files"
+
   1. Descarga la web como .html (menú del artefacto -> Descargar / Copiar código y guárdalo como tomares.html).
   2. Pon este script en la misma carpeta y ejecuta:
         python extraer_cromos.py tomares.html
@@ -23,7 +26,22 @@ if len(sys.argv) < 2:
     print("Uso: python extraer_cromos.py tomares.html")
     sys.exit(1)
 
-src = open(sys.argv[1], encoding="utf-8", errors="ignore").read()
+import shutil
+entrada = sys.argv[1]
+imagenes_sueltas = []
+if os.path.isdir(entrada):
+    # Carpeta de "Guardar como -> Página web completa": se leen todos los .html/.js y se copian las imágenes
+    textos = []
+    for raiz, _, ficheros in os.walk(entrada):
+        for fn in ficheros:
+            ruta = os.path.join(raiz, fn)
+            if fn.lower().endswith((".html", ".htm", ".js", ".css")):
+                textos.append(open(ruta, encoding="utf-8", errors="ignore").read())
+            elif fn.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".avif")) and os.path.getsize(ruta) > 20000:
+                imagenes_sueltas.append(ruta)
+    src = "\n".join(textos)
+else:
+    src = open(entrada, encoding="utf-8", errors="ignore").read()
 out = "cromos_extraidos"
 os.makedirs(out, exist_ok=True)
 
@@ -66,6 +84,18 @@ for m in re.finditer(r"data:image/([a-zA-Z+]+);base64,([A-Za-z0-9+/=\s]+)", src)
     base = nombre_cercano(m.start()) or "imagen"
     fn = f"{n:02d}_{base}.{EXT.get(tipo, 'img')}"
     open(os.path.join(out, fn), "wb").write(b)
+    guardadas.append(fn)
+
+# 1b) Imágenes que ya venían como archivo (Página web completa)
+for ruta in imagenes_sueltas:
+    b = open(ruta, "rb").read()
+    h = hashlib.md5(b).hexdigest()
+    if h in vistas:
+        continue
+    vistas.add(h)
+    n += 1
+    fn = f"{n:02d}_{limpia(os.path.splitext(os.path.basename(ruta))[0]) or 'imagen'}{os.path.splitext(ruta)[1].lower()}"
+    shutil.copyfile(ruta, os.path.join(out, fn))
     guardadas.append(fn)
 
 # 2) Imágenes enlazadas por URL
