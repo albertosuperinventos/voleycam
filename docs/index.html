@@ -1436,7 +1436,8 @@ function start() {
         if (!confirm('¿Borrar a ' + ((players[d.id] || {}).nombre || 'esta jugadora') + '?')) return;
         await playersRef.child(d.id).remove(); squadRef.child('ids/' + d.id).remove(); editingPl = null; return render();
       case 'plImg': {
-        const img = await pickImage(700, true); if (!img) return;
+        // Foto: WebP/PNG para conservar la transparencia del recorte; cromo: JPEG
+        const img = await pickImage(v === 'cromo' ? 700 : 800, v === 'cromo'); if (!img) return;
         await playersRef.child(d.id).update({ img, imgKind: v === 'cromo' ? 'cromo' : 'foto' });
         return toast(v === 'cromo' ? 'Cromo guardado' : 'Foto guardada');
       }

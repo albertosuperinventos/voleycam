@@ -113,8 +113,12 @@ class SquadSlide(private val width: Int, private val height: Int, private val fo
     c.drawText(pl.dorsal, r.centerX(), r.top + r.height() * 0.42f - (fm.ascent + fm.descent) / 2, t)
     t.style = Paint.Style.FILL
     // Foto o silueta
-    val photo = RectF(r.left, r.top + r.height() * 0.06f, r.right, r.bottom)
-    if (bmp != null) cover(c, bmp, photo, 0.2f)
+    if (bmp != null) {
+      // Foto recortada (PNG/WebP sin fondo): al 86 % del ancho, desde el 13 % de arriba, para que se vea el dorsal detrás
+      val fw = r.width() * 0.86f; val fh = fw * bmp.height / bmp.width
+      val l = r.centerX() - fw / 2; val tp = r.top + r.height() * 0.13f
+      c.drawBitmap(bmp, null, RectF(l, tp, l + fw, tp + fh), bmpPaint)
+    }
     else {
       p.color = Color.rgb(235, 205, 185); c.drawOval(RectF(r.left + r.width() * 0.36f, r.top + r.height() * 0.2f, r.left + r.width() * 0.64f, r.top + r.height() * 0.44f), p)
       p.color = Color.rgb(240, 240, 250); c.drawOval(RectF(r.left + r.width() * 0.18f, r.top + r.height() * 0.43f, r.right - r.width() * 0.18f, r.bottom + r.height() * 0.3f), p)
