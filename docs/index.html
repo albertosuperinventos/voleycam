@@ -361,9 +361,18 @@ function start() {
   /* ---------- Jugadoras y convocatoria (diapositiva de plantilla en el PREPARTIDO) ---------- */
   const SQUAD_MAX = 16;
   const plList = () => Object.entries(players).sort((a, b) => (+a[1].dorsal || 99) - (+b[1].dorsal || 99) || String(a[1].nombre).localeCompare(b[1].nombre));
-  const squadIds = () => Object.keys(squad.ids || {}).filter(id => players[id]);
+  /** Convocatoria del equipo elegido (se recuerda una por equipo). */
+  const squadSel = () => { const bt = squad.byTeam && squad.byTeam[squadTeamKeyOf()]; return (bt && bt.ids) || (!squad.byTeam ? squad.ids : null) || {}; };
+  const squadIds = () => Object.keys(squadSel()).filter(id => players[id]);
+  /** Guarda la selección del equipo actual (y pasa la antigua convocatoria única al nuevo formato). */
+  function setSquadSel(ids) {
+    const upd = {}; upd['byTeam/' + squadTeamKeyOf() + '/ids'] = Object.keys(ids).length ? ids : null;
+    if (squad.ids) upd.ids = null;
+    return squadRef.update(upd);
+  }
   /** Dorsal de la jugadora con el equipo elegido en la convocatoria (se recuerda por equipo: p. ej. 13 en Junior y 23 en Senior). */
   const squadTeamKey = () => squad.team || '_local';
+  function squadTeamKeyOf() { return squad.team || '_local'; }
   const squadNum = id => {
     const p = players[id] || {}, byTeam = p.nums && p.nums[squadTeamKey()];
     if (byTeam != null && byTeam !== '') return byTeam;
@@ -381,7 +390,7 @@ function start() {
       const t = squadTeam();
       const list = squadIds().map(id => { const p = players[id]; return { d: String(squadNum(id) ?? ''), n: p.nombre || '', p: p.pos || '', c: !!p.cap, img: p.img || '', kind: p.imgKind || 'foto' }; })
         .sort((a, b) => (+a.d || 99) - (+b.d || 99));
-      const data = list.length ? { name: (t.name || '').toUpperCase(), logo: t.logo || '', tag: squad.tag || '', players: list } : null;
+      const data = (list.length && list.length <= SQUAD_MAX) ? { name: (t.name || '').toUpperCase(), logo: t.logo || '', tag: squad.tag || '', players: list } : null;
       try { window.SportCamNative.setSquad(data ? JSON.stringify(data) : ''); } catch (e) {}
     }, 300);
   }
@@ -411,7 +420,7 @@ function start() {
   function squadBlock() {
     const list = plList();
     if (!list.length) return `<div class="card"><p class="muted" style="margin:0">Añade las jugadoras en Ajustes → Jugadoras.</p></div>`;
-    const sel = squad.ids || {};
+    const sel = squadSel();
     const n = squadIds().length;
     const teamSel = `<option value="">Equipo local</option>` + Object.entries(teams).map(([id, t]) => `<option value="${id}" ${squad.team === id ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
     return `<div class="card">
@@ -421,8 +430,9 @@ function start() {
         <label style="margin:0;display:flex;gap:10px;align-items:center;flex:1;font-weight:600;color:var(--text)"><input type="checkbox" data-sq="${id}" ${sel[id] ? 'checked' : ''} style="width:22px;height:22px">${esc(p.nombre || '')}<span class="muted small">${esc(p.pos || '')}</span></label>
         <input type="number" data-sqnum="${id}" value="${esc(String(squadNum(id) ?? ''))}" title="Dorsal con este equipo (se recuerda)" style="width:64px" ${sel[id] ? '' : 'disabled'}></div>`).join('')}</div>
       ${(() => { const nums = squadIds().map(id => String(squadNum(id))); const dup = [...new Set(nums.filter((x, i) => nums.indexOf(x) !== i))]; return dup.length ? `<p class="small" style="color:var(--warn);margin:6px 0 0">⚠ Dorsal repetido: ${dup.join(', ')}. Cambia el número de una de ellas para este partido.</p>` : ''; })()}
-      <div class="row" style="margin-top:6px"><span class="muted small" style="flex:1">${n} convocada${n === 1 ? '' : 's'} (máx. ${SQUAD_MAX}). El dorsal que cambies se recuerda para este equipo.</span>
-        ${n ? '<button class="ghost" data-act="sqClear">Quitar todas</button>' : ''}</div></div>`;
+      ${n > SQUAD_MAX ? `<p class="small" style="color:var(--danger);margin:6px 0 0;font-weight:700">Sobran ${n - SQUAD_MAX}: desmarca hasta dejar ${SQUAD_MAX}. Mientras, no sale la plantilla en el prepartido.</p>` : ''}
+      <p class="muted small" style="margin:6px 0 0">${n} convocada${n === 1 ? '' : 's'} (máx. ${SQUAD_MAX}). La convocatoria y los dorsales se recuerdan para cada equipo.</p>
+      <div class="grid2" style="margin-top:6px"><button data-act="sqAll">☑ Marcar todas</button><button class="ghost" data-act="sqClear" ${n ? '' : 'disabled'}>☐ Ninguna</button></div></div>`;
   }
   async function importPlayers() {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
@@ -1343,9 +1353,10 @@ function start() {
     });
     m.querySelectorAll('[data-sq]').forEach(el => el.addEventListener('change', () => {
       const id = el.dataset.sq;
-      if (el.checked && squadIds().length >= SQUAD_MAX) { el.checked = false; return toast('Máximo ' + SQUAD_MAX + ' jugadoras'); }
       const num = el.closest('.optrow').querySelector('[data-sqnum]'); if (num) num.disabled = !el.checked;
-      squadRef.child('ids/' + id).set(el.checked ? true : null);
+      const ids = Object.assign({}, squadSel());
+      if (el.checked) ids[id] = true; else delete ids[id];
+      setSquadSel(ids);
     }));
     m.querySelectorAll('[data-sqnum]').forEach(el => el.addEventListener('change', () => {
       const id = el.dataset.sqnum, v = el.value.trim();
@@ -1450,7 +1461,8 @@ function start() {
         await playersRef.child(d.id).update({ img, imgKind: v === 'cromo' ? 'cromo' : 'foto' });
         return toast(v === 'cromo' ? 'Cromo guardado' : 'Foto guardada');
       }
-      case 'sqClear': if (confirm('¿Quitar a todas de la convocatoria?')) squadRef.child('ids').remove(); return;
+      case 'sqClear': if (confirm('¿Desmarcar a todas?')) setSquadSel({}); return;
+      case 'sqAll': { const ids = {}; Object.keys(players).forEach(id => ids[id] = true); setSquadSel(ids); return; }
       case 'panC': return panCmd('pan_c');
       case 'panSpeed': panCmd('pan_v' + v); if (status && status.pan) status.pan.speed = +v; return render();
       case 'panToggle': { const p = panInfo(); panCmd(p && p.on ? 'pan_disable' : 'pan_enable'); return toast(p && p.on ? 'Cabezal desactivado' : 'Activando el cabezal…'); }

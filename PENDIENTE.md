@@ -112,6 +112,7 @@
 ## Próxima versión (1.8.6) — hecho en local, sin compilar
 - La app deja elegir el JSON de jugadoras en "Importar archivo" (antes solo imágenes).
 - Fotos de jugadoras con transparencia (WebP/PNG, recorte IA de la Galería Xiaomi) y colocadas al 86 % del ancho para que se vea el dorsal dorado detrás (boceto cromo_carmela.png).
+- Convocatoria recordada por equipo (squad/byTeam/<equipo>/ids), botones ☑ Marcar todas / ☐ Ninguna; si pasan de 16 avisa "Sobran N" y no sale la diapositiva.
 - Dorsal recordado por equipo: en Convocatoria se elige el equipo y el dorsal que se cambie se guarda para ese equipo (players/<id>/nums/<equipo>).
 
 ## Versión 1.8.5
