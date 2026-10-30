@@ -362,7 +362,14 @@ function start() {
   const SQUAD_MAX = 16;
   const plList = () => Object.entries(players).sort((a, b) => (+a[1].dorsal || 99) - (+b[1].dorsal || 99) || String(a[1].nombre).localeCompare(b[1].nombre));
   const squadIds = () => Object.keys(squad.ids || {}).filter(id => players[id]);
-  const squadNum = id => (squad.num && squad.num[id] != null && squad.num[id] !== '') ? squad.num[id] : (players[id] || {}).dorsal;
+  /** Dorsal de la jugadora con el equipo elegido en la convocatoria (se recuerda por equipo: p. ej. 13 en Junior y 23 en Senior). */
+  const squadTeamKey = () => squad.team || '_local';
+  const squadNum = id => {
+    const p = players[id] || {}, byTeam = p.nums && p.nums[squadTeamKey()];
+    if (byTeam != null && byTeam !== '') return byTeam;
+    if (squad.num && squad.num[id] != null && squad.num[id] !== '') return squad.num[id];   // versión anterior
+    return p.dorsal;
+  };
   /** Equipo de la plantilla: el elegido o, si no, el local. */
   const squadTeam = () => teamView(squad.team && teams[squad.team] ? squad.team : live.homeId, 'LOCAL');
   let squadTimer = null;
@@ -387,6 +394,7 @@ function start() {
           <div><label style="margin-top:0">Nombre</label><input id="plName" maxlength="20" value="${esc(p.nombre || '')}"></div></div>
         <label>Posición</label><select id="plPos">${['', 'Colocadora', 'Receptora', 'Opuesta', 'Central', 'Líbero'].map(x => `<option ${x === (p.pos || '') ? 'selected' : ''}>${x}</option>`).join('')}</select>
         <div class="optrow" style="border-top:0"><span>Capitana (C)</span><input id="plCap" type="checkbox" ${p.cap ? 'checked' : ''} style="width:auto"></div>
+        ${p.nums && Object.keys(p.nums).length ? `<p class="muted small" style="margin:0">Dorsal en otros equipos: ${Object.entries(p.nums).map(([t, n]) => esc((teams[t] || {}).name || (t === '_local' ? 'equipo local' : 'equipo')) + ' ' + esc(String(n))).join(' · ')}. Se cambia en Partido → Convocatoria eligiendo ese equipo.</p>` : ''}
         <div class="row" style="margin-top:6px"><button class="ghost" data-act="plCancel">Cancelar</button><button class="primary" data-act="plSave">Guardar</button></div>
         ${id !== 'new' ? `<button class="danger" style="margin-top:8px" data-act="plDel" data-id="${id}">Borrar jugadora</button>` : ''}</div>`;
     };
@@ -411,9 +419,9 @@ function start() {
         <div><label style="margin-top:0">Lema (opcional)</label><input id="sqTag" maxlength="24" placeholder="#VAMOSTOMARES" value="${esc(squad.tag || '')}"></div></div>
       <div style="margin-top:8px">${list.map(([id, p]) => `<div class="optrow" style="padding:6px 0">
         <label style="margin:0;display:flex;gap:10px;align-items:center;flex:1;font-weight:600;color:var(--text)"><input type="checkbox" data-sq="${id}" ${sel[id] ? 'checked' : ''} style="width:22px;height:22px">${esc(p.nombre || '')}<span class="muted small">${esc(p.pos || '')}</span></label>
-        <input type="number" data-sqnum="${id}" value="${esc(String(squadNum(id) ?? ''))}" title="Dorsal en este partido" style="width:64px" ${sel[id] ? '' : 'disabled'}></div>`).join('')}</div>
+        <input type="number" data-sqnum="${id}" value="${esc(String(squadNum(id) ?? ''))}" title="Dorsal con este equipo (se recuerda)" style="width:64px" ${sel[id] ? '' : 'disabled'}></div>`).join('')}</div>
       ${(() => { const nums = squadIds().map(id => String(squadNum(id))); const dup = [...new Set(nums.filter((x, i) => nums.indexOf(x) !== i))]; return dup.length ? `<p class="small" style="color:var(--warn);margin:6px 0 0">⚠ Dorsal repetido: ${dup.join(', ')}. Cambia el número de una de ellas para este partido.</p>` : ''; })()}
-      <div class="row" style="margin-top:6px"><span class="muted small" style="flex:1">${n} convocada${n === 1 ? '' : 's'} (máx. ${SQUAD_MAX}). Sale en el carrusel del PREPARTIDO.</span>
+      <div class="row" style="margin-top:6px"><span class="muted small" style="flex:1">${n} convocada${n === 1 ? '' : 's'} (máx. ${SQUAD_MAX}). El dorsal que cambies se recuerda para este equipo.</span>
         ${n ? '<button class="ghost" data-act="sqClear">Quitar todas</button>' : ''}</div></div>`;
   }
   async function importPlayers() {
@@ -1341,7 +1349,8 @@ function start() {
     }));
     m.querySelectorAll('[data-sqnum]').forEach(el => el.addEventListener('change', () => {
       const id = el.dataset.sqnum, v = el.value.trim();
-      squadRef.child('num/' + id).set(v === '' || +v === +(players[id] || {}).dorsal ? null : +v);
+      playersRef.child(id + '/nums/' + squadTeamKey()).set(v === '' || +v === +(players[id] || {}).dorsal ? null : +v);
+      if (squad.num && squad.num[id] != null) squadRef.child('num/' + id).remove();
     }));
     on('sqTeam', 'change', e => squadRef.child('team').set(e.target.value || null));
     on('sqTag', 'change', e => squadRef.child('tag').set(e.target.value.trim() || null));
