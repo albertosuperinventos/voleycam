@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.2.3"
+VERSION = "1.2.4"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):

@@ -534,8 +534,9 @@ class Options:
 
 def ffmpeg_major() -> int:
     r = _run([tool("ffmpeg"), "-version"])
-    m = re.search(r"ffmpeg version n?(\d+)", r.stdout or "")
-    return int(m.group(1)) if m else 6
+    m = re.search(r"ffmpeg version n?(\d+)\.", r.stdout or "")
+    # Las compilaciones "master" se llaman "N-12345-g…" (sin número de versión): son modernas
+    return int(m.group(1)) if m else 99
 
 
 def build_job(clips: list, videos: list, out: str, opt: Options, intro=None, sponsors=(), workdir: str = "") -> tuple:
@@ -663,7 +664,13 @@ def make_summary(kind: str, match: Match, clips: list, videos: list, sponsors: l
                 render_sponsor(sp, opt.width, opt.height).save(pth)
                 spons.append(pth)
         args, total = build_job(clips, videos, out, opt, intro, spons, work)
-        return run_job(args, total, on_progress, should_stop)
+        ok, err = run_job(args, total, on_progress, should_stop)
+        if not ok and "Unrecognized option" in err and "filter_complex" in err:
+            # La otra forma de pasar el filtro (cambia según la versión de ffmpeg)
+            alt = {"-/filter_complex": "-filter_complex_script", "-filter_complex_script": "-/filter_complex"}
+            args = [alt.get(a, a) for a in args]
+            ok, err = run_job(args, total, on_progress, should_stop)
+        return ok, err
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

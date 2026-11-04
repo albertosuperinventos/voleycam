@@ -132,7 +132,10 @@
 ## Estudio 1.1.3
 - Descargar de YouTube (pestaña Vídeos del partido): pegar enlace (se rellena con el vídeo de la emisión si está en el estado), 1080p por defecto o 720p, MP4 H.264, progreso y cancelar; se guarda en <Guardar en>/Directos y no se borra. Al terminar se añade a la lista y, si el partido tiene hora de inicio del directo, se cuadra solo con las jugadas (si no, poner la hora a mano). Cualquier enlace. yt-dlp + Deno van en el instalador; botón "Actualizar descargador" (yt-dlp -U en %LOCALAPPDATA%\VoleyCamEstudio\bin).
 
-## Estudio 1.2.3 — hecho en local, sin compilar
+## Estudio 1.2.4 — hecho en local, sin compilar
+- Crear resúmenes fallaba ("Unrecognized option 'filter_complex_script'"): el ffmpeg incluido era una compilación "master" (versión N-…) y se detectaba como antigua. Ahora versión desconocida = moderna, reintento con la otra opción si falla, y el instalador lleva ffmpeg 8.0 estable.
+
+## Estudio 1.2.3 — compilado
 - Si yt-dlp falla al juntar ("Postprocessing: Conversion failed") y están las dos pistas, se juntan con ffmpeg (copia; si falla, audio a AAC). Registro detallado (--verbose y errores de ffmpeg) en ultima_descarga.log.
 - "Actualizar descargador" ya no se queda colgado (sin tuberías; límite 3 min).
 - Enlaces /live/ID?feature=shared se limpian a watch?v=ID.
