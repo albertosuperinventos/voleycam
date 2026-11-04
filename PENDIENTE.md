@@ -132,8 +132,11 @@
 ## Estudio 1.1.3
 - Descargar de YouTube (pestaña Vídeos del partido): pegar enlace (se rellena con el vídeo de la emisión si está en el estado), 1080p por defecto o 720p, MP4 H.264, progreso y cancelar; se guarda en <Guardar en>/Directos y no se borra. Al terminar se añade a la lista y, si el partido tiene hora de inicio del directo, se cuadra solo con las jugadas (si no, poner la hora a mano). Cualquier enlace. yt-dlp + Deno van en el instalador; botón "Actualizar descargador" (yt-dlp -U en %LOCALAPPDATA%\VoleyCamEstudio\bin).
 
-## Estudio 1.2 — aprobado (boceto_estudio.png), sin hacer
-- Tres pestañas: 1 Preparar (canal, partido, vídeos) · 2 Ver y marcar (vídeo grande, línea de tiempo con marcas de colores clicables, ⏮ −10 −5 ▶ +5 +10 ⏭, velocidad, botones ⭐💜🧱🛡, jugada seleccionada con tipos/segundos/quitar, lista con filtros, teclado: Espacio, ←→, 1-4, Supr, N/P, guardar en el canal) · 3 Crear resúmenes.
+## Estudio 1.2.0 — hecho
+- Tres pestañas: 1 Preparar (canal, partido, vídeos, descargar de YouTube) · 2 Ver y marcar · 3 Crear resúmenes.
+- Ver y marcar: vídeo grande; barra de tiempo DESLIZANTE (arrastrar para moverse) con las jugadas en colores (tocar = ir a la jugada) y los tramos del resumen sombreados; ⏮ −10 −5 ▶ +5 +10 ⏭, velocidad 0.5-2x, añadir ⭐💜🧱🛡; panel de jugada seleccionada (tipos, antes/después, entra en resúmenes, quitar); lista con filtros y contadores; teclado (Espacio, ← → 5 s, Mayús 10 s, 1-4, Supr, N/P).
+- Quitar jugadas arreglado: quitar seleccionadas (Ctrl/Mayús), Supr, botón "Quitar las que no caen en los vídeos" (otro partido); aviso si no hay nada seleccionado (también en Quitar vídeo).
+- Al abrir conecta solo y abre el último partido con jugadas; recuerda los vídeos de cada partido; si hay cambios sin guardar al cerrar, pregunta.
 
 ## Plan para poder vender en el futuro (planteado 26/10)
 Fase 0 · Proteger (ya): repo privado + mando en Firebase Hosting + repo público solo con descargas; firma fuera del repo (secreto); R8 en la app, PyArmor en Estudio, mando minificado; aviso de derechos.
