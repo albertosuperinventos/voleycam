@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -671,10 +671,39 @@ class Main(QMainWindow):
         if not files:
             return
         self.cfg["video_dir"] = os.path.dirname(files[0]); save_cfg(self.cfg)
-        t = Task(lambda s, fs: [core.load_video(f) for f in fs], files)
-        t.s.done.connect(self.on_videos)
-        t.s.fail.connect(lambda e: QMessageBox.warning(self, APP, e))
+        self.lblYt.setText("Leyendo vídeos…")
+
+        def work(s, fs):
+            out = []
+            for f in fs:
+                meta = {}
+                if core.FILE_ID.search(os.path.basename(f)):   # descargado de YouTube: hora y título de YouTube
+                    s.log.emit("Preguntando a YouTube por el vídeo…")
+                    try:
+                        meta = core.prepare_youtube_file(f, lambda m: s.log.emit(m.splitlines()[0][:100]))
+                    except Exception as e:  # noqa
+                        s.log.emit(str(e)[:100])
+                        meta = {}
+                v = core.load_video(meta.get("path") or f)
+                if meta:
+                    v.yt = meta
+                    v.start_ms, v.source = (meta["start_ms"], "youtube") if meta.get("start_ms") else (0, "?")
+                out.append(v)
+            return out
+        t = Task(work, files)
+        t.s.log.connect(lambda m: self.lblYt.setText(m))
+        t.s.done.connect(self.on_added)
+        t.s.fail.connect(lambda e: (self.lblYt.setText(""), QMessageBox.warning(self, APP, e)))
         self.pool.start(t)
+
+    def on_added(self, vids):
+        self.lblYt.setText("")
+        yt = [v for v in vids if getattr(v, "yt", None)]
+        rest = [v for v in vids if v not in yt]
+        if rest:
+            self.on_videos(rest)
+        for v in yt:
+            self.assign_youtube_video(v)
 
     def on_videos(self, vids, remember=True):
         known = {v.path for v in self.videos}
@@ -747,9 +776,10 @@ class Main(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(d))
 
     def yt_download(self):
-        url = self.edYt.text().strip()
+        url = core.clean_youtube_url(self.edYt.text())
         if not url:
             return QMessageBox.information(self, APP, "Pega el enlace del vídeo de YouTube.")
+        self.edYt.setText(url)
         h = 1080 if self.cmbYtRes.currentIndex() == 0 else 720
         self.cfg["yt_res"] = self.cmbYtRes.currentIndex(); save_cfg(self.cfg)
         self.yt_stop = False
@@ -792,6 +822,10 @@ class Main(QMainWindow):
     def on_yt_done(self, v):
         self.btnYt.setEnabled(True); self.btnYtStop.setEnabled(False)
         self.lblYt.setText(f"✔ {os.path.basename(v.path)}")
+        self.assign_youtube_video(v)
+
+    def assign_youtube_video(self, v):
+        """Pone un vídeo de YouTube en su partido (o en uno nuevo si no tiene jugadas en el canal)."""
         m = self.match_for_video(v)
         yt = getattr(v, "yt", {}) or {}
         if m is None:
@@ -800,7 +834,7 @@ class Main(QMainWindow):
             self.cmbMatch.setCurrentIndex(self.matches.index(m))   # cambia al partido de ese vídeo
         self.on_videos([v])
         if not v.start_ms:
-            QMessageBox.information(self, APP, "Vídeo descargado y añadido, pero YouTube no dice a qué hora empezó.\n\n"
+            QMessageBox.information(self, APP, "Vídeo añadido, pero YouTube no dice a qué hora empezó (o no hay conexión).\n\n"
                                                "Pon la hora en la columna «Empieza» para que cuadren las jugadas.")
         elif self.match is not None and self.match.pending is not None:
             QMessageBox.information(self, APP, "Este vídeo no tiene jugadas en el canal, así que se ha creado un partido nuevo para él.\n\n"

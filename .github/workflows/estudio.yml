@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: estudio
     env:
-      APP_VERSION: "1.2.2"
+      APP_VERSION: "1.2.3"
     steps:
       - uses: actions/checkout@v4
 

@@ -704,89 +704,190 @@ def deno_path() -> str:
     return _bundled(exe) or shutil.which("deno") or ""
 
 
+def _run_to_file(args, timeout: int) -> tuple:
+    """Ejecuta sin tuberías (en Windows, yt-dlp -U deja un proceso hijo que las mantiene abiertas). (código, texto)."""
+    flags = 0x08000000 if os.name == "nt" else 0
+    with tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as f:
+        p = subprocess.Popen(args, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, creationflags=flags)
+        try:
+            rc = p.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            rc = -1
+        f.seek(0)
+        return rc, f.read()
+
+
 def ytdlp_update() -> str:
     """Actualiza yt-dlp (YouTube cambia a menudo). Devuelve el texto de resultado."""
     y = ytdlp_path()
     if not y:
         raise RuntimeError("No se encuentra yt-dlp")
-    r = _run([y, "-U"], timeout=180)
-    out = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
-    return out[-1] if out else ("Actualizado" if r.returncode == 0 else "No se pudo actualizar")
+    rc, out = _run_to_file([y, "-U"], 180)
+    if rc == -1:
+        raise RuntimeError("El descargador tardó demasiado en actualizarse. Prueba otra vez más tarde.")
+    lines = [x for x in out.strip().splitlines() if x.strip()]
+    return lines[-1] if lines else ("Actualizado" if rc == 0 else "No se pudo actualizar")
 
 
 YT_PROGRESS = re.compile(r"\[download\]\s+([\d.]+)%")
+YT_ID = re.compile(r"(?:v=|youtu\.be/|/live/|/shorts/|/embed/)([A-Za-z0-9_-]{11})")
+FILE_ID = re.compile(r"\[([A-Za-z0-9_-]{11})\](?:\.f\d+)?\.\w+$")
 
 
-def _merge_parts(final: str, log) -> str:
-    """Si yt-dlp dejó la pista de vídeo y la de audio sueltas (…f137.mp4 + …f140.m4a), las junta en un MP4."""
-    m = re.search(r"^(.*)\.f\d+\.(mp4|webm|mkv)$", final)
-    if not m:
-        return final
-    base = m.group(1)
-    d = os.path.dirname(final)
-    pref = os.path.basename(base) + ".f"
-    audio = ""
-    for fn in sorted(os.listdir(d)):
-        p = os.path.join(d, fn)
-        if fn.startswith(pref) and p != final and fn.lower().endswith((".m4a", ".webm", ".mp4", ".opus")):
-            audio = p
-            break
-    out = base + ".mp4"
-    if not audio:
-        if not os.path.exists(out):
-            os.replace(final, out)
-        return out if os.path.exists(out) else final
-    log(f"Juntando vídeo y audio: {os.path.basename(final)} + {os.path.basename(audio)}")
-    r = _run([tool("ffmpeg"), "-hide_banner", "-y", "-i", final, "-i", audio, "-map", "0:v:0", "-map", "1:a:0",
-              "-c", "copy", "-movflags", "+faststart", out])
-    if r.returncode != 0 or not os.path.isfile(out):
-        log((r.stderr or "")[-800:])
-        raise RuntimeError("Se descargó el vídeo pero no se pudo juntar con el audio.")
-    for f in (final, audio):
-        try:
-            os.remove(f)
-        except OSError:
-            pass
-    return out
+def youtube_id(url: str) -> str:
+    m = YT_ID.search(url or "")
+    if m:
+        return m.group(1)
+    u = (url or "").strip()
+    return u if re.fullmatch(r"[A-Za-z0-9_-]{11}", u) else ""
 
 
-def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=None, should_stop=None, on_log=None) -> dict:
-    """Descarga un vídeo de YouTube como MP4 (preferencia H.264 + AAC hasta `height`).
-    Devuelve {"path": ruta del MP4, "start_ms": hora real de inicio del directo según YouTube (0 si no se sabe)}."""
+def clean_youtube_url(url: str) -> str:
+    """https://www.youtube.com/live/ID?feature=shared -> https://www.youtube.com/watch?v=ID"""
+    vid = youtube_id(url)
+    return f"https://www.youtube.com/watch?v={vid}" if vid else (url or "").strip()
+
+
+def _ytdlp_base() -> list:
     y = ytdlp_path()
     if not y:
         raise RuntimeError("No se encuentra yt-dlp")
-    url = url.strip()
-    if not url:
-        raise ValueError("Pega el enlace del vídeo")
-    os.makedirs(out_dir, exist_ok=True)
+    args = [y]
     ff = tool("ffmpeg")
-    args = [y, "--newline", "--progress", "--no-playlist", "--no-mtime", "--windows-filenames", "--trim-filenames", "120",
-            "-f", "bv*+ba/b", "-S", f"res:{int(height)},vcodec:h264,acodec:aac",
-            "--merge-output-format", "mp4", "-o", os.path.join(out_dir, "%(title)s [%(id)s].%(ext)s"),
-            "--print", "after_move:VCFILE %(filepath)s",
-            "--print", "after_move:VCTS %(release_timestamp)s %(timestamp)s %(was_live)s",
-            "--print", "after_move:VCID %(id)s",
-            "--print", "after_move:VCTITLE %(title)s"]
     if os.path.isfile(ff):
         args += ["--ffmpeg-location", os.path.dirname(ff)]
     dn = deno_path()
     if dn:
         args += ["--js-runtimes", f"deno:{dn}"]
+    return args
+
+
+def _parse_meta(line: str, meta: dict) -> bool:
+    if line.startswith("VCFILE "):
+        meta["file"] = line[7:].strip()
+    elif line.startswith("VCID "):
+        meta["id"] = line[5:].strip()
+    elif line.startswith("VCTITLE "):
+        meta["title"] = line[8:].strip()
+    elif line.startswith("VCTS "):
+        x = (line[5:].split() or [""])[0]   # release_timestamp = cuándo empezó el directo
+        if x.isdigit():
+            meta["start_ms"] = int(x) * 1000
+    else:
+        return False
+    return True
+
+
+META_PRINTS = ["--print", "VCTS %(release_timestamp)s %(timestamp)s %(was_live)s", "--print", "VCID %(id)s",
+               "--print", "VCTITLE %(title)s"]
+
+
+def youtube_info(vid: str) -> dict:
+    """Hora de inicio y título de un vídeo de YouTube, sin descargarlo."""
+    args = _ytdlp_base() + ["--skip-download", "--no-playlist"] + META_PRINTS + [f"https://www.youtube.com/watch?v={vid}"]
+    rc, out = _run_to_file(args, 120)
+    meta = {"id": vid, "title": "", "start_ms": 0}
+    for line in out.splitlines():
+        _parse_meta(line.strip(), meta)
+    return meta
+
+
+def _streams(path: str) -> set:
+    try:
+        return {s.get("codec_type") for s in probe(path).get("streams") or []}
+    except Exception:
+        return set()
+
+
+def parts_for(folder: str, vid: str) -> tuple:
+    """(pista de vídeo, pista de audio) sueltas de un vídeo de YouTube en una carpeta: «… [ID].f137.mp4», «… [ID].f140.m4a»."""
+    video = audio = ""
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return "", ""
+    for fn in names:
+        if f"[{vid}].f" not in fn or fn.endswith((".part", ".ytdl")):
+            continue
+        p = os.path.join(folder, fn)
+        st = _streams(p)
+        if "video" in st and not video:
+            video = p
+        elif st == {"audio"} and not audio:
+            audio = p
+    return video, audio
+
+
+def merge_parts(video: str, audio: str, log=print) -> str:
+    """Junta la pista de vídeo y la de audio en un MP4 («… [ID].mp4»). Devuelve la ruta."""
+    base = re.sub(r"\.f\d+\.\w+$", "", video)
+    out = base + ".mp4"
+    if out == video:
+        out = base + " (con audio).mp4"
+    if not audio:
+        return video
+    log(f"Juntando vídeo y audio: {os.path.basename(video)} + {os.path.basename(audio)}")
+    ff = tool("ffmpeg")
+    for extra in ([], ["-c:a", "aac", "-b:a", "160k"]):   # primero sin recodificar; si falla, el audio a AAC
+        args = [ff, "-hide_banner", "-y", "-i", video, "-i", audio, "-map", "0:v:0", "-map", "1:a:0", "-c", "copy"] + extra + \
+               ["-movflags", "+faststart", out]
+        r = _run(args)
+        if r.returncode == 0 and os.path.isfile(out):
+            for f in (video, audio):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+            return out
+        log("ffmpeg: " + "\n".join((r.stderr or "").strip().splitlines()[-12:]))
+    raise RuntimeError("Se descargaron el vídeo y el audio pero no se pudieron juntar (detalles en el registro).")
+
+
+def log_path() -> str:
+    return os.path.normpath(os.path.join(_user_bin(), "..", "ultima_descarga.log"))
+
+
+def prepare_youtube_file(path: str, log=print) -> dict:
+    """Archivo ya descargado de YouTube (lleva [ID] en el nombre): junta el audio si está suelto y pide a YouTube la hora y el título."""
+    m = FILE_ID.search(os.path.basename(path))
+    if not m:
+        return {}
+    vid = m.group(1)
+    if re.search(r"\.f\d+\.\w+$", path):
+        v, a = parts_for(os.path.dirname(path), vid)
+        if v and a:
+            path = merge_parts(v, a, log)
+    meta = youtube_info(vid)
+    meta["path"] = path
+    return meta
+
+
+def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=None, should_stop=None, on_log=None) -> dict:
+    """Descarga un vídeo de YouTube como MP4 (preferencia H.264 + AAC hasta `height`).
+    Devuelve {"path", "start_ms" (hora real de inicio del directo según YouTube, 0 si no se sabe), "id", "title"}."""
+    url = clean_youtube_url(url)
+    if not url:
+        raise ValueError("Pega el enlace del vídeo")
+    os.makedirs(out_dir, exist_ok=True)
+    args = _ytdlp_base() + ["--verbose", "--newline", "--progress", "--no-playlist", "--no-mtime", "--windows-filenames",
+                            "--trim-filenames", "120", "-f", "bv*+ba/b", "-S", f"res:{int(height)},vcodec:h264,acodec:aac",
+                            "--merge-output-format", "mp4", "-o", os.path.join(out_dir, "%(title)s [%(id)s].%(ext)s")]
+    args += [x if not x.startswith("VC") else "after_move:" + x for x in META_PRINTS] + ["--print", "after_move:VCFILE %(filepath)s"]
     args.append(url)
-    logf = os.path.join(_user_bin(), "..", "ultima_descarga.log")
-    lf = open(logf, "w", encoding="utf-8", errors="replace")
+    lf = open(log_path(), "w", encoding="utf-8", errors="replace")
     lf.write(" ".join(f'"{a}"' if " " in a else a for a in args) + "\n")
 
     def log(msg):
         lf.write(msg + "\n")
+        lf.flush()
         if on_log:
-            on_log(msg)
+            on_log(msg.splitlines()[0][:120] if msg else msg)
     flags = 0x08000000 if os.name == "nt" else 0
-    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True,
                          encoding="utf-8", errors="replace", creationflags=flags)
-    final, start_ms, tail, part, last = "", 0, [], 0, -1
-    vid, title = "", ""
+    meta = {"file": "", "start_ms": 0, "id": youtube_id(url), "title": ""}
+    tail, part, last = [], 0, -1
     try:
         for line in p.stdout:
             line = line.rstrip()
@@ -794,7 +895,7 @@ def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=Non
                 p.kill()
                 break
             m = YT_PROGRESS.search(line)
-            if m:
+            if m and not line.startswith("[debug]"):
                 pc = float(m.group(1))
                 if pc < last - 50:   # empieza la segunda pista (audio)
                     part += 1
@@ -803,33 +904,34 @@ def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=Non
                     on_progress(int(pc * 0.9) if part == 0 else min(99, 90 + int(pc / 10)))
                 continue
             lf.write(line + "\n")
-            if line.startswith("VCFILE "):
-                final = line[7:].strip()
+            if _parse_meta(line, meta):
                 continue
-            if line.startswith("VCID "):
-                vid = line[5:].strip()
-                continue
-            if line.startswith("VCTITLE "):
-                title = line[8:].strip()
-                continue
-            if line.startswith("VCTS "):
-                parts = line[5:].split()
-                for x in parts[:1]:   # release_timestamp = cuándo empezó el directo
-                    if x.isdigit():
-                        start_ms = int(x) * 1000
-                continue
-            if line:
+            if line and not line.startswith("[debug]"):
                 tail.append(line)
                 del tail[:-15]
-                if on_log and ("ERROR" in line or "Merging" in line or "WARNING" in line):
-                    on_log(line)
+                if on_log and ("ERROR" in line or "Merging" in line):
+                    on_log(line[:120])
         p.wait()
         if should_stop and should_stop():
             raise RuntimeError("Descarga cancelada")
+        final = meta["file"]
         if p.returncode != 0 or not final or not os.path.isfile(final):
-            raise RuntimeError("No se pudo descargar:\n" + "\n".join(tail[-8:]))
-        final = _merge_parts(final, log)
-        # Quita pistas sueltas que hayan quedado junto al MP4
+            # ¿Falló solo al juntar? Si están las dos pistas, se juntan aquí
+            v, a = parts_for(out_dir, meta["id"]) if meta["id"] else ("", "")
+            if not (v and a):
+                raise RuntimeError("No se pudo descargar:\n" + "\n".join(tail[-8:]))
+            log("yt-dlp no pudo juntar las pistas; se juntan con ffmpeg.")
+            if on_progress:
+                on_progress(99)
+            final = merge_parts(v, a, log)
+            if not meta["start_ms"] or not meta["title"]:
+                info = youtube_info(meta["id"])
+                meta["start_ms"] = meta["start_ms"] or info.get("start_ms", 0)
+                meta["title"] = meta["title"] or info.get("title", "")
+        elif re.search(r"\.f\d+\.\w+$", final):
+            v, a = parts_for(os.path.dirname(final), meta["id"])
+            if v and a:
+                final = merge_parts(v, a, log)
         stem = os.path.splitext(final)[0]
         for ext in (".webm", ".m4a", ".part", ".ytdl"):
             f = stem + ext
@@ -842,4 +944,4 @@ def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=Non
         lf.close()
     if on_progress:
         on_progress(100)
-    return {"path": final, "start_ms": start_ms, "id": vid, "title": title}
+    return {"path": final, "start_ms": meta["start_ms"], "id": meta["id"], "title": meta["title"]}

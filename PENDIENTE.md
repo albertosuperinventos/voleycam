@@ -132,7 +132,13 @@
 ## Estudio 1.1.3
 - Descargar de YouTube (pestaña Vídeos del partido): pegar enlace (se rellena con el vídeo de la emisión si está en el estado), 1080p por defecto o 720p, MP4 H.264, progreso y cancelar; se guarda en <Guardar en>/Directos y no se borra. Al terminar se añade a la lista y, si el partido tiene hora de inicio del directo, se cuadra solo con las jugadas (si no, poner la hora a mano). Cualquier enlace. yt-dlp + Deno van en el instalador; botón "Actualizar descargador" (yt-dlp -U en %LOCALAPPDATA%\VoleyCamEstudio\bin).
 
-## Estudio 1.2.2 — hecho en local, sin compilar
+## Estudio 1.2.3 — hecho en local, sin compilar
+- Si yt-dlp falla al juntar ("Postprocessing: Conversion failed") y están las dos pistas, se juntan con ffmpeg (copia; si falla, audio a AAC). Registro detallado (--verbose y errores de ffmpeg) en ultima_descarga.log.
+- "Actualizar descargador" ya no se queda colgado (sin tuberías; límite 3 min).
+- Enlaces /live/ID?feature=shared se limpian a watch?v=ID.
+- Añadir a mano un archivo descargado de YouTube ([ID] en el nombre): junta el audio suelto, pide a YouTube hora y título sin descargar, y lo pone en su partido o crea uno nuevo.
+
+## Estudio 1.2.2 — compilado
 - Vídeo descargado que no pertenece a ningún partido del canal (sin jugadas dentro): se crea un partido nuevo con local/visitante sacados del título de YouTube (editable en una ventanita), sin jugadas; se marcan en Ver y marcar y al Guardar se crea en el historial del canal (matches/<id>, con ytVideoId) y se guardan sus jugadas.
 
 ## Estudio 1.2.1 — compilado
