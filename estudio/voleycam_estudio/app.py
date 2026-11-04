@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -762,6 +762,7 @@ class Main(QMainWindow):
                                       lambda line: s.log.emit(line))
             s.progress.emit(100, "Leyendo vídeo…")
             v = core.load_video(r["path"])
+            v.yt = r   # id y título del vídeo de YouTube
             if r["start_ms"]:   # hora real en que empezó ese directo, según YouTube
                 v.start_ms, v.source = r["start_ms"], "youtube"
             else:               # la fecha interna de una descarga no es la del partido
@@ -792,16 +793,53 @@ class Main(QMainWindow):
         self.btnYt.setEnabled(True); self.btnYtStop.setEnabled(False)
         self.lblYt.setText(f"✔ {os.path.basename(v.path)}")
         m = self.match_for_video(v)
+        yt = getattr(v, "yt", {}) or {}
+        if m is None:
+            m = self.new_match_for(v, yt)   # partido que no se marcó con VoleyCam: partido nuevo
         if m is not None and m is not self.match:
             self.cmbMatch.setCurrentIndex(self.matches.index(m))   # cambia al partido de ese vídeo
         self.on_videos([v])
         if not v.start_ms:
             QMessageBox.information(self, APP, "Vídeo descargado y añadido, pero YouTube no dice a qué hora empezó.\n\n"
-                                               "Elige el partido y pon la hora en la columna «Empieza» para que cuadren las jugadas.")
-        elif m is None:
-            QMessageBox.information(self, APP, f"Vídeo descargado y añadido (empezó a las {fmt_time(v.start_ms)}).\n\n"
-                                               "No hay jugadas del canal dentro de este vídeo: puede que sea de un partido que no se marcó con VoleyCam. "
-                                               "Puedes marcarlas ahora en «Ver y marcar».")
+                                               "Pon la hora en la columna «Empieza» para que cuadren las jugadas.")
+        elif self.match is not None and self.match.pending is not None:
+            QMessageBox.information(self, APP, "Este vídeo no tiene jugadas en el canal, así que se ha creado un partido nuevo para él.\n\n"
+                                               "Márcalas en «Ver y marcar» (⭐💜🧱🛡 o teclas 1-4) y pulsa «Guardar»: "
+                                               "el partido quedará en el historial del canal.")
+            self.go_tab(1)
+
+    def new_match_for(self, v, yt):
+        """Crea (sin guardar todavía) un partido para un vídeo que no pertenece a ninguno del canal."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox
+        home, away = core.teams_from_title(yt.get("title", ""))
+        dlg = QDialog(self); dlg.setWindowTitle("Partido nuevo")
+        f = QFormLayout(dlg)
+        f.addRow(QLabel("Este vídeo no tiene jugadas en el canal. Se crea un partido nuevo:"))
+        if yt.get("title"):
+            t = QLabel(yt["title"], objectName="muted"); t.setWordWrap(True); f.addRow(t)
+        edH, edA = QLineEdit(home), QLineEdit(away)
+        f.addRow("Local:", edH); f.addRow("Visitante:", edA)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Crear partido"); bb.button(QDialogButtonBox.Cancel).setText("No, dejarlo en el partido elegido")
+        bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject); f.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return None
+        hn, an = edH.text().strip() or "LOCAL", edA.text().strip() or "VISITANTE"
+        hs, as_ = core.short_name(hn), core.short_name(an)
+        ts = v.start_ms or int(datetime.now().timestamp() * 1000)
+        rec = {"ts": ts, "sport": "volley", "home": {"id": "", "name": hn, "short": hs, "color": "#1e6bff"},
+               "away": {"id": "", "name": an, "short": as_, "color": "#ff3b3b"},
+               "score": {"h": 0, "a": 0}, "sets": {"h": 0, "a": 0}, "history": [], "finished": True,
+               "liveStart": v.start_ms or 0, "ytVideoId": yt.get("id", ""), "source": "estudio"}
+        date = datetime.fromtimestamp(ts / 1000).strftime("%d/%m/%Y")
+        m = core.Match(f"{hs} - {as_} · {date} (nuevo)", ts, "volley", core.Team(hn, hs, "#1e6bff"), core.Team(an, as_, "#ff3b3b"),
+                       (0, 0), (0, 0), [], True, v.start_ms or 0, [], {}, f"matches/_nuevo{ts}/marks", yt=yt.get("id", ""), pending=rec)
+        pos = 1 if self.matches and self.matches[0].title == "Partido actual" else 0
+        self.matches.insert(pos, m)
+        self.cmbMatch.blockSignals(True)
+        self.cmbMatch.insertItem(pos, m.title)
+        self.cmbMatch.blockSignals(False)
+        return m
 
     def on_yt_fail(self, e):
         self.btnYt.setEnabled(True); self.btnYtStop.setEnabled(False)
@@ -839,7 +877,7 @@ class Main(QMainWindow):
     def dirty_count(self) -> int:
         if not self.match:
             return 0
-        return sum(1 for x in self.match.marks if x.dirty) + len(self.match.removed)
+        return sum(1 for x in self.match.marks if x.dirty) + len(self.match.removed) + (1 if self.match.pending is not None else 0)
 
     def mark_name(self, k):
         return core.player_name(self.channel) if k == "carmen" else core.TYPES[k][1]
@@ -1089,6 +1127,19 @@ class Main(QMainWindow):
         if not self.match:
             return False
         try:
+            m = self.match
+            if m.pending is not None:   # partido nuevo: se crea en el historial y luego van sus jugadas
+                old_id = self.match_id()
+                mid = core.create_match(self.key.text(), m.pending)
+                if not mid:
+                    raise RuntimeError("El canal no devolvió la clave del partido nuevo")
+                m.path, m.pending = f"matches/{mid}/marks", None
+                m.title = m.title.replace(" (nuevo)", "")
+                i = self.matches.index(m)
+                self.cmbMatch.setItemText(i, f"{m.title}  ({len(m.marks)} jugadas)")
+                store = self.cfg.get("match_videos") or {}
+                store.pop(old_id, None)
+                self.remember_videos()
             n = core.save_marks(self.key.text(), self.match.path, self.match.marks, self.match.removed)
             self.match.removed.clear()
             self.update_dirty()

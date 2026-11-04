@@ -89,6 +89,39 @@ def save_marks(key: str, path: str, marks: list, removed: list = (), timeout: in
     return len(upd)
 
 
+def create_match(key: str, rec: dict, timeout: int = 30) -> str:
+    """Crea un partido en el historial del canal. Devuelve su clave."""
+    import requests
+    r = requests.post(f"{DB_URL}/c/{key.strip()}/matches.json", data=json.dumps(rec), timeout=timeout)
+    r.raise_for_status()
+    return (r.json() or {}).get("name", "")
+
+
+CATEGORY_WORDS = {"junior", "júnior", "juvenil", "cadete", "infantil", "alevin", "alevín", "benjamin", "benjamín", "senior", "sénior",
+                  "fem", "fem.", "femenino", "masc", "masc.", "masculino", "liga", "oro", "plata", "division", "división", "grupo"}
+
+
+def teams_from_title(title: str) -> tuple:
+    """('INMUV FUENTES', 'MAIRENA V.C.') a partir de '26/27 JUNIOR Fem. INMUV FUENTES vs MAIRENA V.C.'."""
+    t = re.sub(r"\s+", " ", title or "").strip()
+    m = re.split(r"\s+(?:vs\.?|v\.?s\.?|contra|-|–)\s+", t, maxsplit=1, flags=re.I)
+    if len(m) < 2:
+        return ("LOCAL", "VISITANTE")
+    home, away = m[0], m[1]
+    words = [w for w in home.split(" ") if not re.fullmatch(r"\d{2,4}[/-]\d{2,4}|\d+[ªºa]?", w) and w.lower() not in CATEGORY_WORDS]
+    home = " ".join(words) or m[0]
+    away = re.split(r"\s+[|·(\[]", away)[0].strip()
+    return (home.strip(" .-|") or "LOCAL", away.strip(" -|") or "VISITANTE")
+
+
+def short_name(name: str) -> str:
+    """Nombre corto para el marcador: la palabra más significativa (sin C.V., V.C., CD…)."""
+    ws = [w for w in re.split(r"\s+", name.upper()) if w and not re.fullmatch(r"(C\.?V\.?|V\.?C\.?|C\.?D\.?|CD|CV|VC|CLUB|VOLEY|VOLEIBOL|DE|EL|LA)", w)]
+    if not ws:
+        return name.upper()[:12]
+    return max(ws, key=len)[:12] if len(ws) > 2 else ws[-1][:12] if len(ws) == 2 else ws[0][:12]
+
+
 def _vals(x):
     if isinstance(x, list):
         return [v for v in x if v is not None]
@@ -186,6 +219,7 @@ class Match:
     path: str = "marks"   # dónde están sus jugadas dentro del canal
     removed: list = field(default_factory=list)   # claves de jugadas quitadas, pendientes de borrar en el canal
     yt: str = ""          # id del vídeo de YouTube de ese directo (si se guardó)
+    pending: dict | None = None   # partido nuevo creado en Estudio, aún no guardado en el canal
 
 
 def _team(d: dict, teams: dict, fb: str) -> Team:
@@ -731,7 +765,9 @@ def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=Non
             "-f", "bv*+ba/b", "-S", f"res:{int(height)},vcodec:h264,acodec:aac",
             "--merge-output-format", "mp4", "-o", os.path.join(out_dir, "%(title)s [%(id)s].%(ext)s"),
             "--print", "after_move:VCFILE %(filepath)s",
-            "--print", "after_move:VCTS %(release_timestamp)s %(timestamp)s %(was_live)s"]
+            "--print", "after_move:VCTS %(release_timestamp)s %(timestamp)s %(was_live)s",
+            "--print", "after_move:VCID %(id)s",
+            "--print", "after_move:VCTITLE %(title)s"]
     if os.path.isfile(ff):
         args += ["--ffmpeg-location", os.path.dirname(ff)]
     dn = deno_path()
@@ -750,6 +786,7 @@ def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=Non
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                          encoding="utf-8", errors="replace", creationflags=flags)
     final, start_ms, tail, part, last = "", 0, [], 0, -1
+    vid, title = "", ""
     try:
         for line in p.stdout:
             line = line.rstrip()
@@ -768,6 +805,12 @@ def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=Non
             lf.write(line + "\n")
             if line.startswith("VCFILE "):
                 final = line[7:].strip()
+                continue
+            if line.startswith("VCID "):
+                vid = line[5:].strip()
+                continue
+            if line.startswith("VCTITLE "):
+                title = line[8:].strip()
                 continue
             if line.startswith("VCTS "):
                 parts = line[5:].split()
@@ -799,4 +842,4 @@ def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=Non
         lf.close()
     if on_progress:
         on_progress(100)
-    return {"path": final, "start_ms": start_ms}
+    return {"path": final, "start_ms": start_ms, "id": vid, "title": title}
