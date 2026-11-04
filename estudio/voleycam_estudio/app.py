@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -600,9 +600,6 @@ class Main(QMainWindow):
         self.chk["carmen"].setText(f"Resumen de {name}")
         self.addBtns["carmen"].setText(f"{core.TYPES['carmen'][0]} {name}")
         self.lblConn.setText(f"✔ Conectado · {len(self.matches)} partidos")
-        vid = ((ch.get("status") or {}).get("ytVideoId") or "").strip()
-        if vid and not self.edYt.text().strip():
-            self.edYt.setText(f"https://www.youtube.com/watch?v={vid}")
         self.cmbMatch.blockSignals(True)
         self.cmbMatch.clear()
         for m in self.matches:
@@ -626,6 +623,11 @@ class Main(QMainWindow):
         res = f"{m.sets[0]}-{m.sets[1]}" if m.sport == "volley" else f"{m.score[0]}-{m.score[1]}"
         det = "  ".join(f"{h}-{a}" for h, a in m.history)
         self.lblMatch.setText(f"{m.home.short} {res} {m.away.short}   {det}")
+        # Enlace de YouTube de ese partido (si se guardó); no pisa uno pegado a mano
+        cur = self.edYt.text().strip()
+        if not cur or cur == getattr(self, "_yt_auto", ""):
+            self._yt_auto = f"https://www.youtube.com/watch?v={m.yt}" if m.yt else ""
+            self.edYt.setText(self._yt_auto)
         self.sel = None
         self.videos = []
         if self.player:
@@ -698,7 +700,7 @@ class Main(QMainWindow):
             self.tblVid.setCellWidget(r, 1, te)
             self.tblVid.setItem(r, 2, ro(fmt_dur(v.duration)))
             src = {"nombre": "por el nombre del archivo", "fecha interna": "por la fecha guardada en el vídeo",
-                   "directo": "inicio del directo", "manual": "puesta a mano", "?": "⚠ desconocida: ponla a mano"}.get(v.source, v.source)
+                   "directo": "inicio del directo", "youtube": "inicio del directo (YouTube)", "manual": "puesta a mano", "?": "⚠ desconocida: ponla a mano"}.get(v.source, v.source)
             self.tblVid.setItem(r, 3, ro(src))
         self.cmbVid.clear()
         n = len(self.videos)
@@ -753,15 +755,16 @@ class Main(QMainWindow):
         self.yt_stop = False
         self.btnYt.setEnabled(False); self.btnYtStop.setEnabled(True)
         self.progYt.setValue(0); self.lblYt.setText("Descargando…")
-        live_start = self.match.live_start if self.match else 0
         out_dir = self.yt_dir()
 
         def work(s, url, h):
-            path = core.youtube_download(url, out_dir, h, lambda p: s.progress.emit(p, ""), lambda: self.yt_stop,
-                                         lambda line: s.log.emit(line))
+            r = core.youtube_download(url, out_dir, h, lambda p: s.progress.emit(p, ""), lambda: self.yt_stop,
+                                      lambda line: s.log.emit(line))
             s.progress.emit(100, "Leyendo vídeo…")
-            v = core.load_video(path, live_start)
-            if not live_start:   # la fecha interna de una descarga no es la del partido
+            v = core.load_video(r["path"])
+            if r["start_ms"]:   # hora real en que empezó ese directo, según YouTube
+                v.start_ms, v.source = r["start_ms"], "youtube"
+            else:               # la fecha interna de una descarga no es la del partido
                 v.start_ms, v.source = 0, "?"
             return v
 
@@ -772,13 +775,33 @@ class Main(QMainWindow):
         t.s.fail.connect(self.on_yt_fail)
         self.pool.start(t)
 
+    def match_for_video(self, v):
+        """Partido del canal al que pertenece un vídeo: el que tiene más jugadas dentro, o el directo que empezó a la vez."""
+        if not v.start_ms:
+            return None
+        best, score = None, 0
+        for m in self.matches:
+            n = sum(1 for mk in m.marks if v.start_ms <= mk.ts <= v.end_ms)
+            near = m.live_start and abs(m.live_start - v.start_ms) < 15 * 60 * 1000
+            sc = n * 10 + (5 if near else 0)
+            if sc > score:
+                best, score = m, sc
+        return best
+
     def on_yt_done(self, v):
         self.btnYt.setEnabled(True); self.btnYtStop.setEnabled(False)
         self.lblYt.setText(f"✔ {os.path.basename(v.path)}")
+        m = self.match_for_video(v)
+        if m is not None and m is not self.match:
+            self.cmbMatch.setCurrentIndex(self.matches.index(m))   # cambia al partido de ese vídeo
         self.on_videos([v])
-        if v.source != "directo":
-            QMessageBox.information(self, APP, "Vídeo descargado y añadido.\n\nEste partido no tiene guardada la hora de inicio del directo: "
-                                               "pon a mano la hora en la columna «Empieza» para que cuadren las jugadas.")
+        if not v.start_ms:
+            QMessageBox.information(self, APP, "Vídeo descargado y añadido, pero YouTube no dice a qué hora empezó.\n\n"
+                                               "Elige el partido y pon la hora en la columna «Empieza» para que cuadren las jugadas.")
+        elif m is None:
+            QMessageBox.information(self, APP, f"Vídeo descargado y añadido (empezó a las {fmt_time(v.start_ms)}).\n\n"
+                                               "No hay jugadas del canal dentro de este vídeo: puede que sea de un partido que no se marcó con VoleyCam. "
+                                               "Puedes marcarlas ahora en «Ver y marcar».")
 
     def on_yt_fail(self, e):
         self.btnYt.setEnabled(True); self.btnYtStop.setEnabled(False)

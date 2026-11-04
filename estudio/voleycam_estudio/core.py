@@ -185,6 +185,7 @@ class Match:
     info: dict = field(default_factory=dict)
     path: str = "marks"   # dónde están sus jugadas dentro del canal
     removed: list = field(default_factory=list)   # claves de jugadas quitadas, pendientes de borrar en el canal
+    yt: str = ""          # id del vídeo de YouTube de ese directo (si se guardó)
 
 
 def _team(d: dict, teams: dict, fb: str) -> Team:
@@ -210,7 +211,8 @@ def matches_from(ch: dict) -> list:
             ((live.get("sets") or {}).get("h", 0), (live.get("sets") or {}).get("a", 0)),
             ((live.get("score") or {}).get("h", 0), (live.get("score") or {}).get("a", 0)),
             [(x.get("h", 0), x.get("a", 0)) for x in _vals(live.get("history"))],
-            bool(live.get("finished")), int(status.get("liveStartTs") or 0), cur_marks, live.get("info") or {}, "marks"))
+            bool(live.get("finished")), int(status.get("liveStartTs") or 0), cur_marks, live.get("info") or {}, "marks",
+            yt=str(status.get("ytVideoId") or "")))
     for mid, m in sorted(_items(ch.get("matches")), key=lambda km: -(km[1].get("ts") or 0)):
         home, away = _team(m.get("home"), teams, "LOCAL"), _team(m.get("away"), teams, "VISITANTE")
         date = datetime.fromtimestamp((m.get("ts") or 0) / 1000).strftime("%d/%m/%Y")
@@ -221,7 +223,7 @@ def matches_from(ch: dict) -> list:
             ((m.get("score") or {}).get("h", 0), (m.get("score") or {}).get("a", 0)),
             [(x.get("h", 0), x.get("a", 0)) for x in _vals(m.get("history"))],
             bool(m.get("finished")), int(m.get("liveStart") or 0), [mark_from(x, k) for k, x in _items(m.get("marks"))],
-            m.get("info") or {}, f"matches/{mid}/marks"))
+            m.get("info") or {}, f"matches/{mid}/marks", yt=str(m.get("ytVideoId") or "")))
     return out
 
 
@@ -681,8 +683,42 @@ def ytdlp_update() -> str:
 YT_PROGRESS = re.compile(r"\[download\]\s+([\d.]+)%")
 
 
-def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=None, should_stop=None, on_log=None) -> str:
-    """Descarga un vídeo de YouTube como MP4 (preferencia H.264 + AAC hasta `height`). Devuelve la ruta del MP4."""
+def _merge_parts(final: str, log) -> str:
+    """Si yt-dlp dejó la pista de vídeo y la de audio sueltas (…f137.mp4 + …f140.m4a), las junta en un MP4."""
+    m = re.search(r"^(.*)\.f\d+\.(mp4|webm|mkv)$", final)
+    if not m:
+        return final
+    base = m.group(1)
+    d = os.path.dirname(final)
+    pref = os.path.basename(base) + ".f"
+    audio = ""
+    for fn in sorted(os.listdir(d)):
+        p = os.path.join(d, fn)
+        if fn.startswith(pref) and p != final and fn.lower().endswith((".m4a", ".webm", ".mp4", ".opus")):
+            audio = p
+            break
+    out = base + ".mp4"
+    if not audio:
+        if not os.path.exists(out):
+            os.replace(final, out)
+        return out if os.path.exists(out) else final
+    log(f"Juntando vídeo y audio: {os.path.basename(final)} + {os.path.basename(audio)}")
+    r = _run([tool("ffmpeg"), "-hide_banner", "-y", "-i", final, "-i", audio, "-map", "0:v:0", "-map", "1:a:0",
+              "-c", "copy", "-movflags", "+faststart", out])
+    if r.returncode != 0 or not os.path.isfile(out):
+        log((r.stderr or "")[-800:])
+        raise RuntimeError("Se descargó el vídeo pero no se pudo juntar con el audio.")
+    for f in (final, audio):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+    return out
+
+
+def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=None, should_stop=None, on_log=None) -> dict:
+    """Descarga un vídeo de YouTube como MP4 (preferencia H.264 + AAC hasta `height`).
+    Devuelve {"path": ruta del MP4, "start_ms": hora real de inicio del directo según YouTube (0 si no se sabe)}."""
     y = ytdlp_path()
     if not y:
         raise RuntimeError("No se encuentra yt-dlp")
@@ -694,53 +730,73 @@ def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=Non
     args = [y, "--newline", "--progress", "--no-playlist", "--no-mtime", "--windows-filenames", "--trim-filenames", "120",
             "-f", "bv*+ba/b", "-S", f"res:{int(height)},vcodec:h264,acodec:aac",
             "--merge-output-format", "mp4", "-o", os.path.join(out_dir, "%(title)s [%(id)s].%(ext)s"),
-            "--print", "after_move:filepath"]
+            "--print", "after_move:VCFILE %(filepath)s",
+            "--print", "after_move:VCTS %(release_timestamp)s %(timestamp)s %(was_live)s"]
     if os.path.isfile(ff):
         args += ["--ffmpeg-location", os.path.dirname(ff)]
     dn = deno_path()
     if dn:
         args += ["--js-runtimes", f"deno:{dn}"]
     args.append(url)
+    logf = os.path.join(_user_bin(), "..", "ultima_descarga.log")
+    lf = open(logf, "w", encoding="utf-8", errors="replace")
+    lf.write(" ".join(f'"{a}"' if " " in a else a for a in args) + "\n")
+
+    def log(msg):
+        lf.write(msg + "\n")
+        if on_log:
+            on_log(msg)
     flags = 0x08000000 if os.name == "nt" else 0
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                          encoding="utf-8", errors="replace", creationflags=flags)
-    final, tail, part, last = "", [], 0, -1
-    for line in p.stdout:
-        line = line.rstrip()
+    final, start_ms, tail, part, last = "", 0, [], 0, -1
+    try:
+        for line in p.stdout:
+            line = line.rstrip()
+            if should_stop and should_stop():
+                p.kill()
+                break
+            m = YT_PROGRESS.search(line)
+            if m:
+                pc = float(m.group(1))
+                if pc < last - 50:   # empieza la segunda pista (audio)
+                    part += 1
+                last = pc
+                if on_progress:   # vídeo 0-90 %, audio 90-99 %
+                    on_progress(int(pc * 0.9) if part == 0 else min(99, 90 + int(pc / 10)))
+                continue
+            lf.write(line + "\n")
+            if line.startswith("VCFILE "):
+                final = line[7:].strip()
+                continue
+            if line.startswith("VCTS "):
+                parts = line[5:].split()
+                for x in parts[:1]:   # release_timestamp = cuándo empezó el directo
+                    if x.isdigit():
+                        start_ms = int(x) * 1000
+                continue
+            if line:
+                tail.append(line)
+                del tail[:-15]
+                if on_log and ("ERROR" in line or "Merging" in line or "WARNING" in line):
+                    on_log(line)
+        p.wait()
         if should_stop and should_stop():
-            p.kill()
-            break
-        m = YT_PROGRESS.search(line)
-        if m:
-            pc = float(m.group(1))
-            if pc < last - 50:   # empieza la segunda pista (audio)
-                part += 1
-            last = pc
-            if on_progress:   # vídeo 0-90 %, audio 90-99 %
-                on_progress(int(pc * 0.9) if part == 0 else min(99, 90 + int(pc / 10)))
-            continue
-        if line.lower().endswith(".mp4") and os.path.isfile(line):
-            final = line
-            continue
-        if line:
-            tail.append(line)
-            del tail[:-15]
-            if on_log and ("ERROR" in line or "Merging" in line or "WARNING" in line):
-                on_log(line)
-    p.wait()
-    if should_stop and should_stop():
-        raise RuntimeError("Descarga cancelada")
-    if p.returncode != 0 or not final:
-        raise RuntimeError("No se pudo descargar:\n" + "\n".join(tail[-8:]))
-    # Quita pistas sueltas que hayan quedado junto al MP4
-    stem = os.path.splitext(final)[0]
-    for ext in (".webm", ".m4a", ".part", ".ytdl"):
-        f = stem + ext
-        if os.path.isfile(f):
-            try:
-                os.remove(f)
-            except OSError:
-                pass
+            raise RuntimeError("Descarga cancelada")
+        if p.returncode != 0 or not final or not os.path.isfile(final):
+            raise RuntimeError("No se pudo descargar:\n" + "\n".join(tail[-8:]))
+        final = _merge_parts(final, log)
+        # Quita pistas sueltas que hayan quedado junto al MP4
+        stem = os.path.splitext(final)[0]
+        for ext in (".webm", ".m4a", ".part", ".ytdl"):
+            f = stem + ext
+            if os.path.isfile(f):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+    finally:
+        lf.close()
     if on_progress:
         on_progress(100)
-    return final
+    return {"path": final, "start_ms": start_ms}

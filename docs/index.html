@@ -288,7 +288,8 @@ function start() {
     if (IS_NATIVE) { try { window.SportCamNative.setCover(cover); } catch (e) {} }
     if (tab !== 'juego' && !compact) render();
   });
-  statusRef.on('value', s => { const was = replaying(); const pk = JSON.stringify((panInfo() || {}).state) + ((panInfo() || {}).on ? 1 : 0); status = s.val(); const pk2 = JSON.stringify((panInfo() || {}).state) + ((panInfo() || {}).on ? 1 : 0); if (pk !== pk2 && !panTimer && (tab === 'juego' || tab === 'ajustes') && !compact) render(); if (was !== replaying() && (tab === 'juego' || compact)) render(); if (!IS_NATIVE) { renderWarn(); if (remoteOpen) renderRemote(); } if (shareOpen) renderShare(); });
+  let lastYtId = '';   // último vídeo de YouTube emitido (se guarda con el partido en el historial)
+  statusRef.on('value', s => { const was = replaying(); const pk = JSON.stringify((panInfo() || {}).state) + ((panInfo() || {}).on ? 1 : 0); status = s.val(); if (status && status.ytVideoId) lastYtId = status.ytVideoId; const pk2 = JSON.stringify((panInfo() || {}).state) + ((panInfo() || {}).on ? 1 : 0); if (pk !== pk2 && !panTimer && (tab === 'juego' || tab === 'ajustes') && !compact) render(); if (was !== replaying() && (tab === 'juego' || compact)) render(); if (!IS_NATIVE) { renderWarn(); if (remoteOpen) renderRemote(); } if (shareOpen) renderShare(); });
   if (IS_NATIVE) {
     // Órdenes del mando remoto hacia la cámara
     let lastCmd = ''; try { lastCmd = localStorage.getItem('sc_lastcmd') || ''; } catch (e) {}
@@ -1244,7 +1245,7 @@ function start() {
     const tv = (id, f) => { const t = teamView(id, f); return { id: id || '', name: (teams[id] || {}).name || f, short: t.short, color: t.color }; };
     return { ts: Date.now(), sport: live.sport, home: tv(live.homeId, 'LOCAL'), away: tv(live.awayId, 'VISITANTE'),
              score: live.score, sets: live.sets, history: live.history, finished: live.finished,
-             liveStart: (status && status.liveStartTs) || 0,
+             liveStart: (status && status.liveStartTs) || 0, ytVideoId: (status && status.ytVideoId) || lastYtId || '',
              marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '', kind: m.kind || '' })) };
   }
   function hasData(L) { return L.score.h || L.score.a || L.sets.h || L.sets.a || L.history.length; }

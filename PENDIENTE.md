@@ -132,6 +132,11 @@
 ## Estudio 1.1.3
 - Descargar de YouTube (pestaña Vídeos del partido): pegar enlace (se rellena con el vídeo de la emisión si está en el estado), 1080p por defecto o 720p, MP4 H.264, progreso y cancelar; se guarda en <Guardar en>/Directos y no se borra. Al terminar se añade a la lista y, si el partido tiene hora de inicio del directo, se cuadra solo con las jugadas (si no, poner la hora a mano). Cualquier enlace. yt-dlp + Deno van en el instalador; botón "Actualizar descargador" (yt-dlp -U en %LOCALAPPDATA%\VoleyCamEstudio\bin).
 
+## Estudio 1.2.1 — hecho en local, sin compilar
+- Descarga de YouTube: la hora de inicio del vídeo se toma de YouTube (cuándo empezó ese directo), ya no la del "Partido actual"; el Estudio cambia solo al partido que tiene jugadas dentro del vídeo; si no hay ninguno, avisa.
+- Si yt-dlp deja vídeo y audio sueltos (…f137.mp4 + …f140.m4a), se juntan con ffmpeg. Registro de la última descarga en %LOCALAPPDATA%\VoleyCamEstudio\ultima_descarga.log.
+- El enlace de YouTube se rellena con el del partido elegido. Mando: el historial guarda el id del vídeo de YouTube (ytVideoId) con cada partido.
+
 ## Estudio 1.2.0 — hecho
 - Tres pestañas: 1 Preparar (canal, partido, vídeos, descargar de YouTube) · 2 Ver y marcar · 3 Crear resúmenes.
 - Ver y marcar: vídeo grande; barra de tiempo DESLIZANTE (arrastrar para moverse) con las jugadas en colores (tocar = ir a la jugada) y los tramos del resumen sombreados; ⏮ −10 −5 ▶ +5 +10 ⏭, velocidad 0.5-2x, añadir ⭐💜🧱🛡; panel de jugada seleccionada (tipos, antes/después, entra en resúmenes, quitar); lista con filtros y contadores; teclado (Espacio, ← → 5 s, Mayús 10 s, 1-4, Supr, N/P).
