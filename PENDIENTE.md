@@ -129,6 +129,9 @@
 - Mando: pestaña Juego "Cámara motorizada" (◀ Centrar ▶ + velocidad 1-5, solo si el cabezal está activado); Ajustes → "Cabezal de giro" (activar/desactivar).
 - ESP32: esp32/voleycam_pan/voleycam_pan.ino (centro 1500, topes 900-2100, rampa suave, se para solo si deja de recibir órdenes o se pierde la conexión). Sin compilar aquí: compilar en Arduino IDE con esp32 2.0.17 + ESP32Servo.
 
+## Estudio 1.1.3
+- Descargar de YouTube (pestaña Vídeos del partido): pegar enlace (se rellena con el vídeo de la emisión si está en el estado), 1080p por defecto o 720p, MP4 H.264, progreso y cancelar; se guarda en <Guardar en>/Directos y no se borra. Al terminar se añade a la lista y, si el partido tiene hora de inicio del directo, se cuadra solo con las jugadas (si no, poner la hora a mano). Cualquier enlace. yt-dlp + Deno van en el instalador; botón "Actualizar descargador" (yt-dlp -U en %LOCALAPPDATA%\VoleyCamEstudio\bin).
+
 ## Estudio 1.2 — aprobado (boceto_estudio.png), sin hacer
 - Tres pestañas: 1 Preparar (canal, partido, vídeos) · 2 Ver y marcar (vídeo grande, línea de tiempo con marcas de colores clicables, ⏮ −10 −5 ▶ +5 +10 ⏭, velocidad, botones ⭐💜🧱🛡, jugada seleccionada con tipos/segundos/quitar, lista con filtros, teclado: Espacio, ←→, 1-4, Supr, N/P, guardar en el canal) · 3 Crear resúmenes.
 

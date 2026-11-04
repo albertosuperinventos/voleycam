@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.1.2"
+VERSION = "1.1.3"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -176,6 +176,23 @@ class Main(QMainWindow):
         hb.addStretch(1)
         v2.addLayout(hb)
         v2.addWidget(QLabel("Elige los vídeos originales del móvil (VoleyCam_fecha_hora). Si la hora no cuadra, cámbiala en la columna «Empieza».", objectName="muted"))
+        # Descargar de YouTube
+        hy = QHBoxLayout()
+        hy.addWidget(QLabel("⬇ YouTube:"))
+        self.edYt = QLineEdit(); self.edYt.setPlaceholderText("Pega el enlace del vídeo o del directo ya emitido")
+        hy.addWidget(self.edYt, 1)
+        self.cmbYtRes = QComboBox(); self.cmbYtRes.addItems(["1080p", "720p"]); self.cmbYtRes.setCurrentIndex(self.cfg.get("yt_res", 0))
+        hy.addWidget(self.cmbYtRes)
+        self.btnYt = QPushButton("Descargar"); self.btnYt.clicked.connect(self.yt_download); hy.addWidget(self.btnYt)
+        self.btnYtStop = QPushButton("Cancelar"); self.btnYtStop.setEnabled(False); self.btnYtStop.clicked.connect(self.yt_cancel); hy.addWidget(self.btnYtStop)
+        v2.addLayout(hy)
+        hy2 = QHBoxLayout()
+        self.progYt = QProgressBar(); self.progYt.setValue(0); self.progYt.setFormat("%p %"); hy2.addWidget(self.progYt, 1)
+        self.lblYt = QLabel("", objectName="muted"); hy2.addWidget(self.lblYt)
+        b = QPushButton("📂"); b.setToolTip("Abrir la carpeta de descargas"); b.clicked.connect(self.yt_open_dir); hy2.addWidget(b)
+        b = QPushButton("Actualizar descargador"); b.setToolTip("Actualiza yt-dlp si YouTube deja de descargar"); b.clicked.connect(self.yt_update); hy2.addWidget(b)
+        v2.addLayout(hy2)
+        self.yt_stop = False
         ll.addWidget(g2)
 
         g3 = QGroupBox("3 · Jugadas")
@@ -324,6 +341,9 @@ class Main(QMainWindow):
         name = core.player_name(ch)
         self.chk["carmen"].setText(f"Resumen de {name}")
         self.lblConn.setText(f"✔ Conectado · {len(self.matches)} partidos")
+        vid = ((ch.get("status") or {}).get("ytVideoId") or "").strip()
+        if vid and not self.edYt.text().strip():
+            self.edYt.setText(f"https://www.youtube.com/watch?v={vid}")
         self.cmbMatch.blockSignals(True)
         self.cmbMatch.clear()
         for m in self.matches:
@@ -407,6 +427,70 @@ class Main(QMainWindow):
         self.videos[r].start_ms = self.match.live_start
         self.videos[r].source = "directo"
         self.refresh_videos(); self.refresh_marks()
+
+    # ------------------------------------------------------------ descargar de YouTube
+    def yt_dir(self) -> str:
+        return os.path.join(self.edOut.text().strip() or os.path.join(os.path.expanduser("~"), "Videos", "VoleyCam"), "Directos")
+
+    def yt_open_dir(self):
+        d = self.yt_dir()
+        os.makedirs(d, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(d))
+
+    def yt_download(self):
+        url = self.edYt.text().strip()
+        if not url:
+            return QMessageBox.information(self, APP, "Pega el enlace del vídeo de YouTube.")
+        h = 1080 if self.cmbYtRes.currentIndex() == 0 else 720
+        self.cfg["yt_res"] = self.cmbYtRes.currentIndex(); save_cfg(self.cfg)
+        self.yt_stop = False
+        self.btnYt.setEnabled(False); self.btnYtStop.setEnabled(True)
+        self.progYt.setValue(0); self.lblYt.setText("Descargando…")
+        live_start = self.match.live_start if self.match else 0
+        out_dir = self.yt_dir()
+
+        def work(s, url, h):
+            path = core.youtube_download(url, out_dir, h, lambda p: s.progress.emit(p, ""), lambda: self.yt_stop,
+                                         lambda line: s.log.emit(line))
+            s.progress.emit(100, "Leyendo vídeo…")
+            v = core.load_video(path, live_start)
+            if not live_start:   # la fecha interna de una descarga no es la del partido
+                v.start_ms, v.source = 0, "?"
+            return v
+
+        t = Task(work, url, h)
+        t.s.progress.connect(lambda p, txt: (self.progYt.setValue(p), txt and self.lblYt.setText(txt)))
+        t.s.log.connect(lambda line: self.lblYt.setText(line[:90]))
+        t.s.done.connect(self.on_yt_done)
+        t.s.fail.connect(self.on_yt_fail)
+        self.pool.start(t)
+
+    def on_yt_done(self, v):
+        self.btnYt.setEnabled(True); self.btnYtStop.setEnabled(False)
+        self.lblYt.setText(f"✔ {os.path.basename(v.path)}")
+        self.on_videos([v])
+        if v.source != "directo":
+            QMessageBox.information(self, APP, "Vídeo descargado y añadido.\n\nEste partido no tiene guardada la hora de inicio del directo: "
+                                               "pon a mano la hora en la columna «Empieza» para que cuadren las jugadas.")
+
+    def on_yt_fail(self, e):
+        self.btnYt.setEnabled(True); self.btnYtStop.setEnabled(False)
+        self.progYt.setValue(0)
+        if self.yt_stop:
+            self.lblYt.setText("Cancelada")
+            return
+        self.lblYt.setText("Error")
+        QMessageBox.warning(self, APP, f"{e}\n\nSi YouTube ha cambiado algo, pulsa «Actualizar descargador» y vuelve a probar.")
+
+    def yt_cancel(self):
+        self.yt_stop = True
+
+    def yt_update(self):
+        self.lblYt.setText("Actualizando descargador…")
+        t = Task(lambda s: core.ytdlp_update())
+        t.s.done.connect(lambda txt: self.lblYt.setText(txt[:90]))
+        t.s.fail.connect(lambda e: (self.lblYt.setText(""), QMessageBox.warning(self, APP, f"No se pudo actualizar:\n{e}")))
+        self.pool.start(t)
 
     # ------------------------------------------------------------ jugadas
     def sec(self) -> dict:
@@ -702,6 +786,7 @@ class Main(QMainWindow):
 
     def closeEvent(self, e):
         self.stop_flag = True
+        self.yt_stop = True
         super().closeEvent(e)
 
 

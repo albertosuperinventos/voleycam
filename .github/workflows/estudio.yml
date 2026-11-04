@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: estudio
     env:
-      APP_VERSION: "1.1.2"
+      APP_VERSION: "1.1.3"
     steps:
       - uses: actions/checkout@v4
 
@@ -44,11 +44,22 @@ jobs:
           Copy-Item (Join-Path $bin.DirectoryName "ffprobe.exe") ffbin\
           .\ffbin\ffmpeg.exe -version | Select-Object -First 1
 
+      - name: Descargar yt-dlp y Deno (descarga de YouTube)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force ytbin | Out-Null
+          Invoke-WebRequest "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile ytbin\yt-dlp.exe
+          Invoke-WebRequest "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip" -OutFile deno.zip
+          Expand-Archive deno.zip -DestinationPath ytbin -Force
+          .\ytbin\yt-dlp.exe --version
+          .\ytbin\deno.exe --version
+
       - name: Empaquetar con PyInstaller
         run: >
           pyinstaller --noconfirm --windowed --name VoleyCamEstudio --icon icon.ico
           --add-data "voleycam_estudio/fonts;fonts" --add-data "icon.ico;."
           --add-binary "ffbin/ffmpeg.exe;ffmpeg" --add-binary "ffbin/ffprobe.exe;ffmpeg"
+          --add-binary "ytbin/yt-dlp.exe;yt" --add-binary "ytbin/deno.exe;yt"
           main.py
 
       - name: Prueba rápida del paquete
@@ -57,6 +68,8 @@ jobs:
           if (!(Test-Path dist\VoleyCamEstudio\VoleyCamEstudio.exe)) { throw "No se generó el .exe" }
           if (!(Test-Path dist\VoleyCamEstudio\_internal\ffmpeg\ffmpeg.exe)) { throw "Falta ffmpeg" }
           if (!(Test-Path dist\VoleyCamEstudio\_internal\fonts\BarlowCondensed-Black.ttf)) { throw "Faltan las fuentes" }
+          if (!(Test-Path dist\VoleyCamEstudio\_internal\yt\yt-dlp.exe)) { throw "Falta yt-dlp" }
+          if (!(Test-Path dist\VoleyCamEstudio\_internal\yt\deno.exe)) { throw "Falta deno" }
 
       - name: Instalador (Inno Setup)
         shell: pwsh

@@ -630,3 +630,117 @@ def make_summary(kind: str, match: Match, clips: list, videos: list, sponsors: l
         return run_job(args, total, on_progress, should_stop)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+# ----------------------------------------------------------------- Descargar de YouTube (yt-dlp)
+
+def _user_bin() -> str:
+    """Carpeta del usuario donde vive yt-dlp (se puede actualizar sin permisos de administrador)."""
+    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/.local/share")
+    d = os.path.join(base, "VoleyCamEstudio", "bin")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _bundled(exe: str) -> str:
+    for d in (os.path.join(base_dir(), "yt"), base_dir(), os.path.dirname(base_dir())):
+        p = os.path.join(d, exe)
+        if os.path.isfile(p):
+            return p
+    return ""
+
+
+def ytdlp_path() -> str:
+    """yt-dlp: copia del usuario (actualizable); la primera vez se copia la que va con el programa."""
+    exe = "yt-dlp.exe" if os.name == "nt" else "yt-dlp"
+    mine = os.path.join(_user_bin(), exe)
+    if not os.path.isfile(mine):
+        src = _bundled(exe)
+        if src:
+            shutil.copyfile(src, mine)
+        else:
+            return shutil.which("yt-dlp") or ""
+    return mine
+
+
+def deno_path() -> str:
+    exe = "deno.exe" if os.name == "nt" else "deno"
+    return _bundled(exe) or shutil.which("deno") or ""
+
+
+def ytdlp_update() -> str:
+    """Actualiza yt-dlp (YouTube cambia a menudo). Devuelve el texto de resultado."""
+    y = ytdlp_path()
+    if not y:
+        raise RuntimeError("No se encuentra yt-dlp")
+    r = _run([y, "-U"], timeout=180)
+    out = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
+    return out[-1] if out else ("Actualizado" if r.returncode == 0 else "No se pudo actualizar")
+
+
+YT_PROGRESS = re.compile(r"\[download\]\s+([\d.]+)%")
+
+
+def youtube_download(url: str, out_dir: str, height: int = 1080, on_progress=None, should_stop=None, on_log=None) -> str:
+    """Descarga un vídeo de YouTube como MP4 (preferencia H.264 + AAC hasta `height`). Devuelve la ruta del MP4."""
+    y = ytdlp_path()
+    if not y:
+        raise RuntimeError("No se encuentra yt-dlp")
+    url = url.strip()
+    if not url:
+        raise ValueError("Pega el enlace del vídeo")
+    os.makedirs(out_dir, exist_ok=True)
+    ff = tool("ffmpeg")
+    args = [y, "--newline", "--progress", "--no-playlist", "--no-mtime", "--windows-filenames", "--trim-filenames", "120",
+            "-f", "bv*+ba/b", "-S", f"res:{int(height)},vcodec:h264,acodec:aac",
+            "--merge-output-format", "mp4", "-o", os.path.join(out_dir, "%(title)s [%(id)s].%(ext)s"),
+            "--print", "after_move:filepath"]
+    if os.path.isfile(ff):
+        args += ["--ffmpeg-location", os.path.dirname(ff)]
+    dn = deno_path()
+    if dn:
+        args += ["--js-runtimes", f"deno:{dn}"]
+    args.append(url)
+    flags = 0x08000000 if os.name == "nt" else 0
+    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                         encoding="utf-8", errors="replace", creationflags=flags)
+    final, tail, part, last = "", [], 0, -1
+    for line in p.stdout:
+        line = line.rstrip()
+        if should_stop and should_stop():
+            p.kill()
+            break
+        m = YT_PROGRESS.search(line)
+        if m:
+            pc = float(m.group(1))
+            if pc < last - 50:   # empieza la segunda pista (audio)
+                part += 1
+            last = pc
+            if on_progress:   # vídeo 0-90 %, audio 90-99 %
+                on_progress(int(pc * 0.9) if part == 0 else min(99, 90 + int(pc / 10)))
+            continue
+        if line.lower().endswith(".mp4") and os.path.isfile(line):
+            final = line
+            continue
+        if line:
+            tail.append(line)
+            del tail[:-15]
+            if on_log and ("ERROR" in line or "Merging" in line or "WARNING" in line):
+                on_log(line)
+    p.wait()
+    if should_stop and should_stop():
+        raise RuntimeError("Descarga cancelada")
+    if p.returncode != 0 or not final:
+        raise RuntimeError("No se pudo descargar:\n" + "\n".join(tail[-8:]))
+    # Quita pistas sueltas que hayan quedado junto al MP4
+    stem = os.path.splitext(final)[0]
+    for ext in (".webm", ".m4a", ".part", ".ytdl"):
+        f = stem + ext
+        if os.path.isfile(f):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+    if on_progress:
+        on_progress(100)
+    return final
