@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.2.4"
+VERSION = "1.3.0"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -125,8 +125,9 @@ class Timeline(QWidget):
         self.marks = []         # (ms, color, mark)
         self.clips = []         # (inicio ms, fin ms)
         self.sel = None
+        self.segs = []          # (inicio ms, fin ms, elegido)
         self.drag = False
-        self.setMinimumHeight(46)
+        self.setMinimumHeight(52)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setCursor(Qt.PointingHandCursor)
         self.setMouseTracking(True)
@@ -206,6 +207,13 @@ class Timeline(QWidget):
                 p.setPen(Qt.NoPen)
             p.setBrush(QColor(color))
             p.drawRoundedRect(QRectF(x - 3, r.top() + 6, 6, r.height() - 12), 2, 2)
+        # Tramos (sets): franja verde abajo
+        for a, b, on in self.segs:
+            x1, x2 = self._x(max(0, a)), self._x(min(self.dur, b) if b > 0 else self.pos)
+            if x2 > x1:
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor(46, 160, 67, 230 if on else 120))
+                p.drawRoundedRect(QRectF(x1, r.bottom() - 6, x2 - x1, 6), 3, 3)
         # Cabezal
         x = self._x(self.pos)
         p.setPen(QPen(QColor("#D32F2F"), 2.5)); p.drawLine(int(x), int(r.top() - 3), int(x), int(r.bottom() + 3))
@@ -236,6 +244,7 @@ class Main(QMainWindow):
         self.play_end = 0
         self.pending = None          # (posición ms, reproducir) al terminar de cargar un vídeo
         self.last_added = None
+        self._tasks = []
         self.setWindowTitle(f"{APP} {VERSION}")
         self.resize(1440, 900)
         self._build()
@@ -436,6 +445,27 @@ class Main(QMainWindow):
         sv.addWidget(self.chkSelOn)
         rv.addWidget(cs)
 
+        cg2 = QFrame(objectName="card"); gv = QVBoxLayout(cg2); gv.setContentsMargins(12, 8, 12, 8)
+        hg = QHBoxLayout()
+        hg.addWidget(QLabel("Sets / tramos", objectName="h"))
+        self.cmbSeg = QComboBox(); self.cmbSeg.setFocusPolicy(Qt.NoFocus); self.cmbSeg.currentIndexChanged.connect(self.on_seg_pick)
+        hg.addWidget(self.cmbSeg, 1)
+        b = QPushButton("＋ Nuevo"); b.setFocusPolicy(Qt.NoFocus); b.setToolTip("Nuevo set: empieza en el momento que se ve ahora")
+        b.clicked.connect(self.seg_new); hg.addWidget(b)
+        gv.addLayout(hg)
+        hg2 = QHBoxLayout(); hg2.setSpacing(4)
+        self.btnSegStart = QPushButton("⏱ Empieza aquí"); self.btnSegEnd = QPushButton("⏱ Acaba aquí")
+        self.btnSegGo = QPushButton("▶ Ir"); self.btnSegDel = QPushButton("🗑", objectName="danger")
+        for bb, fn, tip in ((self.btnSegStart, lambda: self.seg_set("start"), "El set empieza en el momento que se ve ahora"),
+                            (self.btnSegEnd, lambda: self.seg_set("end"), "El set acaba en el momento que se ve ahora"),
+                            (self.btnSegGo, self.seg_go, "Ir al principio del set"), (self.btnSegDel, self.seg_del, "Quitar este set")):
+            bb.setFocusPolicy(Qt.NoFocus); bb.setToolTip(tip); bb.clicked.connect(fn); hg2.addWidget(bb)
+        gv.addLayout(hg2)
+        self.lblSeg = QLabel("Marca el principio y el final de cada set para sacar el set completo o su resumen.", objectName="muted")
+        self.lblSeg.setWordWrap(True)
+        gv.addWidget(self.lblSeg)
+        rv.addWidget(cg2)
+
         cl = QFrame(objectName="card"); lv2 = QVBoxLayout(cl); lv2.setContentsMargins(12, 10, 12, 10)
         self.lblList = QLabel("Jugadas", objectName="h"); lv2.addWidget(self.lblList)
         hf = QHBoxLayout(); hf.setSpacing(4)
@@ -510,6 +540,11 @@ class Main(QMainWindow):
         f.addRow(boxw)
         self.chkSlides = QCheckBox("Portada «MEJORES JUGADAS» y patrocinadores (solo el del partido)"); self.chkSlides.setChecked(True)
         f.addRow(self.chkSlides)
+        self.cmbMakeSeg = QComboBox(); self.cmbMakeSeg.currentIndexChanged.connect(lambda *_: self.update_counts())
+        f.addRow("Tramo:", self.cmbMakeSeg)
+        self.chkFull = QCheckBox("🎞 Vídeo completo del set, sin cortes (además de los resúmenes)")
+        self.chkFull.setEnabled(False); self.chkFull.toggled.connect(lambda *_: self.update_counts())
+        f.addRow(self.chkFull)
         self.spFade = QDoubleSpinBox(); self.spFade.setRange(0, 2); self.spFade.setSingleStep(0.1); self.spFade.setValue(self.cfg.get("fade", 0.6)); self.spFade.setSuffix(" s"); self.spFade.setMinimumWidth(110)
         f.addRow("Fundido entre jugadas:", self.spFade)
         self.cmbQ = QComboBox(); self.cmbQ.addItems(["Normal (más rápido)", "Alta", "Máxima"]); self.cmbQ.setCurrentIndex(self.cfg.get("quality", 1))
@@ -543,6 +578,27 @@ class Main(QMainWindow):
         self.log = QPlainTextEdit(); self.log.setReadOnly(True); self.log.setMinimumHeight(160)
         f.addRow(self.log)
         cl.addWidget(g4)
+
+        g5 = QGroupBox("Segundos por defecto de cada tipo de jugada")
+        gl = QFormLayout(g5)
+        self.spDef = {}
+        for k in KINDS:
+            h = QHBoxLayout()
+            sb, sa = QDoubleSpinBox(), QDoubleSpinBox()
+            for sp in (sb, sa):
+                sp.setRange(0, 60); sp.setSingleStep(0.5); sp.setDecimals(1); sp.setSuffix(" s"); sp.setMinimumWidth(100)
+            h.addWidget(QLabel("antes")); h.addWidget(sb); h.addSpacing(10); h.addWidget(QLabel("después")); h.addWidget(sa); h.addStretch(1)
+            lab = QLabel(f"{core.TYPES[k][0]} {core.TYPES[k][1]}")
+            gl.addRow(lab, h)
+            self.spDef[k] = (sb, sa, lab)
+            sb.valueChanged.connect(lambda v, kk=k: self.on_def_secs(kk))
+            sa.valueChanged.connect(lambda v, kk=k: self.on_def_secs(kk))
+        hb = QHBoxLayout(); hb.addStretch(1)
+        b = QPushButton("Restablecer"); b.setToolTip("Volver a los segundos de la app (⭐💜) y a los de siempre (🧱 5+2, 🛡 4+1)")
+        b.clicked.connect(self.reset_def_secs); hb.addWidget(b)
+        gl.addRow(hb)
+        gl.addRow(QLabel("Se aplican a todas las jugadas que no tengan sus propios segundos (los que se cambian en «Jugada seleccionada»).", objectName="muted"))
+        cl.addWidget(g5)
         cl.addStretch(1)
         return self._scroll(page)
 
@@ -574,6 +630,21 @@ class Main(QMainWindow):
         if i != 1 and self.playing():
             self.player.pause()
 
+    def start_task(self, t):
+        """Lanza una tarea en segundo plano y la mantiene viva hasta que sus avisos llegan a la ventana
+        (si no, los avisos conectados a funciones sueltas se perdían: no se recordaban los vídeos, etc.)."""
+        t.setAutoDelete(False)
+        self._tasks.append(t)
+        t.s.done.connect(self._task_end)
+        t.s.fail.connect(self._task_end)
+        self.pool.start(t)
+
+    def _task_end(self, *_):
+        s = self.sender()
+        for t in list(self._tasks):
+            if t.s is s:
+                QTimer.singleShot(2000, lambda t=t: t in self._tasks and self._tasks.remove(t))
+
     # ================================================================ canal y partido
     def _autoconnect(self):
         if len(self.key.text().strip()) >= 16:
@@ -589,7 +660,7 @@ class Main(QMainWindow):
         t = Task(lambda s, key: core.fetch_channel(key), k)
         t.s.done.connect(self.on_channel)
         t.s.fail.connect(lambda e: (self.lblConn.setText(""), self.btnConn.setEnabled(True), QMessageBox.warning(self, APP, f"No se pudo leer el canal:\n{e}")))
-        self.pool.start(t)
+        self.start_task(t)
 
     def on_channel(self, ch):
         self.btnConn.setEnabled(True)
@@ -600,6 +671,7 @@ class Main(QMainWindow):
         self.chk["carmen"].setText(f"Resumen de {name}")
         self.addBtns["carmen"].setText(f"{core.TYPES['carmen'][0]} {name}")
         self.lblConn.setText(f"✔ Conectado · {len(self.matches)} partidos")
+        self.load_def_secs()
         self.cmbMatch.blockSignals(True)
         self.cmbMatch.clear()
         for m in self.matches:
@@ -635,6 +707,7 @@ class Main(QMainWindow):
         self.cur_video = -1
         self.refresh_videos()
         self.refresh_marks()
+        self.refresh_segs()
         self.restore_videos()
 
     # ================================================================ vídeos
@@ -663,7 +736,7 @@ class Main(QMainWindow):
             return out
         t = Task(work, saved)
         t.s.done.connect(lambda vids: mid == self.match_id() and self.on_videos(vids, remember=False))
-        self.pool.start(t)
+        self.start_task(t)
 
     def add_videos(self):
         start = self.cfg.get("video_dir", os.path.expanduser("~"))
@@ -694,7 +767,7 @@ class Main(QMainWindow):
         t.s.log.connect(lambda m: self.lblYt.setText(m))
         t.s.done.connect(self.on_added)
         t.s.fail.connect(lambda e: (self.lblYt.setText(""), QMessageBox.warning(self, APP, e)))
-        self.pool.start(t)
+        self.start_task(t)
 
     def on_added(self, vids):
         self.lblYt.setText("")
@@ -804,7 +877,7 @@ class Main(QMainWindow):
         t.s.log.connect(lambda line: self.lblYt.setText(line[:90]))
         t.s.done.connect(self.on_yt_done)
         t.s.fail.connect(self.on_yt_fail)
-        self.pool.start(t)
+        self.start_task(t)
 
     def match_for_video(self, v):
         """Partido del canal al que pertenece un vídeo: el que tiene más jugadas dentro, o el directo que empezó a la vez."""
@@ -892,14 +965,40 @@ class Main(QMainWindow):
         t = Task(lambda s: core.ytdlp_update())
         t.s.done.connect(lambda txt: self.lblYt.setText(txt[:90]))
         t.s.fail.connect(lambda e: (self.lblYt.setText(""), QMessageBox.warning(self, APP, f"No se pudo actualizar:\n{e}")))
-        self.pool.start(t)
+        self.start_task(t)
 
     # ================================================================ jugadas
-    def sec(self) -> dict:
+    def base_sec(self) -> dict:
         b, a = core.hl_seconds(self.channel) if self.channel else (7, 3)
         s = {k: (t[2], t[3]) for k, t in core.TYPES.items()}
         s["jugada"] = s["carmen"] = (b, a)
         return s
+
+    def sec(self) -> dict:
+        s = self.base_sec()
+        for k, v in (self.cfg.get("secs") or {}).items():
+            if k in s and isinstance(v, list) and len(v) == 2:
+                s[k] = (float(v[0]), float(v[1]))
+        return s
+
+    def load_def_secs(self):
+        s = self.sec()
+        for k, (sb, sa, lab) in self.spDef.items():
+            for sp, val in ((sb, s[k][0]), (sa, s[k][1])):
+                sp.blockSignals(True); sp.setValue(val); sp.blockSignals(False)
+            if k == "carmen":
+                lab.setText(f"{core.TYPES[k][0]} {self.mark_name(k)}")
+
+    def on_def_secs(self, k):
+        sb, sa, _ = self.spDef[k]
+        self.cfg.setdefault("secs", {})[k] = [sb.value(), sa.value()]
+        save_cfg(self.cfg)
+        self.update_sel_panel(); self.update_timeline(); self.update_counts()
+
+    def reset_def_secs(self):
+        self.cfg.pop("secs", None); save_cfg(self.cfg)
+        self.load_def_secs()
+        self.update_sel_panel(); self.update_timeline(); self.update_counts()
 
     def locate(self, mk):
         """(índice de vídeo, segundos dentro) o None si la jugada no cae en ningún vídeo."""
@@ -911,7 +1010,8 @@ class Main(QMainWindow):
     def dirty_count(self) -> int:
         if not self.match:
             return 0
-        return sum(1 for x in self.match.marks if x.dirty) + len(self.match.removed) + (1 if self.match.pending is not None else 0)
+        m = self.match
+        return sum(1 for x in m.marks if x.dirty) + len(m.removed) + (1 if m.pending is not None else 0) + (1 if m.segs_dirty else 0)
 
     def mark_name(self, k):
         return core.player_name(self.channel) if k == "carmen" else core.TYPES[k][1]
@@ -983,6 +1083,9 @@ class Main(QMainWindow):
                 marks.append((int(loc[1] * 1000), COLORS[mk.main], mk))
         clips = [(int(c.start * 1000), int(c.end * 1000)) for c in core.clips_for(self.match.marks, self.videos, self.sec()) if c.video == i]
         self.timeline.sel = self.sel
+        cur = self.cur_seg()
+        self.timeline.segs = [(g["start"] - v.start_ms, (g["end"] - v.start_ms) if g["end"] else -1, g is cur)
+                              for g in self.match.segs if v.start_ms]
         self.timeline.set_data(int(v.duration * 1000), marks, clips)
 
     def highlight_sel(self):
@@ -1063,8 +1166,12 @@ class Main(QMainWindow):
     def on_sel_secs(self, _=None):
         if self.sel is None:
             return
-        self.sel.before, self.sel.after = self.spBefore.value(), self.spAfter.value()
-        self.update_timeline(); self.update_counts()
+        if self.sender() is self.spAfter:   # solo el que se ha cambiado; el otro sigue al de por defecto
+            self.sel.after = self.spAfter.value()
+        else:
+            self.sel.before = self.spBefore.value()
+        self.sel.dirty = True
+        self.update_timeline(); self.update_counts(); self.update_dirty()
 
     def on_sel_enabled(self, on):
         if self.sel is None:
@@ -1157,6 +1264,96 @@ class Main(QMainWindow):
         if 0 <= i < len(vis):
             self.select_mark(vis[i], play=True)
 
+    # ---------------------------------------------------------------- tramos (sets)
+    def cur_seg(self):
+        segs = self.match.segs if self.match else []
+        i = self.cmbSeg.currentIndex()
+        return segs[i] if 0 <= i < len(segs) else None
+
+    def seg_text(self, g):
+        if not g["end"]:
+            return f"{g['name']} · desde {fmt_time(g['start'])} (falta el final)"
+        return f"{g['name']} · {fmt_time(g['start'])} → {fmt_time(g['end'])} · {fmt_dur((g['end'] - g['start']) / 1000)}"
+
+    def refresh_segs(self, keep=None):
+        segs = self.match.segs if self.match else []
+        segs.sort(key=lambda g: g["start"])
+        cur = keep if keep is not None else self.cur_seg()
+        self.cmbSeg.blockSignals(True)
+        self.cmbSeg.clear()
+        for g in segs:
+            self.cmbSeg.addItem(g["name"])
+        if cur in segs:
+            self.cmbSeg.setCurrentIndex(segs.index(cur))
+        self.cmbSeg.blockSignals(False)
+        g = self.cur_seg()
+        for w in (self.btnSegStart, self.btnSegEnd, self.btnSegGo, self.btnSegDel):
+            w.setEnabled(g is not None)
+        self.lblSeg.setText(self.seg_text(g) if g else "Marca el principio y el final de cada set para sacar el set completo o su resumen.")
+        # Crear resúmenes
+        prev = self.cmbMakeSeg.currentText().split(" · ")[0]
+        self.cmbMakeSeg.blockSignals(True)
+        self.cmbMakeSeg.clear()
+        self.cmbMakeSeg.addItem("Todo el partido")
+        done = [x for x in segs if x["end"] > x["start"]]
+        for x in done:
+            self.cmbMakeSeg.addItem(self.seg_text(x))
+        names = [x["name"] for x in done]
+        self.cmbMakeSeg.setCurrentIndex(names.index(prev) + 1 if prev in names else 0)
+        self.cmbMakeSeg.blockSignals(False)
+        self.update_timeline(); self.update_counts(); self.update_dirty()
+
+    def on_seg_pick(self, _=None):
+        self.refresh_segs(keep=self.cur_seg())
+
+    def seg_now(self):
+        if not self.match or not self.player or self.cur_video < 0 or not self.videos[self.cur_video].start_ms:
+            QMessageBox.information(self, APP, "Primero pon el vídeo (con su hora de inicio) en el momento que quieras.")
+            return 0
+        return self.now_abs()
+
+    def seg_new(self):
+        now = self.seg_now()
+        if not now:
+            return
+        used = {g["name"] for g in self.match.segs}
+        n = 1
+        while f"Set {n}" in used:
+            n += 1
+        g = {"key": f"s{now}", "name": f"Set {n}", "start": now, "end": 0}
+        self.match.segs.append(g)
+        self.match.segs_dirty = True
+        self.refresh_segs(keep=g)
+
+    def seg_set(self, which):
+        g = self.cur_seg()
+        now = self.seg_now()
+        if g is None or not now:
+            return
+        g[which] = now
+        if g["end"] and g["end"] < g["start"]:
+            g["start"], g["end"] = g["end"], g["start"]
+        self.match.segs_dirty = True
+        self.refresh_segs(keep=g)
+
+    def seg_go(self):
+        g = self.cur_seg()
+        if g is None:
+            return
+        for i, v in enumerate(self.videos):
+            if v.start_ms and v.start_ms <= g["start"] <= v.end_ms:
+                self.play_end = 0
+                self.load_video_idx(i, g["start"] - v.start_ms, False)
+                return
+
+    def seg_del(self):
+        g = self.cur_seg()
+        if g is None:
+            return
+        self.match.segs.remove(g)
+        self.match.segs_dirty = True
+        self.refresh_segs()
+
     def save_marks(self):
         if not self.match:
             return False
@@ -1175,6 +1372,10 @@ class Main(QMainWindow):
                 store.pop(old_id, None)
                 self.remember_videos()
             n = core.save_marks(self.key.text(), self.match.path, self.match.marks, self.match.removed)
+            if self.match.segs_dirty:
+                core.save_segs(self.key.text(), self.match.path, self.match.segs)
+                self.match.segs_dirty = False
+                n += 1
             self.match.removed.clear()
             self.update_dirty()
             self.lblDirty.setText(f"✔ Guardados {n} cambios")
@@ -1262,12 +1463,27 @@ class Main(QMainWindow):
             self.player.setPlaybackRate([0.5, 1.0, 1.5, 2.0][self.cmbSpeed.currentIndex()])
 
     # ================================================================ crear
+    def make_seg(self):
+        """Tramo elegido en «Crear resúmenes» (None = todo el partido)."""
+        i = self.cmbMakeSeg.currentIndex() - 1
+        segs = [g for g in (self.match.segs if self.match else []) if g["end"] > g["start"]]
+        return segs[i] if 0 <= i < len(segs) else None
+
+    def marks_in(self, seg):
+        m = self.match.marks
+        return [x for x in m if seg["start"] <= x.ts <= seg["end"]] if seg else m
+
     def update_counts(self):
         if not self.match:
             return
         sec = self.sec()
+        seg = self.make_seg()
+        self.chkFull.setEnabled(seg is not None and bool(self.videos))
+        if seg is None:
+            self.chkFull.setChecked(False)
+        marks = self.marks_in(seg)
         for key, title, filt, _ in core.SUMMARIES:
-            n = len(core.clips_for(self.match.marks, self.videos, sec, filt)) if self.videos else 0
+            n = len(core.clips_for(marks, self.videos, sec, filt)) if self.videos else 0
             base = self.chk[key].text().split("  (")[0]
             self.chk[key].setText(f"{base}  ({n} tramo{'' if n == 1 else 's'})")
             self.chk[key].setEnabled(n > 0)
@@ -1306,14 +1522,22 @@ class Main(QMainWindow):
         m = self.match
         stamp = datetime.fromtimestamp((self.videos[0].start_ms or m.ts) / 1000).strftime("%Y%m%d")
         vs = f"{m.home.short}_{m.away.short}".replace(" ", "")
+        seg = self.make_seg()
+        suf = ("_" + "".join(ch for ch in seg["name"] if ch.isalnum())) if seg else ""
+        marks = self.marks_in(seg)
+        if seg is not None and self.chkFull.isChecked():
+            full = core.clips_range(seg, self.videos)
+            if full:
+                jobs.append(("completo", f"{seg['name']} completo", full, False, f"{seg['name'].replace(' ', '')}_completo_{vs}_{stamp}.mp4"))
         for key, title, filt, slides in core.SUMMARIES:
             if not self.chk[key].isChecked() or not self.chk[key].isEnabled():
                 continue
-            clips = core.clips_for(m.marks, self.videos, sec, filt)
+            clips = core.clips_for(marks, self.videos, sec, filt)
             if clips:
-                fname = {"partido": f"Resumen_{vs}_{stamp}.mp4", "carmen": f"Resumen_{safe}_{stamp}.mp4",
-                         "bloqueo": f"Bloqueos_{vs}_{stamp}.mp4", "recepcion": f"Recepciones_{vs}_{stamp}.mp4"}[key]
-                jobs.append((key, self.chk[key].text().split("  (")[0], clips, slides and self.chkSlides.isChecked(), fname))
+                fname = {"partido": f"Resumen_{vs}_{stamp}{suf}.mp4", "carmen": f"Resumen_{safe}_{stamp}{suf}.mp4",
+                         "bloqueo": f"Bloqueos_{vs}_{stamp}{suf}.mp4", "recepcion": f"Recepciones_{vs}_{stamp}{suf}.mp4"}[key]
+                title = self.chk[key].text().split("  (")[0] + (f" · {seg['name']}" if seg else "")
+                jobs.append((key, title, clips, slides and self.chkSlides.isChecked(), fname))
         if not jobs:
             return QMessageBox.information(self, APP, "No hay jugadas para los resúmenes elegidos.")
         out_dir = self.edOut.text().strip()
@@ -1335,7 +1559,11 @@ class Main(QMainWindow):
                     break
                 out = os.path.join(out_dir, fname)
                 s.log.emit(f"▶ {title}: {len(clips)} tramos…")
-                ok, err = core.make_summary(key, m, clips, self.videos, sponsors, out, opt, slides,
+                o = opt
+                if key == "completo":   # el set entero, con su sonido y sin música
+                    import dataclasses
+                    o = dataclasses.replace(opt, music="", venue_vol=1.0)
+                ok, err = core.make_summary(key, m, clips, self.videos, sponsors, out, o, slides,
                                             lambda p, t=title, i=i: s.progress.emit(int((i + p / 100) / len(jobs) * 100), t),
                                             lambda: self.stop_flag)
                 if ok:
@@ -1352,7 +1580,7 @@ class Main(QMainWindow):
         t.s.progress.connect(lambda p, title: (self.prog.setValue(p), self.prog.setFormat(f"{title}: %p %")))
         t.s.done.connect(self.on_made)
         t.s.fail.connect(lambda e: (self.on_made([]), QMessageBox.warning(self, APP, e)))
-        self.pool.start(t)
+        self.start_task(t)
 
     def on_made(self, done):
         self.busy = False

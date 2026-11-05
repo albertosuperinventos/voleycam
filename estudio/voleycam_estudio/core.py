@@ -162,6 +162,10 @@ class Mark:
         d = {"ts": self.ts, "label": self.label}
         if self.kind:
             d["kind"] = self.kind
+        if self.before is not None:
+            d["before"] = round(float(self.before), 1)
+        if self.after is not None:
+            d["after"] = round(float(self.after), 1)
         return d
 
     @property
@@ -190,7 +194,13 @@ def mark_from(d: dict, key: str = "") -> Mark:
     k = (d.get("kind") or "").strip()
     if k:
         tags |= set(k.split("+"))
-    return Mark(int(d.get("ts") or 0), d.get("label") or "Jugada", tags, key=str(key))
+    def num(x):
+        try:
+            return float(x) if x is not None and x != "" else None
+        except (TypeError, ValueError):
+            return None
+    return Mark(int(d.get("ts") or 0), d.get("label") or "Jugada", tags, before=num(d.get("before")), after=num(d.get("after")),
+                key=str(key))
 
 
 def _items(x):
@@ -220,6 +230,8 @@ class Match:
     removed: list = field(default_factory=list)   # claves de jugadas quitadas, pendientes de borrar en el canal
     yt: str = ""          # id del vídeo de YouTube de ese directo (si se guardó)
     pending: dict | None = None   # partido nuevo creado en Estudio, aún no guardado en el canal
+    segs: list = field(default_factory=list)   # tramos (sets): {"key", "name", "start", "end"} en ms
+    segs_dirty: bool = False
 
 
 def _team(d: dict, teams: dict, fb: str) -> Team:
@@ -246,7 +258,7 @@ def matches_from(ch: dict) -> list:
             ((live.get("score") or {}).get("h", 0), (live.get("score") or {}).get("a", 0)),
             [(x.get("h", 0), x.get("a", 0)) for x in _vals(live.get("history"))],
             bool(live.get("finished")), int(status.get("liveStartTs") or 0), cur_marks, live.get("info") or {}, "marks",
-            yt=str(status.get("ytVideoId") or "")))
+            yt=str(status.get("ytVideoId") or ""), segs=segs_from(ch.get("segs"))))
     for mid, m in sorted(_items(ch.get("matches")), key=lambda km: -(km[1].get("ts") or 0)):
         home, away = _team(m.get("home"), teams, "LOCAL"), _team(m.get("away"), teams, "VISITANTE")
         date = datetime.fromtimestamp((m.get("ts") or 0) / 1000).strftime("%d/%m/%Y")
@@ -257,7 +269,42 @@ def matches_from(ch: dict) -> list:
             ((m.get("score") or {}).get("h", 0), (m.get("score") or {}).get("a", 0)),
             [(x.get("h", 0), x.get("a", 0)) for x in _vals(m.get("history"))],
             bool(m.get("finished")), int(m.get("liveStart") or 0), [mark_from(x, k) for k, x in _items(m.get("marks"))],
-            m.get("info") or {}, f"matches/{mid}/marks", yt=str(m.get("ytVideoId") or "")))
+            m.get("info") or {}, f"matches/{mid}/marks", yt=str(m.get("ytVideoId") or ""), segs=segs_from(m.get("segs"))))
+    return out
+
+
+def segs_from(x) -> list:
+    out = []
+    for k, d in _items(x):
+        try:
+            out.append({"key": k, "name": str(d.get("name") or "Tramo"), "start": int(d.get("start") or 0), "end": int(d.get("end") or 0)})
+        except (AttributeError, ValueError, TypeError):
+            pass
+    return sorted(out, key=lambda g: g["start"])
+
+
+def segs_path(marks_path: str) -> str:
+    """'matches/ID/marks' -> 'matches/ID/segs'; 'marks' -> 'segs'."""
+    return marks_path[:-5] + "segs" if marks_path.endswith("marks") else marks_path + "/segs"
+
+
+def save_segs(key: str, marks_path: str, segs: list, timeout: int = 30):
+    """Guarda los tramos (sets) del partido en el canal (se reemplazan todos)."""
+    import requests
+    data = {g["key"]: {"name": g["name"], "start": g["start"], "end": g["end"]} for g in segs} or None
+    r = requests.put(f"{DB_URL}/c/{key.strip()}/{segs_path(marks_path)}.json", data=json.dumps(data), timeout=timeout)
+    r.raise_for_status()
+
+
+def clips_range(seg: dict, videos: list) -> list:
+    """El tramo completo, sin cortes (un trozo por vídeo si ocupa más de uno)."""
+    out = []
+    for i, v in enumerate(videos):
+        if not v.start_ms:
+            continue
+        a, b = max(seg["start"], v.start_ms), min(seg["end"], v.end_ms)
+        if b > a:
+            out.append(Clip(i, (a - v.start_ms) / 1000, (b - v.start_ms) / 1000, []))
     return out
 
 

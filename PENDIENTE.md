@@ -132,7 +132,15 @@
 ## Estudio 1.1.3
 - Descargar de YouTube (pestaña Vídeos del partido): pegar enlace (se rellena con el vídeo de la emisión si está en el estado), 1080p por defecto o 720p, MP4 H.264, progreso y cancelar; se guarda en <Guardar en>/Directos y no se borra. Al terminar se añade a la lista y, si el partido tiene hora de inicio del directo, se cuadra solo con las jugadas (si no, poner la hora a mano). Cualquier enlace. yt-dlp + Deno van en el instalador; botón "Actualizar descargador" (yt-dlp -U en %LOCALAPPDATA%\VoleyCamEstudio\bin).
 
-## Estudio 1.2.4 — hecho en local, sin compilar
+## Estudio 1.3.0 — hecho en local, sin compilar
+- Sets / tramos (Ver y marcar): ＋ Nuevo, ⏱ Empieza aquí, ⏱ Acaba aquí, ▶ Ir, quitar; franja verde en la barra; se guardan en el canal (matches/<id>/segs, o segs del partido actual).
+- Crear resúmenes: "Tramo" (todo el partido o un set) → resúmenes solo con jugadas de ese set (nombre _Set2) y opción "Vídeo completo del set, sin cortes" (sin música, con su sonido).
+- Segundos por defecto de cada tipo (⭐💜🧱🛡) en Crear resúmenes, guardados en el Estudio; "Restablecer".
+- Los segundos propios de una jugada (antes/después) se guardan en el canal (campos before/after) — solo el que se cambia.
+- Arreglado: avisos de tareas en segundo plano que se perdían (no recordaba los vídeos del partido; "Actualizando descargador…" se quedaba colgado).
+- Pendiente menor: el mando no borra "segs" del partido actual al empezar uno nuevo.
+
+## Estudio 1.2.4 — compilado
 - Crear resúmenes fallaba ("Unrecognized option 'filter_complex_script'"): el ffmpeg incluido era una compilación "master" (versión N-…) y se detectaba como antigua. Ahora versión desconocida = moderna, reintento con la otra opción si falla, y el instalador lleva ffmpeg 8.0 estable.
 
 ## Estudio 1.2.3 — compilado
