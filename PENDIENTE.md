@@ -132,7 +132,11 @@
 ## Estudio 1.1.3
 - Descargar de YouTube (pestaña Vídeos del partido): pegar enlace (se rellena con el vídeo de la emisión si está en el estado), 1080p por defecto o 720p, MP4 H.264, progreso y cancelar; se guarda en <Guardar en>/Directos y no se borra. Al terminar se añade a la lista y, si el partido tiene hora de inicio del directo, se cuadra solo con las jugadas (si no, poner la hora a mano). Cualquier enlace. yt-dlp + Deno van en el instalador; botón "Actualizar descargador" (yt-dlp -U en %LOCALAPPDATA%\VoleyCamEstudio\bin).
 
-## Estudio 1.3.0 — hecho en local, sin compilar
+## Estudio 1.3.1 — hecho en local, sin compilar (para la próxima)
+- Sets: el texto muestra los minutos del vídeo ("min 0:45:00 → 1:12:00 · dura 27:00") en vez de la hora del directo.
+- Al crear un set se elige el nombre (Set 1-5, Calentamiento… o escrito); botón ✎ para cambiarlo.
+
+## Estudio 1.3.0 — compilado
 - Sets / tramos (Ver y marcar): ＋ Nuevo, ⏱ Empieza aquí, ⏱ Acaba aquí, minuto del vídeo escrito a mano (H:mm:ss), ▶ Ir, quitar; franja verde en la barra; se guardan en el canal (matches/<id>/segs, o segs del partido actual).
 - Crear resúmenes: "Tramo" (todo el partido o un set) → resúmenes solo con jugadas de ese set (nombre _Set2) y opción "Vídeo completo del set, sin cortes" (sin música, con su sonido).
 - Segundos por defecto de cada tipo (⭐💜🧱🛡) en Crear resúmenes, guardados en el Estudio; "Restablecer".

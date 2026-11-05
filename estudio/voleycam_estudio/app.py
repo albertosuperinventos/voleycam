@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -452,6 +452,8 @@ class Main(QMainWindow):
         hg.addWidget(self.cmbSeg, 1)
         b = QPushButton("＋ Nuevo"); b.setFocusPolicy(Qt.NoFocus); b.setToolTip("Nuevo set: empieza en el momento que se ve ahora")
         b.clicked.connect(self.seg_new); hg.addWidget(b)
+        self.btnSegRen = QPushButton("✎"); self.btnSegRen.setFocusPolicy(Qt.NoFocus); self.btnSegRen.setToolTip("Cambiar el nombre del set")
+        self.btnSegRen.clicked.connect(self.seg_rename); hg.addWidget(self.btnSegRen)
         gv.addLayout(hg)
         hg2 = QHBoxLayout(); hg2.setSpacing(4)
         self.btnSegStart = QPushButton("⏱ Empieza aquí"); self.btnSegEnd = QPushButton("⏱ Acaba aquí")
@@ -1281,9 +1283,14 @@ class Main(QMainWindow):
         return segs[i] if 0 <= i < len(segs) else None
 
     def seg_text(self, g):
+        """Con los minutos del vídeo (como se escriben); si no hay vídeo, con la hora."""
+        v = self.seg_video(g)
+        def t(ms):
+            return fmt_dur((ms - v.start_ms) / 1000) if v else fmt_time(ms)
+        pre = "min " if v else ""
         if not g["end"]:
-            return f"{g['name']} · desde {fmt_time(g['start'])} (falta el final)"
-        return f"{g['name']} · {fmt_time(g['start'])} → {fmt_time(g['end'])} · {fmt_dur((g['end'] - g['start']) / 1000)}"
+            return f"{g['name']} · desde {pre}{t(g['start'])} (falta el final)"
+        return f"{g['name']} · {pre}{t(g['start'])} → {t(g['end'])} · dura {fmt_dur((g['end'] - g['start']) / 1000)}"
 
     def refresh_segs(self, keep=None):
         segs = self.match.segs if self.match else []
@@ -1297,7 +1304,7 @@ class Main(QMainWindow):
             self.cmbSeg.setCurrentIndex(segs.index(cur))
         self.cmbSeg.blockSignals(False)
         g = self.cur_seg()
-        for w in (self.btnSegStart, self.btnSegEnd, self.btnSegGo, self.btnSegDel, self.teSegStart, self.teSegEnd):
+        for w in (self.btnSegStart, self.btnSegEnd, self.btnSegGo, self.btnSegDel, self.btnSegRen, self.teSegStart, self.teSegEnd):
             w.setEnabled(g is not None and (w not in (self.teSegStart, self.teSegEnd) or self.seg_video(g) is not None))
         v = self.seg_video(g) if g else None
         for te, ms in ((self.teSegStart, g["start"] if g else 0), (self.teSegEnd, g["end"] if g else 0)):
@@ -1355,14 +1362,37 @@ class Main(QMainWindow):
         now = self.seg_now()
         if not now:
             return
-        used = {g["name"] for g in self.match.segs}
-        n = 1
-        while f"Set {n}" in used:
-            n += 1
-        g = {"key": f"s{now}", "name": f"Set {n}", "start": now, "end": 0}
+        name = self.ask_seg_name("Nuevo set")
+        if not name:
+            return
+        g = {"key": f"s{now}", "name": name, "start": now, "end": 0}
         self.match.segs.append(g)
         self.match.segs_dirty = True
         self.refresh_segs(keep=g)
+
+    def ask_seg_name(self, title, current=""):
+        from PySide6.QtWidgets import QInputDialog
+        used = {g["name"] for g in self.match.segs} - {current}
+        opts = [f"Set {n}" for n in range(1, 6) if f"Set {n}" not in used] + ["Calentamiento", "Partido completo"]
+        if current and current not in opts:
+            opts.insert(0, current)
+        i = opts.index(current) if current in opts else 0
+        name, ok = QInputDialog.getItem(self, title, "Nombre (elige o escribe):", opts, i, True)
+        name = (name or "").strip()
+        if ok and name in used:
+            QMessageBox.information(self, APP, f"Ya hay un tramo llamado «{name}».")
+            return ""
+        return name if ok else ""
+
+    def seg_rename(self):
+        g = self.cur_seg()
+        if g is None:
+            return
+        name = self.ask_seg_name("Cambiar nombre", g["name"])
+        if name and name != g["name"]:
+            g["name"] = name
+            self.match.segs_dirty = True
+            self.refresh_segs(keep=g)
 
     def seg_set(self, which):
         g = self.cur_seg()
