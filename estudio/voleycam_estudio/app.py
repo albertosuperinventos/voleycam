@@ -461,6 +461,15 @@ class Main(QMainWindow):
                             (self.btnSegGo, self.seg_go, "Ir al principio del set"), (self.btnSegDel, self.seg_del, "Quitar este set")):
             bb.setFocusPolicy(Qt.NoFocus); bb.setToolTip(tip); bb.clicked.connect(fn); hg2.addWidget(bb)
         gv.addLayout(hg2)
+        hg3 = QHBoxLayout(); hg3.setSpacing(6)
+        hg3.addWidget(QLabel("Minuto del vídeo:"))
+        self.teSegStart, self.teSegEnd = QTimeEdit(), QTimeEdit()
+        for te, which, tip in ((self.teSegStart, "start", "Minuto del vídeo en que empieza el set"),
+                               (self.teSegEnd, "end", "Minuto del vídeo en que acaba el set")):
+            te.setDisplayFormat("H:mm:ss"); te.setToolTip(tip); te.setFocusPolicy(Qt.ClickFocus)
+            te.timeChanged.connect(lambda tm, w=which: self.seg_typed(w, tm))
+        hg3.addWidget(self.teSegStart); hg3.addWidget(QLabel("→")); hg3.addWidget(self.teSegEnd); hg3.addStretch(1)
+        gv.addLayout(hg3)
         self.lblSeg = QLabel("Marca el principio y el final de cada set para sacar el set completo o su resumen.", objectName="muted")
         self.lblSeg.setWordWrap(True)
         gv.addWidget(self.lblSeg)
@@ -784,6 +793,7 @@ class Main(QMainWindow):
         self.videos.sort(key=lambda v: (v.start_ms or 9e15, os.path.basename(v.path)))
         self.refresh_videos()
         self.refresh_marks()
+        self.refresh_segs()
         if remember:
             self.remember_videos()
 
@@ -1287,8 +1297,12 @@ class Main(QMainWindow):
             self.cmbSeg.setCurrentIndex(segs.index(cur))
         self.cmbSeg.blockSignals(False)
         g = self.cur_seg()
-        for w in (self.btnSegStart, self.btnSegEnd, self.btnSegGo, self.btnSegDel):
-            w.setEnabled(g is not None)
+        for w in (self.btnSegStart, self.btnSegEnd, self.btnSegGo, self.btnSegDel, self.teSegStart, self.teSegEnd):
+            w.setEnabled(g is not None and (w not in (self.teSegStart, self.teSegEnd) or self.seg_video(g) is not None))
+        v = self.seg_video(g) if g else None
+        for te, ms in ((self.teSegStart, g["start"] if g else 0), (self.teSegEnd, g["end"] if g else 0)):
+            off = max(0, (ms - v.start_ms) // 1000) if v and ms else 0
+            te.blockSignals(True); te.setTime(QTime(min(23, off // 3600), off // 60 % 60, off % 60)); te.blockSignals(False)
         self.lblSeg.setText(self.seg_text(g) if g else "Marca el principio y el final de cada set para sacar el set completo o su resumen.")
         # Crear resúmenes
         prev = self.cmbMakeSeg.currentText().split(" · ")[0]
@@ -1302,6 +1316,31 @@ class Main(QMainWindow):
         self.cmbMakeSeg.setCurrentIndex(names.index(prev) + 1 if prev in names else 0)
         self.cmbMakeSeg.blockSignals(False)
         self.update_timeline(); self.update_counts(); self.update_dirty()
+
+    def seg_video(self, g):
+        """Vídeo de referencia para escribir los minutos del set: el que contiene su principio (o el que se ve, o el primero)."""
+        vids = [v for v in self.videos if v.start_ms]
+        for v in vids:
+            if v.start_ms <= g["start"] <= v.end_ms:
+                return v
+        if 0 <= self.cur_video < len(self.videos) and self.videos[self.cur_video].start_ms:
+            return self.videos[self.cur_video]
+        return vids[0] if vids else None
+
+    def seg_typed(self, which, tm):
+        g = self.cur_seg()
+        v = self.seg_video(g) if g else None
+        if g is None or v is None:
+            return
+        off = (tm.hour() * 3600 + tm.minute() * 60 + tm.second()) * 1000
+        g[which] = v.start_ms + min(off, int(v.duration * 1000))
+        self.match.segs_dirty = True
+        self.lblSeg.setText(self.seg_text(g))
+        self.update_timeline(); self.update_dirty()
+        if not getattr(self, "_seg_timer", None):
+            self._seg_timer = QTimer(self); self._seg_timer.setSingleShot(True)
+            self._seg_timer.timeout.connect(lambda: self.refresh_segs(keep=self.cur_seg()))
+        self._seg_timer.start(800)   # al dejar de escribir se reordena y se actualiza «Crear resúmenes»
 
     def on_seg_pick(self, _=None):
         self.refresh_segs(keep=self.cur_seg())
