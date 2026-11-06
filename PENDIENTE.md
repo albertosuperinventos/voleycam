@@ -209,6 +209,11 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Móvil: tornillo 1/4" por agujero de 6,5 mm a ~3 cm del centro + tuerca; soporte de móvil enroscado.
 - Pendiente: medidas para piezas 3D (tapa inferior con tuerca 1/4" para trípode y hueco ESP32/power bank; adaptador superior centrado). Albert tiene impresora 3D.
 
+## Próximas mejoras pedidas (mando)
+- Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
+- Convocatoria: opción de cargar la última convocatoria usada de ese equipo (o la del último partido) — confirmar detalle.
+- Aviso: si hay dos móviles con la app abierta en el mismo canal, las órdenes del Remoto (empezar directo, etc.) llegan a los dos → valorar elegir qué móvil manda.
+
 ## En espera (stand by)
 - Ideas tomadas de Kinovea (kinovea.org, gratuito, análisis de técnica): cámara lenta 0,25× y fotograma a fotograma en Ver y marcar; repetición lenta automática de cada jugada en el resumen; marcar a la jugadora con círculo/flecha en el resumen 💜. De momento se usa Kinovea aparte con los vídeos que saca el Estudio.
 - Cámara virtual para fútbol desde vídeo panorámico (como Once Sport Autocam): pendiente de que Albert decida.
