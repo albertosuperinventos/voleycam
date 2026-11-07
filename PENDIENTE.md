@@ -209,6 +209,12 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Móvil: tornillo 1/4" por agujero de 6,5 mm a ~3 cm del centro + tuerca; soporte de móvil enroscado.
 - Pendiente: medidas para piezas 3D (tapa inferior con tuerca 1/4" para trípode y hueco ESP32/power bank; adaptador superior centrado). Albert tiene impresora 3D.
 
+## Próximas mejoras pedidas (07/11, en el partido) — sin compilar
+- Remoto (Cámara a distancia): botones ◀ ▶ del cabezal y centrar, no solo zoom.
+- Marcador temporal para otra persona (p. ej. un padre, solo hoy): enlace de invitación con acceso solo al marcador (sin ajustes, convocatoria, YouTube, Remoto) y que caduque o se pueda revocar. La clave de Albert NO cambia.
+- PREPARTIDO: que la cámara en directo entre en el carrusel (portada → cámara → escudos → plantilla → patrocinadores), no solo publicidad. Cambiar cámara con el carrusel puesto debería verse.
+- QR del canal durante la emisión: botón en el mando para sacar el QR en una esquina del directo unos segundos (además de la diapositiva de patrocinadores).
+
 ## Próximas mejoras pedidas (mando)
 - Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
 - Convocatoria: opción de cargar la última convocatoria usada de ese equipo (o la del último partido) — confirmar detalle.
