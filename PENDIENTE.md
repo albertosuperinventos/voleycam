@@ -213,6 +213,7 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Remoto (Cámara a distancia): botones ◀ ▶ del cabezal y centrar, no solo zoom.
 - Marcador temporal para otra persona (p. ej. un padre, solo hoy): enlace de invitación con acceso solo al marcador (sin ajustes, convocatoria, YouTube, Remoto) y que caduque o se pueda revocar. La clave de Albert NO cambia.
 - PREPARTIDO: que la cámara en directo entre en el carrusel (portada → cámara → escudos → plantilla → patrocinadores), no solo publicidad. Cambiar cámara con el carrusel puesto debería verse.
+- Botón "👁 Ver cámara" en el mando: quita el carrusel mientras se ajusta el encuadre (cabezal/zoom) y lo vuelve a poner solo.
 - QR del canal durante la emisión: botón en el mando para sacar el QR en una esquina del directo unos segundos (además de la diapositiva de patrocinadores).
 
 ## Próximas mejoras pedidas (mando)
