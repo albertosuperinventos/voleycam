@@ -219,6 +219,8 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 ## Estudio — próximas
 - Vídeo sin hora de comienzo (p. ej. descargado de Veo): poner una sola (fecha del partido / del archivo) para poder marcar sin rellenar «Empieza» a mano. Veo (app.veo.co) descarga bien con yt-dlp; ojo con el espacio en disco (3-5 GB por partido).
 
+- Segundos por defecto separados por deporte (fútbol / voleibol), que se apliquen solos según el deporte del partido (en fútbol las jugadas son más largas).
+
 ## Próximas mejoras pedidas (mando)
 - Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
 - Convocatoria: opción de cargar la última convocatoria usada de ese equipo (o la del último partido) — confirmar detalle.
