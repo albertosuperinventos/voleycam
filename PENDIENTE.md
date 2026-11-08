@@ -216,6 +216,9 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Botón "👁 Ver cámara" en el mando: quita el carrusel mientras se ajusta el encuadre (cabezal/zoom) y lo vuelve a poner solo.
 - QR del canal durante la emisión: botón en el mando para sacar el QR en una esquina del directo unos segundos (además de la diapositiva de patrocinadores).
 
+## Estudio — próximas
+- Vídeo sin hora de comienzo (p. ej. descargado de Veo): poner una sola (fecha del partido / del archivo) para poder marcar sin rellenar «Empieza» a mano. Veo (app.veo.co) descarga bien con yt-dlp; ojo con el espacio en disco (3-5 GB por partido).
+
 ## Próximas mejoras pedidas (mando)
 - Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
 - Convocatoria: opción de cargar la última convocatoria usada de ese equipo (o la del último partido) — confirmar detalle.
