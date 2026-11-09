@@ -238,6 +238,11 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 - Cada resumen de set: portada "SET 2 · TOMARES 25-21 CAJASOL" con escudos y patrocinadores al final (confirmado: patrocinadores en TODOS los sets).
 - Motivo (07/11): el resumen total no se podía enviar por WhatsApp aunque decía ~180 MB → un vídeo por set, que pesa mucho menos. Vale para partido, 💜, 🧱, 🛡.
 
+## Jugada larga con inicio y fin (pedido 09/11, fútbol y voley) — sin compilar
+- Botón "⏱ Jugada larga" en el mando y en el Estudio (tecla 5): 1.º toque = inicio (el botón queda encendido contando "● 0:08"), 2.º toque = final. Se guarda exactamente de inicio a fin, SIN segundos antes ni después.
+- Por dentro: jugada con before=0 y after=duración (ya existe el campo); combinable con ⚽ Gol / 💜 Alberto; en la barra del Estudio se ve el tramo entero.
+- ⭐ Jugada normal (un toque con sus segundos) sigue igual.
+
 ## Próximas mejoras pedidas (mando)
 - Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
 - Convocatoria: opción de cargar la última convocatoria usada de ese equipo (o la del último partido) — confirmar detalle.
