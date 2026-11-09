@@ -232,6 +232,10 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 - Paradas, ocasiones/al palo, faltas o penaltis NO llevan botón propio: se marcan como ⭐ Jugada.
 - El resumen del partido incluye todo (jugadas + goles + tarjetas); los de goles, jugador y tarjetas salen aparte.
 
+## App (móvil): resúmenes por sets (pedido 09/11) — sin compilar
+- En Después → Crear resúmenes: opción "Por sets" con casillas (Set 1, Set 2…). Los límites de cada set salen solos del marcador (fin de set automático), sin marcar nada.
+- Un vídeo por set (más corto); vale para partido, 💜, 🧱, 🛡. Pendiente: ¿también un solo vídeo con varios sets elegidos?
+
 ## Próximas mejoras pedidas (mando)
 - Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
 - Convocatoria: opción de cargar la última convocatoria usada de ese equipo (o la del último partido) — confirmar detalle.
