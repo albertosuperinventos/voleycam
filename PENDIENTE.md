@@ -225,7 +225,7 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 1. ⭐ Jugada (tecla 1) — segundos de fútbol (más largos que en voley).
 2. ⚽ Gol (tecla 2) — más segundos DESPUÉS de pulsar para que se vea la celebración; en el resumen, rótulo «¡GOL!» al pulsar y opción de marcarlo como «GOL ANULADO» (rótulo distinto).
-3. 💜 Alberto (tecla 3) — jugador seguido (nombre configurable, como ahora «Carmen»); resumen propio.
+3. 💜 Alberto (tecla 3) — etiqueta que se AÑADE a una jugada o gol (se pulsa Alberto + ⭐ o ⚽, seguidos se juntan en la misma jugada); el resumen de Alberto coge todas las que la lleven. Nombre configurable (como ahora «Carmen»).
 4. 🟨 Tarjetas (tecla 4) — amarilla/roja; resumen propio.
 - Resúmenes en fútbol: partido, goles, del jugador, tarjetas.
 - Segundos por defecto propios del fútbol (ver punto de segundos por deporte).
