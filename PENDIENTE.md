@@ -234,6 +234,7 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 
 ## App (móvil): resúmenes por sets (pedido 09/11) — sin compilar
 - En Después → Crear resúmenes: opción "Por sets" con casillas (Set 1, Set 2…). Los límites de cada set salen solos del marcador (fin de set automático), sin marcar nada.
+- Cada resumen de set: portada "SET 2 · TOMARES 25-21 CAJASOL" con escudos y patrocinadores al final (pendiente confirmar si en todos o solo en el último).
 - Motivo (07/11): el resumen total no se podía enviar por WhatsApp aunque decía ~180 MB → un vídeo por set, que pesa mucho menos. Vale para partido, 💜, 🧱, 🛡.
 
 ## Próximas mejoras pedidas (mando)
