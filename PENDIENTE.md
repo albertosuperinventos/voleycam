@@ -229,7 +229,8 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 4. 🟨 Tarjetas (tecla 4) — amarilla/roja; resumen propio.
 - Resúmenes en fútbol: partido, goles, del jugador, tarjetas.
 - Segundos por defecto propios del fútbol (ver punto de segundos por deporte).
-- Ideas para valorar: 🧤 parada del portero, 🎯 ocasión / al palo, falta o penalti.
+- Paradas, ocasiones/al palo, faltas o penaltis NO llevan botón propio: se marcan como ⭐ Jugada.
+- El resumen del partido incluye todo (jugadas + goles + tarjetas); los de goles, jugador y tarjetas salen aparte.
 
 ## Próximas mejoras pedidas (mando)
 - Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
