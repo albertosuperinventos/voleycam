@@ -243,6 +243,12 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 - Por dentro: jugada con before=0 y after=duración (ya existe el campo); combinable con ⚽ Gol / 💜 Alberto; en la barra del Estudio se ve el tramo entero.
 - ⭐ Jugada normal (un toque con sus segundos) sigue igual.
 
+## Estudio: teclas Z X C V B y leyenda (pedido 09/11) — sin compilar
+- Voley: Z ⭐ Jugada · X 💜 Carmen · C 🧱 Bloqueo · V 🛡 Recepción · B ⏱ Jugada larga (inicio/fin).
+- Fútbol: Z ⭐ Jugada · X 💜 Alberto · C ⚽ Gol · V 🟨 Tarjeta · B ⏱ Jugada larga.
+- Se mantienen Espacio, ← → (Mayús 10 s), Supr, N/P; los números 1-5 siguen valiendo.
+- Cada botón muestra su letra ("⭐ Jugada Z") y el recuadro Teclado cambia solo según el deporte.
+
 ## Próximas mejoras pedidas (mando)
 - Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
 - Convocatoria: opción de cargar la última convocatoria usada de ese equipo (o la del último partido) — confirmar detalle.
