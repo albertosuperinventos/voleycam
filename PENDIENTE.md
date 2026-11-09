@@ -221,6 +221,16 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 
 - Segundos por defecto separados por deporte (fútbol / voleibol), que se apliquen solos según el deporte del partido (en fútbol las jugadas son más largas).
 
+## Modo FÚTBOL en el Estudio (pedido 09/11) — sin compilar
+Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
+1. ⭐ Jugada (tecla 1) — segundos de fútbol (más largos que en voley).
+2. ⚽ Gol (tecla 2) — más segundos DESPUÉS de pulsar para que se vea la celebración; en el resumen, rótulo «¡GOL!» al pulsar y opción de marcarlo como «GOL ANULADO» (rótulo distinto).
+3. 💜 Alberto (tecla 3) — jugador seguido (nombre configurable, como ahora «Carmen»); resumen propio.
+4. 🟨 Tarjetas (tecla 4) — amarilla/roja; resumen propio.
+- Resúmenes en fútbol: partido, goles, del jugador, tarjetas.
+- Segundos por defecto propios del fútbol (ver punto de segundos por deporte).
+- Ideas para valorar: 🧤 parada del portero, 🎯 ocasión / al palo, falta o penalti.
+
 ## Próximas mejoras pedidas (mando)
 - Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
 - Convocatoria: opción de cargar la última convocatoria usada de ese equipo (o la del último partido) — confirmar detalle.
