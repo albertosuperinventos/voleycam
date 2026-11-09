@@ -234,7 +234,7 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 
 ## App (móvil): resúmenes por sets (pedido 09/11) — sin compilar
 - En Después → Crear resúmenes: opción "Por sets" con casillas (Set 1, Set 2…). Los límites de cada set salen solos del marcador (fin de set automático), sin marcar nada.
-- Un vídeo por set (más corto); vale para partido, 💜, 🧱, 🛡. Pendiente: ¿también un solo vídeo con varios sets elegidos?
+- Motivo (07/11): el resumen total no se podía enviar por WhatsApp aunque decía ~180 MB → un vídeo por set, que pesa mucho menos. Vale para partido, 💜, 🧱, 🛡.
 
 ## Próximas mejoras pedidas (mando)
 - Datos del partido: elegir la competición/liga de una lista guardada (las ya usadas) en vez de escribirla cada vez.
