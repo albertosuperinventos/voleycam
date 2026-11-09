@@ -214,7 +214,7 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - Marcador temporal para otra persona (p. ej. un padre, solo hoy): enlace de invitación con acceso solo al marcador (sin ajustes, convocatoria, YouTube, Remoto) y que caduque o se pueda revocar. La clave de Albert NO cambia.
 - PREPARTIDO: que la cámara en directo entre en el carrusel (portada → cámara → escudos → plantilla → patrocinadores), no solo publicidad. Cambiar cámara con el carrusel puesto debería verse.
 - Botón "👁 Ver cámara" en el mando: quita el carrusel mientras se ajusta el encuadre (cabezal/zoom) y lo vuelve a poner solo.
-- Carrusel: la portada «NO TODO ES VOLEY» → quitarla del carrusel o dejarla con el QR «Sigue el canal» encima (pendiente que Albert elija; la portada sigue sirviendo de miniatura de YouTube).
+- Carrusel: la portada «NO TODO ES VOLEY» → se DEJA con el QR «Sigue el canal» encima (confirmado); la miniatura de YouTube sigue siendo la imagen original sin QR.
 - QR del canal durante la emisión: botón en el mando para sacar el QR en una esquina del directo unos segundos (además de la diapositiva de patrocinadores).
 
 ## Estudio — próximas
