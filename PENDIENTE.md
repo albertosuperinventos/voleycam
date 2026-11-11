@@ -248,9 +248,9 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 ## App 1.9.0 (próxima versión, acordado 11/11) — sin empezar
 1. 🏁 Terminar partido (botón en el mando, automático, una confirmación): resultado final 20 s en el directo → parar directo y grabación → subir descripción a YouTube → crear resúmenes POR SETS (en el móvil que emitió) → abrir WhatsApp con TODO JUNTO: imagen del resultado primero y luego los vídeos de cada set en orden (Albert elige grupo y envía) → guardar en historial y dejar listo el siguiente. Si no hay jugadas marcadas o no hay grabación: se salta los resúmenes y comparte solo la imagen. Pasos que fallen en rojo, repetibles.
 2. Resúmenes por sets (ver abajo).
-3. Fútbol en el mando: ⭐ 💜(Alberto) ⚽ 🟨 con segundos de fútbol; resúmenes del móvil de goles y tarjetas. (Pendiente: ¿rótulo ¡GOL! también en los resúmenes del móvil?)
+3. Fútbol en el mando: ⭐ 💜(Alberto) ⚽ 🟨 con segundos de fútbol; resúmenes del móvil de goles y tarjetas. Rótulo ¡GOL! / GOL ANULADO también en los resúmenes del móvil (confirmado).
 4. ⏱ Jugada larga en el mando (voley y fútbol): 1.er toque inicio, 2.º final.
-5. Invitaciones (padres): Ajustes → 👥 Invitar: nombre, qué puede hacer (llevar marcador / marcar jugadas de una jugadora), hasta cuándo; QR o WhatsApp; lista de activas con «Anular». El enlace NO lleva la clave: el invitado escribe en una bandeja propia y el móvil que emite valida y aplica. Mando del invitado reducido. (Pendiente: ¿solo marcador o también marcar jugadas?)
+5. Invitaciones (padres): Ajustes → 👥 Invitar: nombre, qué puede hacer (llevar marcador / marcar jugadas de una jugadora), hasta cuándo; QR o WhatsApp; lista de activas con «Anular». El enlace NO lleva la clave: el invitado escribe en una bandeja propia y el móvil que emite valida y aplica. Mando del invitado reducido. Confirmado: la invitación permite llevar el marcador Y marcar jugadas de una jugadora (idea 1.9).
 
 ## App (móvil): resúmenes por sets (pedido 09/11) — sin compilar
 - En Después → Crear resúmenes: opción "Por sets" con casillas (Set 1, Set 2…). Los límites de cada set salen solos del marcador (fin de set automático), sin marcar nada.
