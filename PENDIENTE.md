@@ -248,6 +248,7 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 ## Estudio 1.4.1 — hecho en local, sin compilar
 - Banda de gol (opción B) con jugador (si lleva 💜) y marcador + minuto; botones «Local / Visitante» y «Anulado» en la jugada seleccionada para calcular el marcador.
 - Resúmenes por set con portada de set estilo club (opción B): resultado del set y «SETS x-y» en voley (de la tabla de sets del partido).
+- Botón «✎ Equipos» en Preparar: cambiar nombre y nombre corto de local y visitante (partidos del historial y nuevos); se guarda en el canal.
 
 ## Rótulos elegidos (11/11) — bocetos en scratchpad/rotulos
 - Voley: portada de cada set estilo CLUB (opción B): fondo granate con rayas, franja "VOLEIBOL TOMARES" con línea dorada, "SET 2" contorneado en dorado, resultado del set en dorado, escudos con aro dorado, "SETS 2-0", competición y fecha. (Móvil y Estudio.)

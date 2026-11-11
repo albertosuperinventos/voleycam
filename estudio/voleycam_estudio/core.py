@@ -255,6 +255,7 @@ class Match:
     segs: list = field(default_factory=list)   # tramos (sets): {"key", "name", "start", "end"} en ms
     segs_dirty: bool = False
     sport_dirty: bool = False
+    teams_dirty: bool = False
 
 
 def _team(d: dict, teams: dict, fb: str) -> Team:

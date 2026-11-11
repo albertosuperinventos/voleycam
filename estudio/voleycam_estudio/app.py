@@ -309,6 +309,8 @@ class Main(QMainWindow):
         self.cmbSport = QComboBox(); self.cmbSport.addItems(["🏐 Voleibol", "⚽ Fútbol"]); self.cmbSport.setToolTip("Deporte del partido: cambia botones, teclas y resúmenes")
         self.cmbSport.currentIndexChanged.connect(self.on_sport_changed)
         h.addWidget(self.cmbSport)
+        b = QPushButton("✎ Equipos"); b.setToolTip("Cambiar el nombre de local y visitante de este partido"); b.clicked.connect(self.edit_teams)
+        h.addWidget(b)
         self.lblMatch = QLabel("", objectName="muted"); h.addWidget(self.lblMatch)
         ll.addWidget(g1)
 
@@ -1090,6 +1092,36 @@ class Main(QMainWindow):
         self.load_def_secs()
         self.update_long_btn()
 
+    def edit_teams(self):
+        m = self.match
+        if not m:
+            return
+        if m.path == "marks":
+            return QMessageBox.information(self, APP, "Los equipos del partido actual se cambian en el mando (Partido → Quién juega).")
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox
+        dlg = QDialog(self); dlg.setWindowTitle("Equipos del partido")
+        f = QFormLayout(dlg)
+        eh, ehs, ea, eas = QLineEdit(m.home.name), QLineEdit(m.home.short), QLineEdit(m.away.name), QLineEdit(m.away.short)
+        for e in (ehs, eas):
+            e.setMaxLength(14); e.setPlaceholderText("Nombre corto (marcador y rótulos)")
+        f.addRow("Local:", eh); f.addRow("   corto:", ehs); f.addRow("Visitante:", ea); f.addRow("   corto:", eas)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject); f.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        hn, an = eh.text().strip() or m.home.name, ea.text().strip() or m.away.name
+        hs, as_ = (ehs.text().strip() or core.short_name(hn)).upper(), (eas.text().strip() or core.short_name(an)).upper()
+        m.home.name, m.home.short, m.away.name, m.away.short = hn, hs, an, as_
+        date = datetime.fromtimestamp(m.ts / 1000).strftime("%d/%m/%Y") if m.ts else ""
+        m.title = f"{hs} - {as_} · {date}" + (" (nuevo)" if m.pending is not None else "")
+        if m.pending is not None:
+            m.pending["home"].update(name=hn, short=hs); m.pending["away"].update(name=an, short=as_)
+        else:
+            m.teams_dirty = True
+        i = self.matches.index(m)
+        self.cmbMatch.setItemText(i, f"{m.title}  ({len(m.marks)} jugadas)")
+        self.on_match(i)
+
     def on_sport_changed(self, i):
         if not self.match:
             return
@@ -1196,7 +1228,7 @@ class Main(QMainWindow):
         if not self.match:
             return 0
         m = self.match
-        return sum(1 for x in m.marks if x.dirty) + len(m.removed) + (1 if m.pending is not None else 0) + (1 if m.segs_dirty else 0) + (1 if m.sport_dirty else 0)
+        return sum(1 for x in m.marks if x.dirty) + len(m.removed) + (1 if m.pending is not None else 0) + (1 if m.segs_dirty else 0) + (1 if m.sport_dirty else 0) + (1 if m.teams_dirty else 0)
 
     def mark_name(self, k):
         if k == "carmen":
@@ -1638,6 +1670,12 @@ class Main(QMainWindow):
                 store.pop(old_id, None)
                 self.remember_videos()
             n = core.save_marks(self.key.text(), self.match.path, self.match.marks, self.match.removed)
+            if self.match.teams_dirty:
+                mm = self.match
+                core.save_match_fields(self.key.text(), mm.path, {"home/name": mm.home.name, "home/short": mm.home.short,
+                                                                  "away/name": mm.away.name, "away/short": mm.away.short})
+                mm.teams_dirty = False
+                n += 1
             if self.match.sport_dirty:
                 core.save_match_fields(self.key.text(), self.match.path, {"sport": self.match.sport})
                 self.match.sport_dirty = False
