@@ -133,7 +133,7 @@ def teams_from_title(title: str) -> tuple:
 
 def short_name(name: str) -> str:
     """Nombre corto para el marcador: la palabra más significativa (sin C.V., V.C., CD…)."""
-    ws = [w for w in re.split(r"\s+", name.upper()) if w and not re.fullmatch(r"(C\.?V\.?|V\.?C\.?|C\.?D\.?|CD|CV|VC|CLUB|VOLEY|VOLEIBOL|DE|EL|LA)", w)]
+    ws = [w for w in re.split(r"\s+", name.upper()) if w and not re.fullmatch(r"(C\.?V\.?|V\.?C\.?|C\.?D\.?|C\.?F\.?|F\.?C\.?|CD|CV|VC|CF|FC|CLUB|VOLEY|VOLEIBOL|DE|EL|LA)", w)]
     if not ws:
         return name.upper()[:12]
     return max(ws, key=len)[:12] if len(ws) > 2 else ws[-1][:12] if len(ws) == 2 else ws[0][:12]
