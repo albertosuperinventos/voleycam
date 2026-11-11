@@ -132,7 +132,18 @@
 ## Estudio 1.1.3
 - Descargar de YouTube (pestaña Vídeos del partido): pegar enlace (se rellena con el vídeo de la emisión si está en el estado), 1080p por defecto o 720p, MP4 H.264, progreso y cancelar; se guarda en <Guardar en>/Directos y no se borra. Al terminar se añade a la lista y, si el partido tiene hora de inicio del directo, se cuadra solo con las jugadas (si no, poner la hora a mano). Cualquier enlace. yt-dlp + Deno van en el instalador; botón "Actualizar descargador" (yt-dlp -U en %LOCALAPPDATA%\VoleyCamEstudio\bin).
 
-## Estudio 1.3.1 — hecho en local, sin compilar (para la próxima)
+## Estudio 1.4.0 — hecho en local, sin compilar
+- Modo fútbol: deporte por partido (selector en Preparar; en «Partido nuevo» se elige y se adivina por el título). Fútbol: ⭐ Jugada · 💜 jugador (nombre propio, p. ej. Alberto) · ⚽ Gol · 🟨 Tarjeta; voley igual que antes.
+- ⚽ Gol: segundos 12 + 10 (celebración); rótulo «¡GOL!» en el resumen; casilla «Gol anulado» → rótulo «GOL ANULADO».
+- ⏱ Jugada larga (botón y tecla B/5): 1.ª = inicio (cuenta el tiempo), 2.ª = final; sin segundos de más; ⭐/💜/⚽ pulsados justo al final se juntan.
+- Teclas Z X C V (y 1-4) según deporte, letra en cada botón y leyenda de teclado que cambia con el deporte.
+- Segundos por defecto separados por deporte (fútbol 12+5, gol 12+10, tarjeta 8+4) y nombre del 💜 por deporte.
+- Vídeo sin hora (Veo…): se le pone una sola (inicio del partido o del archivo), «puesta sola», para poder marcar sin rellenar «Empieza».
+- Varios sets a la vez: casillas de sets + «Un vídeo por set» / «Un solo vídeo con los sets elegidos» (resúmenes y vídeo completo).
+- Resúmenes de fútbol: partido, jugador, goles, tarjetas.
+- Falta en el MANDO/app: botones de gol/tarjeta y jugada larga (solo está en el Estudio).
+
+## Estudio 1.3.1 — incluido en 1.4.0
 - Sets: el texto muestra los minutos del vídeo ("min 0:45:00 → 1:12:00 · dura 27:00") en vez de la hora del directo.
 - Al crear un set se elige el nombre (Set 1-5, Calentamiento… o escrito); botón ✎ para cambiarlo.
 

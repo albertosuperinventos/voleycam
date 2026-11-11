@@ -21,7 +21,16 @@ TYPES = {
     "carmen": ("💜", "Jugadora", 7, 3),
     "bloqueo": ("🧱", "Bloqueo", 5, 2),
     "recepcion": ("🛡", "Recepción", 4, 1),
+    "gol": ("⚽", "Gol", 12, 10),
+    "tarjeta": ("🟨", "Tarjeta", 8, 4),
 }
+# Botones de cada deporte (en este orden: teclas Z X C V y 1 2 3 4)
+SPORT_KINDS = {"volley": ("jugada", "carmen", "bloqueo", "recepcion"),
+               "football": ("jugada", "carmen", "gol", "tarjeta")}
+# Segundos por defecto del fútbol (las jugadas son más largas)
+FOOTBALL_SECS = {"jugada": (12, 5), "carmen": (12, 5), "gol": (12, 10), "tarjeta": (8, 4)}
+# Etiquetas extra (no son tipos): gol anulado y jugada larga (inicio-fin)
+EXTRA_TAGS = ("anulado", "larga")
 
 SUMMARIES = [
     # clave, título, filtro de etiquetas, lleva portada y patrocinadores
@@ -29,7 +38,15 @@ SUMMARIES = [
     ("carmen", "Resumen de la jugadora", lambda tags: "carmen" in tags, False),
     ("bloqueo", "Resumen de bloqueos", lambda tags: "bloqueo" in tags, False),
     ("recepcion", "Resumen de recepciones", lambda tags: "recepcion" in tags, False),
+    ("gol", "Resumen de goles", lambda tags: "gol" in tags, False),
+    ("tarjeta", "Resumen de tarjetas", lambda tags: "tarjeta" in tags, False),
 ]
+SPORT_SUMMARIES = {"volley": ("partido", "carmen", "bloqueo", "recepcion"),
+                   "football": ("partido", "carmen", "gol", "tarjeta")}
+
+
+def sport_of(m) -> str:
+    return "football" if getattr(m, "sport", "") == "football" else "volley"
 
 
 def base_dir() -> str:
@@ -155,7 +172,7 @@ class Mark:
         t = set(self.tags) or {"jugada"}
         if t == {"jugada"}:
             return ""
-        order = ["jugada", "carmen", "bloqueo", "recepcion"]
+        order = ["jugada", "carmen", "bloqueo", "recepcion", "gol", "tarjeta", "anulado", "larga"]
         return "+".join(x for x in order if x in t)
 
     def to_json(self) -> dict:
@@ -170,15 +187,20 @@ class Mark:
 
     @property
     def main(self) -> str:
-        for t in ("bloqueo", "recepcion", "carmen"):
+        for t in ("gol", "tarjeta", "bloqueo", "recepcion", "carmen"):
             if t in self.tags:
                 return t
         return "jugada"
 
     @property
     def icon(self) -> str:
-        return "".join(TYPES[t][0] for t in ("jugada", "carmen", "bloqueo", "recepcion")
-                       if (t == "jugada" and (not self.tags or "jugada" in self.tags)) or (t != "jugada" and t in self.tags))
+        s = "".join(TYPES[t][0] for t in ("jugada", "carmen", "bloqueo", "recepcion", "gol", "tarjeta")
+                    if (t == "jugada" and (not self.tags or "jugada" in self.tags)) or (t != "jugada" and t in self.tags))
+        if "anulado" in self.tags:
+            s += "✖"
+        if "larga" in self.tags:
+            s = "⏱" + s
+        return s
 
 
 def mark_window(mk: Mark, sec: dict) -> tuple:
@@ -232,6 +254,7 @@ class Match:
     pending: dict | None = None   # partido nuevo creado en Estudio, aún no guardado en el canal
     segs: list = field(default_factory=list)   # tramos (sets): {"key", "name", "start", "end"} en ms
     segs_dirty: bool = False
+    sport_dirty: bool = False
 
 
 def _team(d: dict, teams: dict, fb: str) -> Team:
@@ -271,6 +294,16 @@ def matches_from(ch: dict) -> list:
             bool(m.get("finished")), int(m.get("liveStart") or 0), [mark_from(x, k) for k, x in _items(m.get("marks"))],
             m.get("info") or {}, f"matches/{mid}/marks", yt=str(m.get("ytVideoId") or ""), segs=segs_from(m.get("segs"))))
     return out
+
+
+def save_match_fields(key: str, marks_path: str, fields: dict, timeout: int = 30):
+    """Cambia campos de un partido del historial (p. ej. el deporte). marks_path = 'matches/ID/marks'."""
+    import requests
+    if not marks_path.startswith("matches/"):
+        return
+    base = marks_path[:-len("/marks")]
+    r = requests.patch(f"{DB_URL}/c/{key.strip()}/{base}.json", data=json.dumps(fields), timeout=timeout)
+    r.raise_for_status()
 
 
 def segs_from(x) -> list:
@@ -530,6 +563,43 @@ def render_title(W: int, H: int):
     return im
 
 
+def render_goal(W: int, H: int, annulled=False):
+    """Rótulo transparente «¡GOL!» (o «GOL ANULADO») para poner encima del vídeo."""
+    from PIL import Image, ImageDraw, ImageFilter
+    k = W / 1920
+    txt = "GOL ANULADO" if annulled else "¡GOL!"
+    col = (230, 60, 60) if annulled else ACCENT
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    f = _font(int((150 if annulled else 220) * k))
+    y = H - 230 * k
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).text((W / 2, y + 10 * k), txt, font=f, fill=(0, 0, 0, 235), anchor="mm")
+    im.alpha_composite(sh.filter(ImageFilter.GaussianBlur(12 * k)))
+    ImageDraw.Draw(im).text((W / 2, y), txt, font=f, fill=col + (255,), anchor="mm")
+    return im
+
+
+def goal_overlays(clips: list, videos: list, sec: dict, work: str, W: int, H: int) -> dict:
+    """{índice de tramo: [(png, desde, hasta)]}: el rótulo sale 3,5 s desde el momento del gol."""
+    out, pngs = {}, {}
+    for i, c in enumerate(clips):
+        v = videos[c.video]
+        for mk in c.marks:
+            if "gol" not in (mk.tags or ()):
+                continue
+            ann = "anulado" in mk.tags
+            if ann not in pngs:
+                pngs[ann] = os.path.join(work, f"gol_{int(ann)}.png")
+                render_goal(W, H, ann).save(pngs[ann])
+            t = (mk.ts - v.start_ms) / 1000 - c.start
+            if "larga" in mk.tags:   # jugada larga: el gol está al final
+                b, a = mark_window(mk, sec)
+                t = t + a - 3.5
+            t = max(0.0, min(t, (c.end - c.start) - 1.0))
+            out.setdefault(i, []).append((pngs[ann], t, t + 3.5))
+    return out
+
+
 def render_sponsor(sp: dict, W: int, H: int):
     from PIL import Image, ImageDraw
     k = W / 1920
@@ -586,7 +656,7 @@ def ffmpeg_major() -> int:
     return int(m.group(1)) if m else 99
 
 
-def build_job(clips: list, videos: list, out: str, opt: Options, intro=None, sponsors=(), workdir: str = "") -> tuple:
+def build_job(clips: list, videos: list, out: str, opt: Options, intro=None, sponsors=(), workdir: str = "", overlays=None) -> tuple:
     """Devuelve (argumentos de ffmpeg, duración total en segundos). intro = (fondo.png, título.png)."""
     W, H, F = opt.width, opt.height, opt.fade
     args = [tool("ffmpeg"), "-hide_banner", "-y", "-nostdin"]
@@ -617,13 +687,24 @@ def build_job(clips: list, videos: list, out: str, opt: Options, intro=None, spo
 
     if intro:
         add_still(intro[0], opt.slide_secs, intro[1])
-    for c in clips:
+    for ci, c in enumerate(clips):
         d = max(0.5, c.end - c.start)
         args.extend(["-ss", f"{c.start:.3f}", "-t", f"{d:.3f}", "-i", videos[c.video].path])
         k = len(vlab)
-        parts.append(f"[{n_in}:v]{norm_v},setpts=PTS-STARTPTS[v{k}]")
-        parts.append(f"[{n_in}:a]{norm_a},asetpts=PTS-STARTPTS[a{k}]")
+        src = n_in
         n_in += 1
+        ovs = (overlays or {}).get(ci) or []
+        if not ovs:
+            parts.append(f"[{src}:v]{norm_v},setpts=PTS-STARTPTS[v{k}]")
+        else:
+            parts.append(f"[{src}:v]{norm_v},setpts=PTS-STARTPTS[c{k}o0]")
+            for j, (png, t0, t1) in enumerate(ovs):
+                args.extend(["-loop", "1", "-framerate", str(opt.fps), "-t", f"{d:.3f}", "-i", png])
+                oi = n_in; n_in += 1
+                outl = f"v{k}" if j == len(ovs) - 1 else f"c{k}o{j + 1}"
+                parts.append(f"[{oi}:v]scale={W}:{H},format=rgba,fade=in:st={t0:.2f}:d=0.3:alpha=1,fade=out:st={max(t0, t1 - 0.4):.2f}:d=0.4:alpha=1[g{k}_{j}];"
+                             f"[c{k}o{j}][g{k}_{j}]overlay=0:0:enable='between(t,{t0:.2f},{t1:.2f})':shortest=1,format=yuv420p[{outl}]")
+        parts.append(f"[{src}:a]{norm_a},asetpts=PTS-STARTPTS[a{k}]")
         vlab.append(f"v{k}"); alab.append(f"a{k}"); items.append(d)
     for png in sponsors:
         add_still(png, opt.slide_secs)
@@ -697,7 +778,7 @@ def run_job(args: list, total: float, on_progress=None, should_stop=None) -> tup
 
 
 def make_summary(kind: str, match: Match, clips: list, videos: list, sponsors: list, out: str, opt: Options,
-                 with_slides: bool, on_progress=None, should_stop=None) -> tuple:
+                 with_slides: bool, on_progress=None, should_stop=None, sec: dict | None = None) -> tuple:
     work = tempfile.mkdtemp(prefix="voleycam_")
     try:
         intro, spons = None, []
@@ -710,7 +791,8 @@ def make_summary(kind: str, match: Match, clips: list, videos: list, sponsors: l
                 pth = os.path.join(work, f"patro_{i}.png")
                 render_sponsor(sp, opt.width, opt.height).save(pth)
                 spons.append(pth)
-        args, total = build_job(clips, videos, out, opt, intro, spons, work)
+        ovs = goal_overlays(clips, videos, sec or {}, work, opt.width, opt.height) if kind != "completo" else {}
+        args, total = build_job(clips, videos, out, opt, intro, spons, work, ovs)
         ok, err = run_job(args, total, on_progress, should_stop)
         if not ok and "Unrecognized option" in err and "filter_complex" in err:
             # La otra forma de pasar el filtro (cambia según la versión de ffmpeg)

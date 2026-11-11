@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -30,8 +30,9 @@ try:
 except Exception:  # sin multimedia: no hay vídeo
     HAS_MM = False
 
-KINDS = ("jugada", "carmen", "bloqueo", "recepcion")
-COLORS = {"jugada": "#F2B705", "carmen": "#9B4DCA", "bloqueo": "#C0392B", "recepcion": "#2D7FD3"}
+KINDS = ("jugada", "carmen", "bloqueo", "recepcion", "gol", "tarjeta")   # todos; cada deporte usa 4 (core.SPORT_KINDS)
+COLORS = {"jugada": "#F2B705", "carmen": "#9B4DCA", "bloqueo": "#C0392B", "recepcion": "#2D7FD3", "gol": "#16A34A", "tarjeta": "#F97316"}
+KEYS = ("Z", "X", "C", "V")   # teclas de los 4 botones (y 1-4); B (o 5) = jugada larga
 
 
 def config_path() -> str:
@@ -305,6 +306,9 @@ class Main(QMainWindow):
         h = QHBoxLayout(g1)
         self.cmbMatch = QComboBox(); self.cmbMatch.currentIndexChanged.connect(self.on_match)
         h.addWidget(self.cmbMatch, 1)
+        self.cmbSport = QComboBox(); self.cmbSport.addItems(["🏐 Voleibol", "⚽ Fútbol"]); self.cmbSport.setToolTip("Deporte del partido: cambia botones, teclas y resúmenes")
+        self.cmbSport.currentIndexChanged.connect(self.on_sport_changed)
+        h.addWidget(self.cmbSport)
         self.lblMatch = QLabel("", objectName="muted"); h.addWidget(self.lblMatch)
         ll.addWidget(g1)
 
@@ -408,9 +412,11 @@ class Main(QMainWindow):
         hc.addWidget(self.cmbSpeed)
         hc.addSpacing(10)
         self.addBtns = {}
-        for i, k in enumerate(KINDS):
-            self.addBtns[k] = btn(f"{core.TYPES[k][0]} {core.TYPES[k][1]}", lambda _=False, kk=k: self.add_mark_here(kk),
-                                  f"Añadir aquí ({i + 1}). Si pulsas otro enseguida, se juntan en la misma jugada.")
+        for k in KINDS:
+            self.addBtns[k] = btn(core.TYPES[k][0], lambda _=False, kk=k: self.add_mark_here(kk),
+                                  "Añadir aquí. Si pulsas otro enseguida, se juntan en la misma jugada.")
+        self.btnLong = btn("⏱ Larga  B", self.toggle_long, "Jugada larga: 1.ª pulsación = inicio, 2.ª = final (sin segundos de más). Tecla B o 5")
+        self.long_start = 0
         hc.addStretch(1)
         bv.addLayout(hc)
         lv.addWidget(bar)
@@ -431,6 +437,9 @@ class Main(QMainWindow):
             b.setToolTip(core.TYPES[k][1]); b.clicked.connect(lambda _=False, kk=k: self.toggle_kind(kk))
             hk.addWidget(b); self.selKind[k] = b
         sv.addLayout(hk)
+        self.chkAnnulled = QCheckBox("Gol anulado (rótulo «GOL ANULADO» en el resumen)")
+        self.chkAnnulled.setFocusPolicy(Qt.NoFocus); self.chkAnnulled.toggled.connect(self.on_annulled)
+        sv.addWidget(self.chkAnnulled)
         hs = QHBoxLayout()
         hs.addWidget(QLabel("Antes"))
         self.spBefore = QDoubleSpinBox(); self.spAfter = QDoubleSpinBox()
@@ -512,8 +521,8 @@ class Main(QMainWindow):
         rv.addWidget(cl, 1)
 
         ck = QFrame(objectName="card"); kv = QVBoxLayout(ck); kv.setContentsMargins(12, 8, 12, 8)
-        kl = QLabel("<b>Teclado:</b> Espacio ▶/❚❚ · ← → 5 s (Mayús: 10 s) · 1-4 añadir ⭐💜🧱🛡 · Supr quitar · N / P siguiente / anterior jugada", objectName="muted")
-        kl.setWordWrap(True); kl.setTextFormat(Qt.RichText); kv.addWidget(kl)
+        self.lblKeys = QLabel("", objectName="muted")
+        self.lblKeys.setWordWrap(True); self.lblKeys.setTextFormat(Qt.RichText); kv.addWidget(self.lblKeys)
         rv.addWidget(ck)
 
         cg = QFrame(objectName="card"); gh = QHBoxLayout(cg); gh.setContentsMargins(12, 8, 12, 8)
@@ -551,8 +560,16 @@ class Main(QMainWindow):
         f.addRow(boxw)
         self.chkSlides = QCheckBox("Portada «MEJORES JUGADAS» y patrocinadores (solo el del partido)"); self.chkSlides.setChecked(True)
         f.addRow(self.chkSlides)
-        self.cmbMakeSeg = QComboBox(); self.cmbMakeSeg.currentIndexChanged.connect(lambda *_: self.update_counts())
-        f.addRow("Tramo:", self.cmbMakeSeg)
+        from PySide6.QtWidgets import QListWidget
+        self.lstMakeSeg = QListWidget(); self.lstMakeSeg.setMaximumHeight(110)
+        self.lstMakeSeg.itemChanged.connect(lambda *_: self.update_counts())
+        f.addRow("Sets:", self.lstMakeSeg)
+        self.cmbSegMode = QComboBox(); self.cmbSegMode.addItems(["Un vídeo por set", "Un solo vídeo con los sets elegidos"])
+        self.cmbSegMode.setCurrentIndex(self.cfg.get("seg_mode", 0))
+        self.cmbSegMode.currentIndexChanged.connect(lambda i: (self.cfg.__setitem__("seg_mode", i), save_cfg(self.cfg), self.update_counts()))
+        f.addRow("Con varios sets:", self.cmbSegMode)
+        self.lblSegHint = QLabel("Sin ningún set marcado se hace con todo el partido.", objectName="muted")
+        f.addRow(self.lblSegHint)
         self.chkFull = QCheckBox("🎞 Vídeo completo del set, sin cortes (además de los resúmenes)")
         self.chkFull.setEnabled(False); self.chkFull.toggled.connect(lambda *_: self.update_counts())
         f.addRow(self.chkFull)
@@ -592,6 +609,11 @@ class Main(QMainWindow):
 
         g5 = QGroupBox("Segundos por defecto de cada tipo de jugada")
         gl = QFormLayout(g5)
+        self.lblDefSport = QLabel("", objectName="h")
+        gl.addRow(self.lblDefSport)
+        self.edPlayer = QLineEdit(); self.edPlayer.setPlaceholderText("Nombre del jugador o jugadora que sigues")
+        self.edPlayer.editingFinished.connect(self.on_player_name)
+        gl.addRow("💜 se llama:", self.edPlayer)
         self.spDef = {}
         for k in KINDS:
             h = QHBoxLayout()
@@ -601,11 +623,11 @@ class Main(QMainWindow):
             h.addWidget(QLabel("antes")); h.addWidget(sb); h.addSpacing(10); h.addWidget(QLabel("después")); h.addWidget(sa); h.addStretch(1)
             lab = QLabel(f"{core.TYPES[k][0]} {core.TYPES[k][1]}")
             gl.addRow(lab, h)
-            self.spDef[k] = (sb, sa, lab)
+            self.spDef[k] = (sb, sa, lab, h)
             sb.valueChanged.connect(lambda v, kk=k: self.on_def_secs(kk))
             sa.valueChanged.connect(lambda v, kk=k: self.on_def_secs(kk))
         hb = QHBoxLayout(); hb.addStretch(1)
-        b = QPushButton("Restablecer"); b.setToolTip("Volver a los segundos de la app (⭐💜) y a los de siempre (🧱 5+2, 🛡 4+1)")
+        b = QPushButton("Restablecer"); b.setToolTip("Volver a los de siempre de este deporte")
         b.clicked.connect(self.reset_def_secs); hb.addWidget(b)
         gl.addRow(hb)
         gl.addRow(QLabel("Se aplican a todas las jugadas que no tengan sus propios segundos (los que se cambian en «Jugada seleccionada»).", objectName="muted"))
@@ -623,8 +645,11 @@ class Main(QMainWindow):
         sc(Qt.Key_Right, lambda: self.seek_rel(5000))
         sc("Shift+Left", lambda: self.seek_rel(-10000))
         sc("Shift+Right", lambda: self.seek_rel(10000))
-        for i, k in enumerate(KINDS):
-            sc(str(i + 1), lambda kk=k: self.add_mark_here(kk))
+        for i in range(4):
+            sc(KEYS[i], lambda ii=i: self.add_mark_here(self.kinds()[ii]))
+            sc(str(i + 1), lambda ii=i: self.add_mark_here(self.kinds()[ii]))
+        sc("B", self.toggle_long)
+        sc("5", self.toggle_long)
         sc(Qt.Key_Delete, self.delete_selected)
         sc("N", lambda: self.nav(1))
         sc("P", lambda: self.nav(-1))
@@ -678,9 +703,6 @@ class Main(QMainWindow):
         self.channel = ch
         self.cfg["key"] = self.key.text().strip(); save_cfg(self.cfg)
         self.matches = core.matches_from(ch)
-        name = core.player_name(ch)
-        self.chk["carmen"].setText(f"Resumen de {name}")
-        self.addBtns["carmen"].setText(f"{core.TYPES['carmen'][0]} {name}")
         self.lblConn.setText(f"✔ Conectado · {len(self.matches)} partidos")
         self.load_def_secs()
         self.cmbMatch.blockSignals(True)
@@ -706,6 +728,9 @@ class Main(QMainWindow):
         res = f"{m.sets[0]}-{m.sets[1]}" if m.sport == "volley" else f"{m.score[0]}-{m.score[1]}"
         det = "  ".join(f"{h}-{a}" for h, a in m.history)
         self.lblMatch.setText(f"{m.home.short} {res} {m.away.short}   {det}")
+        self.cmbSport.blockSignals(True); self.cmbSport.setCurrentIndex(1 if core.sport_of(m) == "football" else 0); self.cmbSport.blockSignals(False)
+        self.long_start = 0
+        self.apply_sport()
         # Enlace de YouTube de ese partido (si se guardó); no pisa uno pegado a mano
         cur = self.edYt.text().strip()
         if not cur or cur == getattr(self, "_yt_auto", ""):
@@ -790,6 +815,14 @@ class Main(QMainWindow):
             self.assign_youtube_video(v)
 
     def on_videos(self, vids, remember=True):
+        for v in vids:
+            if not v.start_ms:   # sin hora (p. ej. Veo): se pone una para poder marcar; se puede cambiar en «Empieza»
+                base = self.match.ts if self.match and self.match.ts else 0
+                try:
+                    base = base or int(os.path.getmtime(v.path) * 1000 - v.duration * 1000)
+                except OSError:
+                    base = base or int(datetime.now().timestamp() * 1000)
+                v.start_ms, v.source = int(base), "auto"
         known = {v.path for v in self.videos}
         self.videos += [v for v in vids if v.path not in known]
         self.videos.sort(key=lambda v: (v.start_ms or 9e15, os.path.basename(v.path)))
@@ -814,7 +847,7 @@ class Main(QMainWindow):
             self.tblVid.setCellWidget(r, 1, te)
             self.tblVid.setItem(r, 2, ro(fmt_dur(v.duration)))
             src = {"nombre": "por el nombre del archivo", "fecha interna": "por la fecha guardada en el vídeo",
-                   "directo": "inicio del directo", "youtube": "inicio del directo (YouTube)", "manual": "puesta a mano", "?": "⚠ desconocida: ponla a mano"}.get(v.source, v.source)
+                   "directo": "inicio del directo", "youtube": "inicio del directo (YouTube)", "manual": "puesta a mano", "auto": "puesta sola (no se sabía)", "?": "⚠ desconocida: ponla a mano"}.get(v.source, v.source)
             self.tblVid.setItem(r, 3, ro(src))
         self.cmbVid.clear()
         n = len(self.videos)
@@ -918,12 +951,9 @@ class Main(QMainWindow):
         if m is not None and m is not self.match:
             self.cmbMatch.setCurrentIndex(self.matches.index(m))   # cambia al partido de ese vídeo
         self.on_videos([v])
-        if not v.start_ms:
-            QMessageBox.information(self, APP, "Vídeo añadido, pero YouTube no dice a qué hora empezó (o no hay conexión).\n\n"
-                                               "Pon la hora en la columna «Empieza» para que cuadren las jugadas.")
-        elif self.match is not None and self.match.pending is not None:
+        if self.match is not None and self.match.pending is not None:
             QMessageBox.information(self, APP, "Este vídeo no tiene jugadas en el canal, así que se ha creado un partido nuevo para él.\n\n"
-                                               "Márcalas en «Ver y marcar» (⭐💜🧱🛡 o teclas 1-4) y pulsa «Guardar»: "
+                                               "Márcalas en «Ver y marcar» (botones o teclas Z X C V; B para jugada larga) y pulsa «Guardar»: "
                                                "el partido quedará en el historial del canal.")
             self.go_tab(1)
 
@@ -938,6 +968,11 @@ class Main(QMainWindow):
             t = QLabel(yt["title"], objectName="muted"); t.setWordWrap(True); f.addRow(t)
         edH, edA = QLineEdit(home), QLineEdit(away)
         f.addRow("Local:", edH); f.addRow("Visitante:", edA)
+        cmbS = QComboBox(); cmbS.addItems(["🏐 Voleibol", "⚽ Fútbol"])
+        tl = (yt.get("title", "") + " " + yt.get("id", "")).lower()
+        if any(w in tl for w in ("fútbol", "futbol", " cf", "-cf", "c.f.", " fc", "-fc", "f.c.", "veo", "cadete", "alevin", "alevín", "benjamin")) and "voley" not in tl and "volei" not in tl:
+            cmbS.setCurrentIndex(1)
+        f.addRow("Deporte:", cmbS)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.button(QDialogButtonBox.Ok).setText("Crear partido"); bb.button(QDialogButtonBox.Cancel).setText("No, dejarlo en el partido elegido")
         bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject); f.addRow(bb)
@@ -946,12 +981,13 @@ class Main(QMainWindow):
         hn, an = edH.text().strip() or "LOCAL", edA.text().strip() or "VISITANTE"
         hs, as_ = core.short_name(hn), core.short_name(an)
         ts = v.start_ms or int(datetime.now().timestamp() * 1000)
-        rec = {"ts": ts, "sport": "volley", "home": {"id": "", "name": hn, "short": hs, "color": "#1e6bff"},
+        sport = "football" if cmbS.currentIndex() == 1 else "volley"
+        rec = {"ts": ts, "sport": sport, "home": {"id": "", "name": hn, "short": hs, "color": "#1e6bff"},
                "away": {"id": "", "name": an, "short": as_, "color": "#ff3b3b"},
                "score": {"h": 0, "a": 0}, "sets": {"h": 0, "a": 0}, "history": [], "finished": True,
                "liveStart": v.start_ms or 0, "ytVideoId": yt.get("id", ""), "source": "estudio"}
         date = datetime.fromtimestamp(ts / 1000).strftime("%d/%m/%Y")
-        m = core.Match(f"{hs} - {as_} · {date} (nuevo)", ts, "volley", core.Team(hn, hs, "#1e6bff"), core.Team(an, as_, "#ff3b3b"),
+        m = core.Match(f"{hs} - {as_} · {date} (nuevo)", ts, sport, core.Team(hn, hs, "#1e6bff"), core.Team(an, as_, "#ff3b3b"),
                        (0, 0), (0, 0), [], True, v.start_ms or 0, [], {}, f"matches/_nuevo{ts}/marks", yt=yt.get("id", ""), pending=rec)
         pos = 1 if self.matches and self.matches[0].title == "Partido actual" else 0
         self.matches.insert(pos, m)
@@ -980,37 +1016,153 @@ class Main(QMainWindow):
         self.start_task(t)
 
     # ================================================================ jugadas
+    # ---------------------------------------------------------------- deporte
+    def sport(self) -> str:
+        return core.sport_of(self.match) if self.match else "volley"
+
+    def kinds(self) -> tuple:
+        return core.SPORT_KINDS[self.sport()]
+
+    def secs_key(self) -> str:
+        sp = self.sport()
+        if sp == "volley" and "secs" in self.cfg and "secs_volley" not in self.cfg:   # ajustes de la 1.3
+            self.cfg["secs_volley"] = self.cfg.pop("secs")
+        return f"secs_{sp}"
+
     def base_sec(self) -> dict:
-        b, a = core.hl_seconds(self.channel) if self.channel else (7, 3)
         s = {k: (t[2], t[3]) for k, t in core.TYPES.items()}
-        s["jugada"] = s["carmen"] = (b, a)
+        if self.sport() == "football":
+            s.update(core.FOOTBALL_SECS)
+        else:
+            b, a = core.hl_seconds(self.channel) if self.channel else (7, 3)
+            s["jugada"] = s["carmen"] = (b, a)
         return s
 
     def sec(self) -> dict:
         s = self.base_sec()
-        for k, v in (self.cfg.get("secs") or {}).items():
+        for k, v in (self.cfg.get(self.secs_key()) or {}).items():
             if k in s and isinstance(v, list) and len(v) == 2:
                 s[k] = (float(v[0]), float(v[1]))
         return s
 
+    def apply_sport(self):
+        """Botones, filtros, teclas, resúmenes y segundos del deporte del partido."""
+        ks = self.kinds()
+        foot = self.sport() == "football"
+        for k in KINDS:
+            on = k in ks
+            self.addBtns[k].setVisible(on); self.selKind[k].setVisible(on); self.filterBtns[k].setVisible(on)
+            sb, sa, lab, h = self.spDef[k]
+            for w in (sb, sa, lab):
+                w.setVisible(on)
+            for i in range(h.count()):
+                w = h.itemAt(i).widget()
+                if w:
+                    w.setVisible(on)
+        for i, k in enumerate(ks):
+            self.addBtns[k].setText(f"{core.TYPES[k][0]} {self.mark_name(k)}  {KEYS[i]}")
+            self.addBtns[k].setToolTip(f"Añadir aquí (tecla {KEYS[i]} o {i + 1}). Si pulsas otro enseguida, se juntan en la misma jugada.")
+        shown = core.SPORT_SUMMARIES[self.sport()]
+        for key, title, _, _ in core.SUMMARIES:
+            c = self.chk[key]
+            c.setVisible(key in shown)
+            if key == "carmen":
+                title = f"Resumen de {self.mark_name('carmen')}"
+            n = c.text().split("  (")[1] if "  (" in c.text() else ""
+            c.setText(title + (f"  ({n}" if n else ""))
+        self.lblDefSport.setText("Fútbol" if foot else "Voleibol")
+        if self.filter != "todas" and self.filter not in ks:
+            self.filter = "todas"; self.filterBtns["todas"].setChecked(True)
+        self.edPlayer.setText(self.mark_name("carmen"))
+        letters = " · ".join(f"<b>{KEYS[i]}</b> {core.TYPES[k][0]}" for i, k in enumerate(ks))
+        self.lblKeys.setText(f"<b>Teclado:</b> {letters} · <b>B</b> ⏱ jugada larga (inicio/fin) · Espacio ▶/❚❚ · ← → 5 s (Mayús: 10 s) · "
+                             f"Supr quitar · N / P siguiente / anterior")
+        self.load_def_secs()
+        self.update_long_btn()
+
+    def on_sport_changed(self, i):
+        if not self.match:
+            return
+        new = "football" if i == 1 else "volley"
+        if self.match.path == "marks":
+            QMessageBox.information(self, APP, "El deporte del partido actual se cambia en el mando (Partido → Quién juega).")
+            self.cmbSport.blockSignals(True); self.cmbSport.setCurrentIndex(1 if self.sport() == "football" else 0); self.cmbSport.blockSignals(False)
+            return
+        self.match.sport = new
+        if self.match.pending is not None:
+            self.match.pending["sport"] = new
+        else:
+            self.match.sport_dirty = True
+        self.apply_sport(); self.refresh_marks()
+
+    def on_player_name(self):
+        name = self.edPlayer.text().strip()
+        if not name:
+            return
+        self.cfg[f"player_{self.sport()}"] = name; save_cfg(self.cfg)
+        self.apply_sport(); self.update_sel_panel(); self.refresh_marks()
+
     def load_def_secs(self):
         s = self.sec()
-        for k, (sb, sa, lab) in self.spDef.items():
+        for k, (sb, sa, lab, h) in self.spDef.items():
             for sp, val in ((sb, s[k][0]), (sa, s[k][1])):
                 sp.blockSignals(True); sp.setValue(val); sp.blockSignals(False)
-            if k == "carmen":
-                lab.setText(f"{core.TYPES[k][0]} {self.mark_name(k)}")
+            lab.setText(f"{core.TYPES[k][0]} {self.mark_name(k)}")
 
     def on_def_secs(self, k):
-        sb, sa, _ = self.spDef[k]
-        self.cfg.setdefault("secs", {})[k] = [sb.value(), sa.value()]
+        sb, sa = self.spDef[k][0], self.spDef[k][1]
+        self.cfg.setdefault(self.secs_key(), {})[k] = [sb.value(), sa.value()]
         save_cfg(self.cfg)
         self.update_sel_panel(); self.update_timeline(); self.update_counts()
 
     def reset_def_secs(self):
-        self.cfg.pop("secs", None); save_cfg(self.cfg)
+        self.cfg.pop(self.secs_key(), None); save_cfg(self.cfg)
         self.load_def_secs()
         self.update_sel_panel(); self.update_timeline(); self.update_counts()
+
+    # ---------------------------------------------------------------- jugada larga (inicio y fin)
+    def update_long_btn(self, now=None):
+        if self.long_start:
+            secs = max(0, ((now or self.now_abs()) - self.long_start) / 1000)
+            self.btnLong.setText(f"● Fin  {fmt_dur(secs)}  B")
+            self.btnLong.setStyleSheet("color:#C62828;border-color:#C62828")
+        else:
+            self.btnLong.setText("⏱ Larga  B")
+            self.btnLong.setStyleSheet("")
+
+    def toggle_long(self):
+        if not self.match or not self.player or self.cur_video < 0:
+            return QMessageBox.information(self, APP, "Primero pon un vídeo (añádelo en 1 · Preparar y pulsa ▶).")
+        if not self.videos[self.cur_video].start_ms:
+            return QMessageBox.information(self, APP, "Ese vídeo no tiene hora de inicio. Ponla en 1 · Preparar, columna «Empieza».")
+        now = self.now_abs()
+        if not self.long_start:
+            self.long_start = now
+            self.update_long_btn(now)
+            return
+        start, end = sorted((self.long_start, now))
+        self.long_start = 0
+        self.update_long_btn()
+        if end - start < 1000:
+            return
+        mk = core.Mark(start, "Jugada larga · añadida en Estudio", {"jugada", "larga"}, before=0.0,
+                       after=round((end - start) / 1000, 1), dirty=True)
+        self.match.marks.append(mk)
+        self.last_added = mk
+        self.sel = mk
+        self.refresh_marks()
+
+    def on_annulled(self, on):
+        mk = self.sel
+        if mk is None or "gol" not in (mk.tags or ()):
+            return
+        tags = set(mk.tags)
+        tags.discard("anulado")
+        if on:
+            tags.add("anulado")
+        mk.tags = tags
+        mk.dirty = True
+        self.refresh_marks()
 
     def locate(self, mk):
         """(índice de vídeo, segundos dentro) o None si la jugada no cae en ningún vídeo."""
@@ -1023,15 +1175,21 @@ class Main(QMainWindow):
         if not self.match:
             return 0
         m = self.match
-        return sum(1 for x in m.marks if x.dirty) + len(m.removed) + (1 if m.pending is not None else 0) + (1 if m.segs_dirty else 0)
+        return sum(1 for x in m.marks if x.dirty) + len(m.removed) + (1 if m.pending is not None else 0) + (1 if m.segs_dirty else 0) + (1 if m.sport_dirty else 0)
 
     def mark_name(self, k):
+        if k == "carmen":
+            saved = self.cfg.get(f"player_{self.sport()}")
+            if saved:
+                return saved
+            return core.player_name(self.channel) if self.sport() == "volley" else "Jugador"
         return core.player_name(self.channel) if k == "carmen" else core.TYPES[k][1]
 
     def refresh_marks(self):
         m = self.match
         marks = sorted(m.marks, key=lambda x: x.ts) if m else []
         counts = {k: sum(1 for x in marks if k in (x.tags or {"jugada"})) for k in KINDS}
+        self.filterBtns["todas"].setVisible(True)
         self.filterBtns["todas"].setText(f"Todas {len(marks)}")
         for k in KINDS:
             self.filterBtns[k].setText(f"{core.TYPES[k][0]} {counts[k]}")
@@ -1114,6 +1272,10 @@ class Main(QMainWindow):
         on = mk is not None
         for w in list(self.selKind.values()) + [self.spBefore, self.spAfter, self.btnSelDel, self.chkSelOn]:
             w.setEnabled(on)
+        isgol = on and "gol" in (mk.tags or ())
+        self.chkAnnulled.setVisible(bool(isgol))
+        if isgol:
+            self.chkAnnulled.blockSignals(True); self.chkAnnulled.setChecked("anulado" in mk.tags); self.chkAnnulled.blockSignals(False)
         if not on:
             self.lblSel.setText("Toca una jugada de la lista o de la barra")
             for k, b in self.selKind.items():
@@ -1171,7 +1333,11 @@ class Main(QMainWindow):
         if mk is None:
             return
         tags = set(mk.tags or {"jugada"}) ^ {k}
-        mk.tags = tags or {"jugada"}
+        if k == "gol" and "gol" not in tags:
+            tags.discard("anulado")
+        if not (tags & set(KINDS)):
+            tags.add("jugada")
+        mk.tags = tags
         mk.dirty = True
         self.refresh_marks()
 
@@ -1247,7 +1413,9 @@ class Main(QMainWindow):
             return QMessageBox.information(self, APP, "Ese vídeo no tiene hora de inicio. Ponla en 1 · Preparar, columna «Empieza».")
         ts = int(v.start_ms + self.player.position())
         last = self.last_added
-        if last is not None and last in self.match.marks and abs(ts - last.ts) < 5000:
+        near = last is not None and last in self.match.marks and (
+            abs(ts - last.ts) < 5000 or ("larga" in last.tags and abs(ts - (last.ts + int((last.after or 0) * 1000))) < 5000))
+        if near:
             # Otro botón justo después: misma jugada con otra etiqueta
             last.tags = set(last.tags or {"jugada"}) | {kind}
             last.dirty = True
@@ -1311,17 +1479,23 @@ class Main(QMainWindow):
             off = max(0, (ms - v.start_ms) // 1000) if v and ms else 0
             te.blockSignals(True); te.setTime(QTime(min(23, off // 3600), off // 60 % 60, off % 60)); te.blockSignals(False)
         self.lblSeg.setText(self.seg_text(g) if g else "Marca el principio y el final de cada set para sacar el set completo o su resumen.")
-        # Crear resúmenes
-        prev = self.cmbMakeSeg.currentText().split(" · ")[0]
-        self.cmbMakeSeg.blockSignals(True)
-        self.cmbMakeSeg.clear()
-        self.cmbMakeSeg.addItem("Todo el partido")
-        done = [x for x in segs if x["end"] > x["start"]]
-        for x in done:
-            self.cmbMakeSeg.addItem(self.seg_text(x))
-        names = [x["name"] for x in done]
-        self.cmbMakeSeg.setCurrentIndex(names.index(prev) + 1 if prev in names else 0)
-        self.cmbMakeSeg.blockSignals(False)
+        # Crear resúmenes: casillas de los sets terminados (se conservan las marcadas)
+        from PySide6.QtWidgets import QListWidgetItem
+        checked = {self.lstMakeSeg.item(i).data(Qt.UserRole) for i in range(self.lstMakeSeg.count())
+                   if self.lstMakeSeg.item(i).checkState() == Qt.Checked}
+        self.lstMakeSeg.blockSignals(True)
+        self.lstMakeSeg.clear()
+        for x in segs:
+            if x["end"] > x["start"]:
+                it = QListWidgetItem(self.seg_text(x))
+                it.setData(Qt.UserRole, x["key"])
+                it.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                it.setCheckState(Qt.Checked if x["key"] in checked else Qt.Unchecked)
+                self.lstMakeSeg.addItem(it)
+        self.lstMakeSeg.blockSignals(False)
+        self.lstMakeSeg.setVisible(self.lstMakeSeg.count() > 0)
+        self.lblSegHint.setText("Sin ningún set marcado se hace con todo el partido." if self.lstMakeSeg.count()
+                                else "Marca sets en «Ver y marcar → Sets / tramos» para hacer resúmenes por set.")
         self.update_timeline(); self.update_counts(); self.update_dirty()
 
     def seg_video(self, g):
@@ -1441,6 +1615,10 @@ class Main(QMainWindow):
                 store.pop(old_id, None)
                 self.remember_videos()
             n = core.save_marks(self.key.text(), self.match.path, self.match.marks, self.match.removed)
+            if self.match.sport_dirty:
+                core.save_match_fields(self.key.text(), self.match.path, {"sport": self.match.sport})
+                self.match.sport_dirty = False
+                n += 1
             if self.match.segs_dirty:
                 core.save_segs(self.key.text(), self.match.path, self.match.segs)
                 self.match.segs_dirty = False
@@ -1489,6 +1667,8 @@ class Main(QMainWindow):
                 self.player.pause()
 
     def on_pos(self, p):
+        if self.long_start and 0 <= self.cur_video < len(self.videos):
+            self.update_long_btn(self.videos[self.cur_video].start_ms + p)
         if self.play_end and p >= self.play_end:
             self.player.pause()
             self.play_end = 0
@@ -1532,26 +1712,31 @@ class Main(QMainWindow):
             self.player.setPlaybackRate([0.5, 1.0, 1.5, 2.0][self.cmbSpeed.currentIndex()])
 
     # ================================================================ crear
-    def make_seg(self):
-        """Tramo elegido en «Crear resúmenes» (None = todo el partido)."""
-        i = self.cmbMakeSeg.currentIndex() - 1
-        segs = [g for g in (self.match.segs if self.match else []) if g["end"] > g["start"]]
-        return segs[i] if 0 <= i < len(segs) else None
+    def make_segs(self) -> list:
+        """Sets marcados en «Crear resúmenes» ([] = todo el partido)."""
+        keys = {self.lstMakeSeg.item(i).data(Qt.UserRole) for i in range(self.lstMakeSeg.count())
+                if self.lstMakeSeg.item(i).checkState() == Qt.Checked}
+        return [g for g in (self.match.segs if self.match else []) if g["key"] in keys and g["end"] > g["start"]]
 
-    def marks_in(self, seg):
+    def marks_in(self, segs):
         m = self.match.marks
-        return [x for x in m if seg["start"] <= x.ts <= seg["end"]] if seg else m
+        if not segs:
+            return m
+        return [x for x in m if any(g["start"] <= x.ts <= g["end"] for g in segs)]
 
     def update_counts(self):
         if not self.match:
             return
         sec = self.sec()
-        seg = self.make_seg()
-        self.chkFull.setEnabled(seg is not None and bool(self.videos))
-        if seg is None:
+        segs = self.make_segs()
+        self.chkFull.setEnabled(bool(segs) and bool(self.videos))
+        self.cmbSegMode.setEnabled(len(segs) > 1)
+        if not segs:
             self.chkFull.setChecked(False)
-        marks = self.marks_in(seg)
+        marks = self.marks_in(segs)
         for key, title, filt, _ in core.SUMMARIES:
+            if key not in core.SPORT_SUMMARIES[self.sport()]:
+                continue
             n = len(core.clips_for(marks, self.videos, sec, filt)) if self.videos else 0
             base = self.chk[key].text().split("  (")[0]
             self.chk[key].setText(f"{base}  ({n} tramo{'' if n == 1 else 's'})")
@@ -1586,27 +1771,37 @@ class Main(QMainWindow):
             return QMessageBox.information(self, APP, "Añade primero los vídeos del partido (1 · Preparar).")
         jobs = []
         sec = self.sec()
-        name = core.player_name(self.channel)
+        name = self.mark_name("carmen")
         safe = "".join(ch for ch in name if ch.isalnum()) or "jugadora"
         m = self.match
         stamp = datetime.fromtimestamp((self.videos[0].start_ms or m.ts) / 1000).strftime("%Y%m%d")
         vs = f"{m.home.short}_{m.away.short}".replace(" ", "")
-        seg = self.make_seg()
-        suf = ("_" + "".join(ch for ch in seg["name"] if ch.isalnum())) if seg else ""
-        marks = self.marks_in(seg)
-        if seg is not None and self.chkFull.isChecked():
-            full = core.clips_range(seg, self.videos)
-            if full:
-                jobs.append(("completo", f"{seg['name']} completo", full, False, f"{seg['name'].replace(' ', '')}_completo_{vs}_{stamp}.mp4"))
-        for key, title, filt, slides in core.SUMMARIES:
-            if not self.chk[key].isChecked() or not self.chk[key].isEnabled():
-                continue
-            clips = core.clips_for(marks, self.videos, sec, filt)
-            if clips:
-                fname = {"partido": f"Resumen_{vs}_{stamp}{suf}.mp4", "carmen": f"Resumen_{safe}_{stamp}{suf}.mp4",
-                         "bloqueo": f"Bloqueos_{vs}_{stamp}{suf}.mp4", "recepcion": f"Recepciones_{vs}_{stamp}{suf}.mp4"}[key]
-                title = self.chk[key].text().split("  (")[0] + (f" · {seg['name']}" if seg else "")
-                jobs.append((key, title, clips, slides and self.chkSlides.isChecked(), fname))
+        shown = core.SPORT_SUMMARIES[self.sport()]
+        segs = self.make_segs()
+        # Grupos: todo el partido, un grupo por set, o todos los sets juntos
+        if not segs:
+            groups = [([], "", "")]
+        elif len(segs) == 1 or self.cmbSegMode.currentIndex() == 0:
+            groups = [([g], "_" + "".join(ch for ch in g["name"] if ch.isalnum()), g["name"]) for g in segs]
+        else:
+            groups = [(segs, "_" + "-".join("".join(ch for ch in g["name"] if ch.isalnum()) for g in segs),
+                       " + ".join(g["name"] for g in segs))]
+        for gs, suf, gname in groups:
+            marks = self.marks_in(gs)
+            if gs and self.chkFull.isChecked():
+                full = [c for g in gs for c in core.clips_range(g, self.videos)]
+                if full:
+                    jobs.append(("completo", f"{gname} completo", full, False, f"{suf.strip('_')}_completo_{vs}_{stamp}.mp4"))
+            for key, title, filt, slides in core.SUMMARIES:
+                if key not in shown or not self.chk[key].isChecked() or not self.chk[key].isEnabled():
+                    continue
+                clips = core.clips_for(marks, self.videos, sec, filt)
+                if clips:
+                    fname = {"partido": f"Resumen_{vs}_{stamp}{suf}.mp4", "carmen": f"Resumen_{safe}_{stamp}{suf}.mp4",
+                             "bloqueo": f"Bloqueos_{vs}_{stamp}{suf}.mp4", "recepcion": f"Recepciones_{vs}_{stamp}{suf}.mp4",
+                             "gol": f"Goles_{vs}_{stamp}{suf}.mp4", "tarjeta": f"Tarjetas_{vs}_{stamp}{suf}.mp4"}[key]
+                    title = self.chk[key].text().split("  (")[0] + (f" · {gname}" if gname else "")
+                    jobs.append((key, title, clips, slides and self.chkSlides.isChecked(), fname))
         if not jobs:
             return QMessageBox.information(self, APP, "No hay jugadas para los resúmenes elegidos.")
         out_dir = self.edOut.text().strip()
@@ -1634,7 +1829,7 @@ class Main(QMainWindow):
                     o = dataclasses.replace(opt, music="", venue_vol=1.0)
                 ok, err = core.make_summary(key, m, clips, self.videos, sponsors, out, o, slides,
                                             lambda p, t=title, i=i: s.progress.emit(int((i + p / 100) / len(jobs) * 100), t),
-                                            lambda: self.stop_flag)
+                                            lambda: self.stop_flag, sec=sec)
                 if ok:
                     s.log.emit(f"   ✔ Guardado: {fname}")
                     done.append(out)
