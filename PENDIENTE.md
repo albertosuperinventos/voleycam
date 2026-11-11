@@ -141,7 +141,7 @@
 - Vídeo sin hora (Veo…): se le pone una sola (inicio del partido o del archivo), «puesta sola», para poder marcar sin rellenar «Empieza».
 - Varios sets a la vez: casillas de sets + «Un vídeo por set» / «Un solo vídeo con los sets elegidos» (resúmenes y vídeo completo).
 - Resúmenes de fútbol: partido, jugador, goles, tarjetas.
-- Falta en el MANDO/app: botones de gol/tarjeta y jugada larga (solo está en el Estudio).
+- Fútbol: de momento NO se emite en directo; solo se usa en el PC (Estudio). En el mando queda pendiente solo la jugada larga para voley.
 
 ## Estudio 1.3.1 — incluido en 1.4.0
 - Sets: el texto muestra los minutos del vídeo ("min 0:45:00 → 1:12:00 · dura 27:00") en vez de la hora del directo.
