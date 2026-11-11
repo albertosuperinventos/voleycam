@@ -218,6 +218,7 @@ Fase 3 · Legal y negocio: comprobar/registrar marca (OEPM), condiciones de uso,
 - QR del canal durante la emisión: botón en el mando para sacar el QR en una esquina del directo unos segundos (además de la diapositiva de patrocinadores).
 
 ## Estudio — próximas
+- Varios sets a la vez en Crear resúmenes (decidido 11/11: LAS DOS): casillas de sets + opción "Un vídeo por set" o "Un solo vídeo con los sets elegidos". Vale para resúmenes y para el vídeo completo.
 - Vídeo sin hora de comienzo (p. ej. descargado de Veo): poner una sola (fecha del partido / del archivo) para poder marcar sin rellenar «Empieza» a mano. Veo (app.veo.co) descarga bien con yt-dlp; ojo con el espacio en disco (3-5 GB por partido).
 
 - Segundos por defecto separados por deporte (fútbol / voleibol), que se apliquen solos según el deporte del partido (en fútbol las jugadas son más largas).
@@ -257,4 +258,3 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 ## En espera (stand by)
 - Ideas tomadas de Kinovea (kinovea.org, gratuito, análisis de técnica): cámara lenta 0,25× y fotograma a fotograma en Ver y marcar; repetición lenta automática de cada jugada en el resumen; marcar a la jugadora con círculo/flecha en el resumen 💜. De momento se usa Kinovea aparte con los vídeos que saca el Estudio.
 - Cámara virtual para fútbol desde vídeo panorámico (como Once Sport Autocam): pendiente de que Albert decida.
-- Varios sets a la vez en Crear resúmenes (un vídeo por set o todos juntos): pendiente de elegir A/B.
