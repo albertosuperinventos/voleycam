@@ -254,7 +254,10 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 - Voley: portada de cada set estilo CLUB (opción B): fondo granate con rayas, franja "VOLEIBOL TOMARES" con línea dorada, "SET 2" contorneado en dorado, resultado del set en dorado, escudos con aro dorado, "SETS 2-0", competición y fecha. (Móvil y Estudio.)
 - Fútbol: gol con BANDA (opción B): franja oscura abajo con "¡GOL!" en lima, nombre del jugador si lleva 💜, y debajo marcador + minuto. GOL ANULADO igual en rojo. Hecho en Estudio 1.4.1 (marcador con botones Local/Visitante en cada gol). Falta en el móvil.
 
-## App 1.9.0 (próxima versión, acordado 11/11) — sin empezar
+## App 1.9.0 (próxima versión, acordado 11/11) — PROGRAMADA, sin compilar (versión 1.9.0, code 17)
+Hecho (11/11): resúmenes por sets (portada estilo club + patrocinadores en cada set), 🏁 Terminar partido (panel de pasos en el mando, rojo + Repetir),
+⏱ jugada larga y fútbol (⚽ 🟨, 🏠/✈/✖ en el editor, segundos de fútbol, banda ¡GOL!/GOL ANULADO), invitaciones (página docs/invitado.html, canal propio c/<código>).
+Falta después: resúmenes por jugadora con las jugadas 👪 de las familias (idea 1.9); el Estudio aún mete las 👪 en el resumen del partido.
 1. 🏁 Terminar partido (botón en el mando, automático, una confirmación): resultado final 20 s en el directo → parar directo y grabación → subir descripción a YouTube → crear resúmenes POR SETS (en el móvil que emitió) → abrir WhatsApp con TODO JUNTO: imagen del resultado primero y luego los vídeos de cada set en orden (Albert elige grupo y envía) → guardar en historial y dejar listo el siguiente. Si no hay jugadas marcadas o no hay grabación: se salta los resúmenes y comparte solo la imagen. Pasos que fallen en rojo, repetibles.
 2. Resúmenes por sets (ver abajo).
 3. Fútbol en el mando: ⭐ 💜(Alberto) ⚽ 🟨 con segundos de fútbol; resúmenes del móvil de goles y tarjetas. Rótulo ¡GOL! / GOL ANULADO también en los resúmenes del móvil (confirmado).

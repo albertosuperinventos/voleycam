@@ -71,15 +71,29 @@ data class OverlayState(
   /** Partidos con marcas para el resumen desde vídeo (JSON tal cual). */
   val savedMatchesJson: String,
   val serverOffset: Long,
+  /** Fútbol: segundos (antes, después) por tipo: jugada (también 💜), gol y tarjeta. */
+  val footSecs: Map<String, Pair<Int, Int>> = emptyMap(),
+  /** Fútbol: nombre del botón 💜. */
+  val footName: String = "Jugador",
 ) {
   val isVolley get() = sport != "football"
 
   /** Segundos (antes, después) de una jugada según sus etiquetas: el más largo si tiene varias. */
   fun window(m: Highlights.Mark): Pair<Int, Int> {
-    val w = m.tags.map { when (it) { "bloqueo" -> blockBefore to blockAfter; "recepcion" -> recBefore to recAfter; else -> hlBefore to hlAfter } }
-      .ifEmpty { listOf(hlBefore to hlAfter) }
+    // Jugada larga (o con segundos propios): lo que diga la jugada
+    if (m.after != null) return Math.round(m.before ?: 0.0).toInt() to Math.ceil(m.after).toInt()
+    val def = if (isVolley) hlBefore to hlAfter else footSecs["jugada"] ?: (12 to 5)
+    val w = m.tags.mapNotNull { when (it) {
+      "bloqueo" -> blockBefore to blockAfter; "recepcion" -> recBefore to recAfter
+      "gol" -> footSecs["gol"] ?: (12 to 10); "tarjeta" -> footSecs["tarjeta"] ?: (8 to 4)
+      "jugada", "carmen" -> def
+      else -> null } }
+      .ifEmpty { listOf(def) }
     return w.maxOf { it.first } to w.maxOf { it.second }
   }
+
+  /** Nombre del botón 💜 según el deporte. */
+  val playerName get() = if (isVolley) hlName else footName
 
   /** La pantalla completa está puesta y no ha caducado. */
   fun breakActive(nowLocal: Long = System.currentTimeMillis()) =
@@ -160,7 +174,7 @@ data class OverlayState(
         timeoutsA = o.optJSONObject("to")?.optInt("a") ?: 0,
         muted = o.optBoolean("muted"),
         marks = o.optJSONArray("marks")?.let { arr ->
-          (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { Highlights.Mark(it.optLong("ts"), it.optString("label"), it.optString("kind")) } }
+          (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { Highlights.Mark.from(it) } }
         } ?: emptyList(),
         hlBefore = o.optJSONObject("hl")?.optInt("before", 10) ?: 10,
         hlAfter = o.optJSONObject("hl")?.optInt("after", 3) ?: 3,
@@ -182,6 +196,11 @@ data class OverlayState(
         chatMsg = o.optString("chatMsg", ""),
         savedMatchesJson = o.optJSONArray("savedMatches")?.toString() ?: "[]",
         serverOffset = o.optLong("serverOffset"),
+        footSecs = o.optJSONObject("hl").let { h ->
+          fun p(b: String, a: String, db: Int, da: Int) = (h?.optInt(b, db) ?: db) to (h?.optInt(a, da) ?: da)
+          mapOf("jugada" to p("fb", "fa", 12, 5), "gol" to p("gb", "ga", 12, 10), "tarjeta" to p("tb", "ta", 8, 4))
+        },
+        footName = o.optJSONObject("hl")?.optString("fname", "Jugador")?.ifBlank { "Jugador" } ?: "Jugador",
       )
     }
   }

@@ -418,6 +418,90 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     return bmp
   }
 
+  /**
+   * Portada de un set, estilo club: granate con rayas, dorado, escudos y resultado del set.
+   * setScore null = tramo sin resultado (p. ej. una parte de fútbol en curso).
+   */
+  fun renderSetCover(s: OverlayState, setName: String, setScore: Pair<Int, Int>?, setsLine: String, subtitle: String, bmp: Bitmap): Bitmap {
+    val gold = Color.rgb(226, 176, 60); val wine = Color.rgb(110, 14, 24)
+    val bg = Color.rgb(30, 4, 10)
+    bmp.eraseColor(bg)
+    val c = Canvas(bmp)
+    val w = width.toFloat(); val h = height.toFloat()
+    // Rayas diagonales
+    fill.color = Color.rgb(40, 6, 14)
+    var x = -h
+    val path = android.graphics.Path()
+    while (x < w) {
+      path.reset()
+      path.moveTo(x, h); path.lineTo(x + d(9.3f), h); path.lineTo(x + d(9.3f) + h, 0f); path.lineTo(x + h, 0f); path.close()
+      c.drawPath(path, fill)
+      x += d(26.7f)
+    }
+    rect(c, 0f, 0f, w, d(100f), wine)
+    rect(c, 0f, d(100f), w, d(104.7f), gold)
+    withShadow {
+      label(c, if (setScore != null) "RESUMEN DEL SET" else "RESUMEN", w / 2, 0f, d(100f), d(43f), Color.WHITE, 0)
+    }
+    // Nombre del set: relleno oscuro con contorno dorado
+    val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = titleFont ?: condensed; textSize = d(133f); textAlign = Paint.Align.CENTER }
+    val name = setName.uppercase()
+    val tw = p.measureText(name)
+    if (tw > w - d(133f)) p.textSize = p.textSize * (w - d(133f)) / tw
+    val fm = p.fontMetrics
+    val base = d(220f) - (fm.ascent + fm.descent) / 2
+    p.style = Paint.Style.STROKE; p.strokeWidth = d(6f); p.color = gold; p.strokeJoin = Paint.Join.ROUND
+    c.drawText(name, w / 2, base, p)
+    p.style = Paint.Style.FILL; p.color = bg
+    c.drawText(name, w / 2, base, p)
+    // Escudos
+    val cy = d(427f); val r = d(80f)
+    for ((t, xx) in listOf(s.home to w / 2 - d(373f), s.away to w / 2 + d(373f))) {
+      if (t.logo.isNotBlank()) drawLogoFit(c, t.logo, RectF(xx - r, cy - r, xx + r, cy + r))
+      else {
+        fill.color = t.color; c.drawCircle(xx, cy, r, fill)
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = d(4f); color = gold }
+        c.drawCircle(xx, cy, r, ring)
+      }
+      withShadow { label(c, t.name.uppercase(), xx, cy + d(100f), cy + d(153f), d(37f), Color.WHITE, 0, d(400f)) }
+    }
+    withShadow {
+      if (setScore != null) label(c, "${setScore.first} - ${setScore.second}", w / 2, cy - d(70f), cy + d(70f), d(127f), gold, 0)
+      if (setsLine.isNotBlank()) label(c, setsLine, w / 2, cy + d(95f), cy + d(138f), d(37f), Color.WHITE, 0)
+      if (subtitle.isNotBlank()) label(c, subtitle, w / 2, h - d(70f), h - d(24f), d(28f), Color.rgb(220, 200, 170), 0, w - d(133f))
+    }
+    return bmp
+  }
+
+  /** Banda de gol (abajo, transparente): «¡GOL!» o «GOL ANULADO», jugador y marcador · minuto. */
+  fun renderGoal(annulled: Boolean, player: String, scoreLine: String, sideColor: Int, bmp: Bitmap): Bitmap {
+    bmp.eraseColor(Color.TRANSPARENT)
+    val c = Canvas(bmp)
+    val w = width.toFloat(); val h = height.toFloat()
+    val y0 = h - d(167f); val bh = d(107f)
+    rect(c, 0f, y0, w, y0 + bh, Color.argb(228, 11, 18, 32))
+    rect(c, 0f, y0, d(17f), y0 + bh, sideColor or (0xFF shl 24))
+    val txt = if (annulled) "GOL ANULADO" else "¡GOL!"
+    text.textSize = d(64f); text.typeface = titleFont ?: condensed
+    val tw = text.measureText(txt)
+    rect(c, d(47f), y0 + d(15f), d(47f) + tw + d(40f), y0 + bh - d(15f), if (annulled) Color.rgb(230, 60, 60) else accent)
+    label(c, txt, d(67f), y0, y0 + bh, d(64f), if (annulled) Color.WHITE else ink, -1)
+    text.typeface = condensed
+    val x = d(47f) + tw + d(67f)
+    val maxW = w - x - d(40f)
+    withShadow {
+      if (player.isNotBlank()) {
+        val top = if (scoreLine.isNotBlank()) y0 + d(8f) else y0
+        label(c, player.uppercase(), x, top, if (scoreLine.isNotBlank()) y0 + d(66f) else y0 + bh, d(52f), Color.WHITE, -1, maxW)
+      }
+      if (scoreLine.isNotBlank()) {
+        val top = if (player.isNotBlank()) y0 + d(62f) else y0
+        label(c, scoreLine, x, top, if (player.isNotBlank()) y0 + bh - d(6f) else y0 + bh, if (player.isNotBlank()) d(33f) else d(43f), Color.rgb(205, 210, 220), -1, maxW)
+      }
+    }
+    return bmp
+  }
+
   /** Solo el título "MEJORES JUGADAS" sobre transparente, del tamaño del vídeo (para animarlo). */
   fun renderTitle(bmp: Bitmap): Bitmap {
     bmp.eraseColor(Color.TRANSPARENT)

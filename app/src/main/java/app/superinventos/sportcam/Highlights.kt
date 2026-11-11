@@ -21,13 +21,35 @@ object Highlights {
    * Jugada marcada. kind lleva las etiquetas separadas por "+": "" (⭐ jugada), "carmen" (💜),
    * "bloqueo" (🧱), "recepcion" (🛡) o combinaciones como "carmen+bloqueo".
    */
-  data class Mark(val ts: Long, val label: String, val kind: String = "") {
+  /** [before]/[after]: segundos propios de esta jugada (jugada larga: 0 y lo que duró). */
+  data class Mark(val ts: Long, val label: String, val kind: String = "", val before: Double? = null, val after: Double? = null) {
     val tags: Set<String> = kind.split('+').map { it.trim() }.filter { it.isNotEmpty() }.toSet().ifEmpty { setOf("jugada") }
     /** Solo de la jugadora (no va al resumen del partido). */
     val isPlayer get() = tags == setOf("carmen")
-    val inGame get() = !isPlayer
+    /** Las jugadas que marcan las familias invitadas (👪) van aparte, no al resumen del partido. */
+    val inGame get() = !isPlayer && !has("fam")
     fun has(t: String) = t in tags
+    /** Set o parte a la que pertenece, sacado de la etiqueta ("Set 2", "1ª parte"); null si no se sabe. */
+    val group: String? get() = groupOf(label)
+
+    companion object {
+      fun from(o: org.json.JSONObject) = Mark(o.optLong("ts"), o.optString("label"), o.optString("kind"),
+        if (o.has("before")) o.optDouble("before").takeIf { !it.isNaN() } else null,
+        if (o.has("after")) o.optDouble("after").takeIf { !it.isNaN() } else null)
+    }
   }
+
+  private val SET_RE = Regex("""(?i)\bset (\d+)\b""")
+  private val PART_RE = Regex("""(?i)(\d+)ª parte""")
+
+  fun groupOf(label: String): String? {
+    SET_RE.find(label)?.let { return "Set ${it.groupValues[1]}" }
+    PART_RE.find(label)?.let { return "${it.groupValues[1]}ª parte" }
+    return null
+  }
+
+  /** Número del set o parte ("Set 2" → 2). */
+  fun groupNo(g: String): Int = Regex("""\d+""").find(g)?.value?.toIntOrNull() ?: 0
 
   /** Tipos de resumen: clave, filtro. */
   val SUMMARY_FILTERS: Map<String, (Mark) -> Boolean> = linkedMapOf(
@@ -35,6 +57,8 @@ object Highlights {
     "carmen" to { m -> m.has("carmen") },
     "bloqueo" to { m -> m.has("bloqueo") },
     "recepcion" to { m -> m.has("recepcion") },
+    "gol" to { m -> m.has("gol") },
+    "tarjeta" to { m -> m.has("tarjeta") },
   )
 
   /** Trozo de una grabación: hora del servidor de inicio y fin (ms) y dónde empieza dentro del vídeo (µs). */

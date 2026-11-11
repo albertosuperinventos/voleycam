@@ -71,7 +71,22 @@ object SummaryMaker {
     } catch (_: Exception) { 1280 to 720 } finally { try { r.release() } catch (_: Exception) {} }
   }
 
-  class Slides(val intro: File, val introNoTitle: File, val title: File, val sponsors: List<File>)
+  /** title null = portada sin el rótulo animado (p. ej. la portada de un set). */
+  class Slides(val intro: File, val introNoTitle: File, val title: File?, val sponsors: List<File>)
+
+  /** Portada de un set (estilo club) con los patrocinadores de [base]. Hilo de fondo. */
+  fun renderSetSlides(context: Context, w: Int, h: Int, st: OverlayState, base: Slides, idx: Int,
+                      setName: String, setScore: Pair<Int, Int>?, setsLine: String, subtitle: String): Slides {
+    val r = ScoreboardRenderer(w, h)
+    try { r.titleFont = Typeface.createFromAsset(context.assets, "fonts/BarlowCondensed-Black.ttf") } catch (_: Exception) {}
+    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val dir = File(context.cacheDir, "summary").apply { mkdirs() }
+    r.renderSetCover(st, setName, setScore, setsLine, subtitle, bmp)
+    val f = File(dir, "portada_set_$idx.png")
+    FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    bmp.recycle()
+    return Slides(f, f, null, base.sponsors)
+  }
 
   /** Dibuja portada (con y sin título), el título suelto y los patrocinadores. Hilo de fondo. */
   fun renderSlides(context: Context, w: Int, h: Int, st: OverlayState, subtitle: String): Slides {
@@ -174,6 +189,41 @@ object SummaryMaker {
     }
   }
 
+  /** Banda (p. ej. de gol) que solo se ve entre [fromUs] y [toUs] desde el principio del tramo. */
+  private class BandOverlay(private val png: File, private val fromUs: Long, private val toUs: Long) : BitmapOverlay() {
+    private var firstUs = -1L
+    private var bmp: Bitmap? = null
+    override fun getBitmap(presentationTimeUs: Long): Bitmap {
+      if (firstUs < 0 || presentationTimeUs < firstUs) firstUs = presentationTimeUs
+      return bmp ?: BitmapFactory.decodeFile(png.absolutePath).also { bmp = it }
+    }
+    override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
+      val t = if (firstUs < 0) 0L else presentationTimeUs - firstUs
+      val a = when {
+        t < fromUs || t > toUs -> 0f
+        t < fromUs + 250_000 -> (t - fromUs) / 250_000f
+        t > toUs - 250_000 -> (toUs - t) / 250_000f
+        else -> 1f
+      }
+      return OverlaySettings.Builder().setAlphaScale(a.coerceIn(0f, 1f)).build()
+    }
+  }
+
+  /** Banda de gol para el tramo [range] (índice), de [fromUs] a [toUs] desde su principio. */
+  class Band(val range: Int, val png: File, val fromUs: Long, val toUs: Long)
+
+  /** Dibuja la banda de gol en un PNG. Hilo de fondo. */
+  fun renderGoalBand(context: Context, w: Int, h: Int, idx: Int, annulled: Boolean, player: String, scoreLine: String, color: Int): File {
+    val r = ScoreboardRenderer(w, h)
+    try { r.titleFont = Typeface.createFromAsset(context.assets, "fonts/BarlowCondensed-Black.ttf") } catch (_: Exception) {}
+    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    r.renderGoal(annulled, player, scoreLine, color, bmp)
+    val f = File(File(context.cacheDir, "summary").apply { mkdirs() }, "gol_$idx.png")
+    FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    bmp.recycle()
+    return f
+  }
+
   /** Baja el volumen al principio y al final de cada tramo para que el corte no suene seco. */
   private class FadeAudio(private val durationUs: Long) : BaseAudioProcessor() {
     private var frames = 0L
@@ -202,7 +252,8 @@ object SummaryMaker {
    * Prepara la lista de tramos (en hilo de fondo: saca los fotogramas de los fundidos).
    * [ranges] en microsegundos dentro de [src]. [slides] solo para el resumen del partido.
    */
-  fun prepare(context: Context, src: Uri, ranges: List<LongRange>, slides: Slides?, w: Int, h: Int, fades: Boolean = true): List<EditedMediaItem> {
+  fun prepare(context: Context, src: Uri, ranges: List<LongRange>, slides: Slides?, w: Int, h: Int, fades: Boolean = true,
+              bands: List<Band> = emptyList()): List<EditedMediaItem> {
     val present: Effect = Presentation.createForWidthAndHeight(w, h, Presentation.LAYOUT_SCALE_TO_FIT)
     fun effects(extra: List<Effect>, audio: List<AudioProcessor> = emptyList()) = Effects(audio, listOf(present) + extra)
     fun overlay(o: BitmapOverlay): Effect = OverlayEffect(ImmutableList.of(o))
@@ -213,7 +264,8 @@ object SummaryMaker {
     val items = mutableListOf<EditedMediaItem>()
     var prev: Tail? = null
     if (slides != null) {
-      items += if (fades) image(slides.introNoTitle, listOf(overlay(TitleOverlay(slides.title)))) else image(slides.intro, emptyList())
+      val t = slides.title
+      items += if (fades && t != null) image(slides.introNoTitle, listOf(overlay(TitleOverlay(t)))) else image(slides.intro, emptyList())
       if (fades) prev = Tail.Still(slides.intro)
     }
     ranges.forEachIndexed { i, r ->
@@ -224,9 +276,10 @@ object SummaryMaker {
       val fade = if (fades && hasNext && len > FADE_US * 3) FADE_US else 0L
       val endUs = r.last - fade
       val clip = MediaItem.ClippingConfiguration.Builder().setStartPositionMs(r.first / 1000).setEndPositionMs(endUs / 1000).build()
-      val fx = prev?.let { listOf(overlay(TailOverlay(it, w, h))) } ?: emptyList()
+      val bandFx = bands.filter { it.range == i }.map { overlay(BandOverlay(it.png, it.fromUs, it.toUs)) }
+      val fx = (prev?.let { listOf(overlay(TailOverlay(it, w, h))) } ?: emptyList()) + bandFx
       items += EditedMediaItem.Builder(MediaItem.Builder().setUri(src).setClippingConfiguration(clip).build())
-        .setEffects(if (fades) effects(fx, listOf(FadeAudio(endUs - r.first))) else effects(emptyList())).build()
+        .setEffects(if (fades) effects(fx, listOf(FadeAudio(endUs - r.first))) else effects(bandFx)).build()
       prev = if (fade > 0) tailFrames(context, src, endUs, r.last).takeIf { it.isNotEmpty() }?.let { Tail.Frames(it) } else null
     }
     slides?.sponsors?.forEach { f ->

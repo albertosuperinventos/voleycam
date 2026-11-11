@@ -158,18 +158,18 @@ body.compact main{padding:8px;gap:6px}
 .stgrid b{color:var(--text)}
 .stgrid span{color:var(--muted)}
 /* Compartir: QR a pantalla completa para enseñarlo en el pabellón */
-#shareOv{position:fixed;inset:0;z-index:60;background:#fff;color:#13233F;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:16px 16px 24px;gap:10px}
-#shareOv h2{margin:4px 0 0;padding:0 44px;font:800 26px/1.1 'Barlow Condensed',sans-serif;text-align:center}
-#shareOv .qr{width:min(82vw,62vh,420px);aspect-ratio:1}
-#shareOv .qr svg{width:100%;height:100%;display:block}
-#shareOv .url{font-weight:700;word-break:break-all;text-align:center}
+#shareOv,#invOv{position:fixed;inset:0;z-index:60;background:#fff;color:#13233F;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:16px 16px 24px;gap:10px}
+#shareOv h2,#invOv h2{margin:4px 0 0;padding:0 44px;font:800 26px/1.1 'Barlow Condensed',sans-serif;text-align:center}
+#shareOv .qr,#invOv .qr{width:min(82vw,62vh,420px);aspect-ratio:1}
+#shareOv .qr svg,#invOv .qr svg{width:100%;height:100%;display:block}
+#shareOv .url,#invOv .url{font-weight:700;word-break:break-all;text-align:center}
 #shareOv .wa{display:flex;gap:6px;width:100%;max-width:420px}
 #shareOv .wa input{min-width:0}
 #shareOv .wa .pre{flex:0 0 64px}
 #shareOv .wa .num{flex:1}
 #shareOv .wa .primary{background:#1FA855;border-color:#1FA855}
 #shareOv .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:420px}
-#shareOv .close{position:absolute;top:8px;right:8px}
+#shareOv .close,#invOv .close{position:absolute;top:8px;right:8px}
 /* Cabezal de giro: botones de mantener pulsado */
 .panrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .panrow button{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;font-size:20px;padding:14px 0}
@@ -240,6 +240,8 @@ function start() {
   const remoteRef = base.child('remote');
   const coverRef = base.child('cover');
   const shareRef = base.child('share');
+  const finishRef = base.child('finish');
+  const invitesRef = base.child('invites');   // 👥 invitaciones: cada una tiene su propio canal c/<token> (sin la clave)   // 🏁 Terminar partido: pasos que va haciendo la app
   const playersRef = base.child('players'); // jugadoras del club (con foto o cromo opcional)
   const squadRef = base.child('squad');     // convocatoria del partido: { ids:{id:true}, num:{id:n}, team, tag }   // enlace del canal de YouTube y mensaje del chat
 
@@ -279,6 +281,7 @@ function start() {
     loaded = true;
     if (s.val() == null) { liveRef.set(SC.defaultLive()); return; }
     live = SC.normalize(s.val()); render(); pushNative();
+    if (IS_NATIVE) pushInvViewsSoon();
   });
   teamsRef.on('value', s => { teams = s.val() || {}; render(); pushNative(); pushSquad(); });
   sponsRef.on('value', s => { sponsors = s.val() || {}; render(); pushNative(); });
@@ -304,6 +307,10 @@ function start() {
   marksRef.on('value', s => { marks = s.val() || {}; if (tab !== 'juego' && !compact) render(); pushNative(); });
   playersRef.on('value', s => { players = s.val() || {}; if ((tab === 'ajustes' || tab === 'partido') && !compact) render(); pushSquad(); });
   squadRef.on('value', s => { squad = s.val() || {}; if (tab === 'partido' && !compact) render(); pushSquad(); });
+  let invites = {};
+  invitesRef.on('value', s => { invites = s.val() || {}; if (tab === 'ajustes' && !compact) render(); if (IS_NATIVE) watchInvites(); });
+  let finishState = null;
+  finishRef.on('value', s => { finishState = s.val(); if (!compact) render(); });
   shareRef.on('value', s => { share = s.val() || {}; if (tab !== 'juego' && !compact) render(); pushNative(); if (shareOpen) renderShare(); });
 
   /* ---------- Acciones ---------- */
@@ -339,7 +346,7 @@ function start() {
         ytTitle: ytTexts().title,
         ytPrivacy: live.info.privacy || 'unlisted',
         ytWhen: live.info.when || '',
-        marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '', kind: m.kind || '' })).sort((a, b) => a.ts - b.ts),
+        marks: Object.values(marks).map(markOut).sort((a, b) => a.ts - b.ts),
         ytDesc: ytTexts().desc,
         chatMsg: share.chatOff ? '' : chatMsg(),
         serverOffset: offset
@@ -528,11 +535,25 @@ function start() {
   // La app publica su estado, la vista previa y el estado de YouTube a través de estas funciones
   window.scStatus = o => statusRef.set(Object.assign({ ts: now() }, o));
   window.scPreview = img => previewRef.set({ ts: now(), img });
+  // 🏁 Terminar partido: la app publica los pasos, pide la imagen del resultado y, al final, guardar y poner a cero
+  window.scFinish = o => finishRef.set(Object.assign({ ts: now() }, o));
+  window.scFinishImage = async () => {
+    try { const c = await resultImage(matchRecord()); window.SportCamNative.finishImage(c.toDataURL('image/png')); }
+    catch (e) { try { window.SportCamNative.finishImage(''); } catch (e2) {} }
+  };
+  window.scFinishReset = async () => {
+    try {
+      if (hasData(live) || Object.keys(marks).length) await matchesRef.push(matchRecord());
+      await act(L => SC.newMatch(L));
+      await marksRef.remove();
+      window.SportCamNative.finishEvent('history', true, '');
+    } catch (e) { try { window.SportCamNative.finishEvent('history', false, String(e && e.message || e)); } catch (e2) {} }
+  };
   window.scYt = o => { ytState = Object.assign({ connected: false, broadcasts: [], message: '' }, o); if (tab !== 'juego' && !compact) render(); };
 
   function savedMatchesForNative() {
     const cur = { title: 'Partido actual', liveStart: (status && status.liveStartTs) || 0,
-                  marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '', kind: m.kind || '' })) };
+                  marks: Object.values(marks).map(markOut) };
     const old = Object.values(matches).filter(m => m.marks).sort((a, b) => b.ts - a.ts).map(m => ({
       title: `${m.home.short} - ${m.away.short} · ${new Date(m.ts).toLocaleDateString('es-ES')}`,
       liveStart: m.liveStart, marks: (Array.isArray(m.marks) ? m.marks : Object.values(m.marks)).map(x => ({ ts: x.ts, label: x.label || '', kind: x.kind || '' }))
@@ -546,6 +567,9 @@ function start() {
     if (cmd === 'markc') addMark(null, 'carmen');
     if (cmd === 'markb') addMark(null, 'bloqueo');
     if (cmd === 'markr') addMark(null, 'recepcion');
+    if (cmd === 'markg') addMark(null, 'gol');
+    if (cmd === 'markt') addMark(null, 'tarjeta');
+    if (cmd === 'markLong') toggleLong();
   };
 
   /* ---------- Jugadas marcadas (resumen) ---------- */
@@ -554,15 +578,37 @@ function start() {
     if (L.sport === 'volley') return `${prefix || 'Jugada'} · Set ${L.setNo} · ${sc}`;
     return `${prefix || 'Jugada'} · ${L.clock.period} ${SC.fmtClock(SC.clockDisplayMs(L.clock, now()))} · ${sc}`;
   }
-  const hlName = () => (live.hl.name || 'Carmen').trim() || 'Carmen';
-  /* Tipos de jugada. Una jugada puede tener varias etiquetas: se guardan en kind separadas por "+". */
-  const TAG_ORDER = ['jugada', 'carmen', 'bloqueo', 'recepcion'];
-  const TAG_ICON = { jugada: '⭐', carmen: '💜', bloqueo: '🧱', recepcion: '🛡' };
-  const TAG_ACT = { jugada: 'mark', carmen: 'markc', bloqueo: 'markb', recepcion: 'markr' };
-  const tagName = t => t === 'carmen' ? hlName() : { jugada: 'Jugada', bloqueo: 'Bloqueo', recepcion: 'Recepción' }[t];
+  const isFootball = () => live.sport === 'football';
+  const hlName = () => isFootball() ? ((live.hl.fname || 'Jugador').trim() || 'Jugador') : ((live.hl.name || 'Carmen').trim() || 'Carmen');
+  /* Tipos de jugada. Una jugada puede tener varias etiquetas: se guardan en kind separadas por "+".
+     Voleibol: ⭐ 💜 🧱 🛡 · Fútbol: ⭐ 💜 ⚽ 🟨. Extras: larga (⏱ inicio-fin), anulado, local / visit (de quién es el gol). */
+  const tagOrder = () => isFootball() ? ['jugada', 'carmen', 'gol', 'tarjeta'] : ['jugada', 'carmen', 'bloqueo', 'recepcion'];
+  const ALL_TAGS = ['jugada', 'carmen', 'bloqueo', 'recepcion', 'gol', 'tarjeta', 'anulado', 'larga', 'local', 'visit', 'fam'];
+  const TAG_ICON = { jugada: '⭐', carmen: '💜', bloqueo: '🧱', recepcion: '🛡', gol: '⚽', tarjeta: '🟨', anulado: '✖', larga: '⏱', local: '🏠', visit: '✈', fam: '👪' };
+  const TAG_ACT = { jugada: 'mark', carmen: 'markc', bloqueo: 'markb', recepcion: 'markr', gol: 'markg', tarjeta: 'markt' };
+  const tagName = t => t === 'carmen' ? hlName() : { jugada: 'Jugada', bloqueo: 'Bloqueo', recepcion: 'Recepción', gol: 'Gol', tarjeta: 'Tarjeta',
+    anulado: 'Anulado', larga: 'Larga', local: (sideTeam('h') || {}).short || 'Local', visit: (sideTeam('a') || {}).short || 'Visitante' }[t];
   const tagsOf = m => { const t = new Set(String((m && m.kind) || '').split('+').filter(Boolean)); if (!t.size) t.add('jugada'); return t; };
-  const kindOf = set => (set.size === 1 && set.has('jugada')) ? null : TAG_ORDER.filter(x => set.has(x)).join('+');
-  const iconsOf = m => { const t = tagsOf(m); return TAG_ORDER.filter(x => t.has(x)).map(x => TAG_ICON[x]).join(''); };
+  const kindOf = set => (set.size === 1 && set.has('jugada')) ? null : ALL_TAGS.filter(x => set.has(x)).join('+');
+  const iconsOf = m => { const t = tagsOf(m); const i = ALL_TAGS.filter(x => t.has(x) && x !== 'larga').map(x => TAG_ICON[x]).join(''); return (t.has('larga') ? '⏱' : '') + i; };
+  /** Jugada para la app: hora, etiqueta, tipo y, si los tiene, segundos propios (jugada larga). */
+  const markOut = m => { const o = { ts: m.ts, label: m.label || '', kind: m.kind || '' }; if (m.before != null) o.before = m.before; if (m.after != null) o.after = m.after; return o; };
+  /* ⏱ Jugada larga: primer toque inicio, segundo final (sin segundos de más por delante ni por detrás). */
+  let longStart = 0;
+  function toggleLong() {
+    const t = now();
+    if (!longStart) { longStart = t; if (navigator.vibrate) navigator.vibrate(40); return render(); }
+    const start = longStart; longStart = 0;
+    if (t - start < 1000) { toast('Jugada larga demasiado corta'); return render(); }
+    const m = { ts: start, label: markLabel(live, 'Jugada larga'), kind: 'jugada+larga', before: 0, after: Math.round((t - start) / 100) / 10 };
+    const ref = marksRef.push(m);
+    lastMark = { id: ref.key, ts: t };   // ⚽ 💜… pulsado justo después se añade a esta jugada
+    marks[ref.key] = m;
+    if (navigator.vibrate) navigator.vibrate(60);
+    toast(`⏱ Jugada larga de ${Math.round((t - start) / 1000)} s`);
+    render();
+  }
+  const longBtn = () => `<button class="${longStart ? 'sun' : ''}" data-act="markLong">${longStart ? '⏱ Fin larga' : '⏱ Larga'}</button>`;
   /** Marca una jugada. Si se pulsó otro botón hace menos de 5 s, se añade la etiqueta a esa misma jugada. */
   function addMark(label, type) {
     type = type || 'jugada';
@@ -584,7 +630,7 @@ function start() {
     document.querySelectorAll(sel).forEach(b => { b.classList.add('flash'); b.dataset.old = b.textContent; b.textContent = '✓'; });
     setTimeout(() => document.querySelectorAll(sel).forEach(b => { b.classList.remove('flash'); if (b.dataset.old) b.textContent = b.dataset.old; }), 1000);
   }
-  const markBtns = (short) => TAG_ORDER.map(t => `<button class="${t === 'jugada' ? 'sun' : ''}" data-act="${TAG_ACT[t]}">${TAG_ICON[t]} ${esc(short && t === 'recepcion' ? 'Recep.' : short && t === 'jugada' ? 'Jugada' : tagName(t))}</button>`).join('');
+  const markBtns = (short) => tagOrder().map(t => `<button class="${t === 'jugada' ? 'sun' : ''}" data-act="${TAG_ACT[t]}">${TAG_ICON[t]} ${esc(short && t === 'recepcion' ? 'Recep.' : short && t === 'jugada' ? 'Jugada' : tagName(t))}</button>`).join('');
   const replaying = () => !!(status && status.replay && now() - (status.ts || 0) < 30000);
   function replayCmd() {
     if (IS_NATIVE) { try { window.SportCamNative.command('replay'); } catch (e) {} return; }
@@ -852,6 +898,7 @@ function start() {
         ${showClock ? `<span class="row" style="flex:0 0 auto;gap:6px"><span class="cclock" id="clk">00:00</span><button class="${live.clock.running ? '' : 'primary'}" style="padding:4px 10px" data-act="clk">${live.clock.running ? '❚❚' : '▶'}</button></span>` : ''}</div>
       <div class="cbtns">
         ${markBtns(true)}
+        ${longBtn()}
         ${replayBtn()}
         <button data-act="undo">Deshacer</button>
         ${scr ? `<button class="sun" data-act="allHide">${scr.until ? `Volver <span class="brkLeft">(${fmtLeft(scr.until - now())})</span>` : 'Quitar'}</button>`
@@ -899,16 +946,17 @@ function start() {
   function viewScore() {
     const volley = live.sport === 'volley';
     const scr = onScreen();
-    let h = `<div class="teams">${teamPanel('h')}${teamPanel('a')}</div>`;
+    let h = finishPanel() + `<div class="teams">${teamPanel('h')}${teamPanel('a')}</div>`;
     if (volley) {
       h += `<div class="setline">${live.history.map((x, i) => `<span class="pill">${x.h}-${x.a}</span>`).join('')}
         <span class="pill now">${live.finished ? 'FINAL' : 'SET ' + live.setNo}</span>
         <button class="link" data-act="setsToggle">${showSets ? 'Cerrar' : '✎ Corregir'}</button></div>`;
-      if (live.finished) h += `<div class="final">PARTIDO TERMINADO</div>`;
+      if (live.finished) h += `<div class="final">PARTIDO TERMINADO</div>` + (finishPanel() ? '' : finishButton());
       if (showSets) h += setsCard();
     }
     h += `<div class="grid4">${markBtns(true)}</div>
-      <div class="grid3">
+      <div class="grid4">
+        ${longBtn()}
         ${replayBtn()}
         <button data-act="undo">↶ Deshacer</button>
         <button class="${live.muted ? 'danger' : ''}" data-act="muteToggle">${live.muted ? '🔇 Sin micro' : '🎙 Micro'}</button>
@@ -1077,12 +1125,12 @@ function start() {
     const list = Object.entries(marks).sort((a, b) => a[1].ts - b[1].ts);
     const time = ts => new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     return `<div class="card">
-      <p class="muted small" style="margin-top:0">⭐ 🧱 🛡 van al resumen del partido (con portada y patrocinadores); 💜 al de ${esc(hlName())}; 🧱 y 🛡 también a sus resúmenes de bloqueos y recepciones.</p>
+      <p class="muted small" style="margin-top:0">${isFootball() ? `⭐ ⚽ 🟨 van al resumen del partido; 💜 al de ${esc(hlName())}; ⚽ y 🟨 también a sus resúmenes de goles y tarjetas. En un ⚽ toca el icono para decir de quién es (🏠 / ✈) o si fue anulado.` : `⭐ 🧱 🛡 van al resumen del partido (con portada y patrocinadores); 💜 al de ${esc(hlName())}; 🧱 y 🛡 también a sus resúmenes de bloqueos y recepciones.`}</p>
       <div>${list.map(([id, m]) => `<div class="item" style="flex-wrap:wrap"><button class="ghost" style="flex:0 0 auto;min-width:44px;padding:6px" data-act="markKind" data-id="${id}" title="Cambiar tipo">${iconsOf(m)}</button>
         <div class="grow">${esc(m.label || 'Jugada')}<br>
         <span class="muted small">${time(m.ts)}</span></div>
         <button class="danger" data-act="markDel" data-id="${id}">✕</button>
-        ${editingMark === id ? `<div class="seg" style="flex-basis:100%;margin-top:6px">${TAG_ORDER.map(t => `<button class="${tagsOf(m).has(t) ? 'on' : ''}" data-act="markTag" data-id="${id}" data-v="${t}">${TAG_ICON[t]} ${esc(tagName(t))}</button>`).join('')}</div>` : ''}</div>`).join('') || '<p class="muted">Sin jugadas marcadas.</p>'}</div>
+        ${editingMark === id ? `<div class="seg" style="flex-basis:100%;margin-top:6px">${tagOrder().concat(tagsOf(m).has('gol') ? ['local', 'visit', 'anulado'] : []).map(t => `<button class="${tagsOf(m).has(t) ? 'on' : ''}" data-act="markTag" data-id="${id}" data-v="${t}">${TAG_ICON[t]} ${esc(tagName(t))}</button>`).join('')}</div>` : ''}</div>`).join('') || '<p class="muted">Sin jugadas marcadas.</p>'}</div>
       ${list.length ? '<p class="muted small" style="margin:4px 0 0">Toca el icono de una jugada para cambiar su tipo.</p>' : ''}
       ${IS_NATIVE ? `<p><button class="primary" style="width:100%" data-act="makeHl">🎬 Crear resúmenes</button></p>
         <p><button style="width:100%" data-act="joinRec">🔗 Unir grabaciones</button></p>
@@ -1109,13 +1157,151 @@ function start() {
   }
 
   /* ----- Pestaña DESPUÉS ----- */
+  const FINISH_STEPS = [['result', 'Resultado final 20 s en el directo'], ['stop', 'Parar directo y grabación'], ['desc', 'Descripción en YouTube'],
+    ['hl', 'Resúmenes por sets'], ['history', 'Guardar en historial y marcador a cero'], ['share', 'Abrir WhatsApp con imagen y vídeos']];
+  const FINISH_ICON = { wait: '⏳', run: '🔄', ok: '✅', skip: '⏭', err: '❌' };
+  /** Panel de 🏁 Terminar partido: un paso por línea; los que fallan salen en rojo con Repetir. */
+  function finishPanel() {
+    const f = finishState;
+    if (!f || !f.steps || now() - (f.ts || 0) > 6 * 3600000) return '';
+    const rows = FINISH_STEPS.map(([k, name]) => {
+      const st = f.steps[k] || {}; const s = st.s || 'wait'; const err = s === 'err';
+      return `<div style="display:flex;gap:8px;align-items:center;padding:4px 0;${err ? 'color:var(--danger);font-weight:600' : ''}">
+        <span>${FINISH_ICON[s] || '⏳'}</span><span style="flex:1">${name}${st.msg ? `<br><span class="small ${err ? '' : 'muted'}">${esc(st.msg)}</span>` : ''}</span>
+        ${err ? `<button class="danger" data-act="finishRetry" data-v="${k}">Repetir</button>` : ''}</div>`;
+    }).join('');
+    const done = FINISH_STEPS.every(([k]) => ['ok', 'skip', 'err'].includes((f.steps[k] || {}).s));
+    return `<div class="card" style="border:2px solid var(--accent)"><b>🏁 Terminar partido</b>${rows}
+      ${done ? `<button style="width:100%;margin-top:6px" data-act="finishClose">Cerrar</button>` : ''}</div>`;
+  }
+  function finishButton() {
+    return `<button class="primary" style="width:100%" data-act="finishMatch">🏁 Terminar partido</button>`;
+  }
+
+  /* ---------- 👥 Invitaciones (familias) ----------
+     El enlace lleva solo un código propio, no la clave. El invitado escribe en c/<código>/ops y
+     el móvil que emite (la app) comprueba la invitación, lo aplica y le devuelve el marcador en c/<código>/view. */
+  const INV_PAGE = location.protocol.startsWith('http') ? new URL('invitado.html', location.href.split('#')[0]).href
+    : 'https://albertosuperinventos.github.io/voleycam/invitado.html';
+  const invLink = t => INV_PAGE + '#i=' + t;
+  const invValid = inv => !!inv && (!inv.until || now() < inv.until);
+  const invWho = inv => (inv.player || inv.name || 'Invitado').trim();
+  let invShow = null;   // código de la invitación cuyo QR se está enseñando
+  function newToken() {
+    const a = new Uint8Array(18); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => a[i] = Math.random() * 256);
+    return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join('');
+  }
+  function invUntil(v) {
+    const d = new Date(now());
+    if (v === '3h') return now() + 3 * 3600000;
+    if (v === 'today') { d.setHours(23, 59, 0, 0); return d.getTime(); }
+    if (v === '7d') return now() + 7 * 86400000;
+    return now() + 30 * 86400000;
+  }
+  async function createInvite() {
+    const name = (document.getElementById('invName') || {}).value.trim();
+    const player = (document.getElementById('invPlayer') || {}).value.trim();
+    const pScore = !!(document.getElementById('invScore') || {}).checked, pMarks = !!(document.getElementById('invMarks') || {}).checked;
+    if (!name) return toast('Pon el nombre de quien invitas');
+    if (!pScore && !pMarks) return toast('Elige al menos un permiso');
+    if (pMarks && !player) return toast('Pon el nombre de la jugadora');
+    const t = newToken();
+    const inv = { name, player, perms: { score: pScore, marks: pMarks }, until: invUntil((document.getElementById('invUntil') || {}).value), created: now() };
+    await db.ref('c/' + t).set({ info: inv });
+    await invitesRef.child(t).set(inv);
+    invShow = t; renderInv();
+    pushInvViewsSoon();
+  }
+  async function revokeInvite(t) {
+    if (!confirm('¿Anular esta invitación? El enlace dejará de funcionar.')) return;
+    await db.ref('c/' + t).set({ revoked: true });
+    await invitesRef.child(t).remove();
+    toast('Invitación anulada');
+  }
+  function invitesBlock() {
+    const list = Object.entries(invites).sort((a, b) => (b[1].created || 0) - (a[1].created || 0));
+    const fmt = ts => new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const names = Object.values(players).map(p => p && p.nombre).filter(Boolean);
+    return `<div class="card">
+      <p class="muted small" style="margin-top:0">Para que una familia lleve el marcador o marque las jugadas de su hija desde su móvil. El enlace no lleva la clave del canal; los cambios los aplica el móvil que emite.</p>
+      <label style="margin-top:0">Nombre de quien invitas</label><input id="invName" maxlength="24" placeholder="Ej.: madre de Lucía">
+      <label>Jugadora (sus jugadas)</label><input id="invPlayer" maxlength="20" list="invPl" placeholder="Nombre de la jugadora">
+      <datalist id="invPl">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <div class="optrow"><span>Llevar el marcador</span><input type="checkbox" id="invScore" checked style="width:22px;height:22px"></div>
+      <div class="optrow"><span>Marcar jugadas de la jugadora</span><input type="checkbox" id="invMarks" checked style="width:22px;height:22px"></div>
+      <div class="optrow"><span>Válida hasta</span><select id="invUntil" style="width:auto"><option value="3h">3 horas</option><option value="today" selected>Hoy</option><option value="7d">7 días</option><option value="30d">30 días</option></select></div>
+      <p><button class="primary" style="width:100%" data-act="invCreate">👥 Crear invitación</button></p>
+      ${list.length ? '<h3 style="margin:12px 0 4px;font-size:15px">Activas</h3>' : ''}
+      ${list.map(([t, inv]) => `<div class="item"><div class="grow"><b>${esc(inv.name || '')}</b>${inv.player ? ' · ' + esc(inv.player) : ''}<br>
+        <span class="muted small">${[inv.perms && inv.perms.score ? 'marcador' : '', inv.perms && inv.perms.marks ? 'jugadas' : ''].filter(Boolean).join(' y ')} · ${invValid(inv) ? 'hasta ' + fmt(inv.until) : '<span style="color:var(--danger)">caducada</span>'}</span></div>
+        ${invValid(inv) ? `<button data-act="invQr" data-id="${t}">QR</button>` : ''}<button class="danger" data-act="invDel" data-id="${t}">Anular</button></div>`).join('')}
+    </div>`;
+  }
+  function renderInv() {
+    let ov = document.getElementById('invOv');
+    const inv = invShow && invites[invShow] || null;
+    if (!invShow) { if (ov) ov.remove(); return; }
+    if (!ov) { ov = document.createElement('div'); ov.id = 'invOv'; document.body.appendChild(ov); }
+    const url = invLink(invShow);
+    let svg = '';
+    try { const q = qrcode(0, 'M'); q.addData(url); q.make(); svg = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }); } catch (e) {}
+    const msg = `Hola${inv && inv.name ? ' ' + inv.name : ''}: con este enlace puedes ${inv && inv.perms && inv.perms.score ? 'llevar el marcador' : ''}${inv && inv.perms && inv.perms.score && inv.perms.marks ? ' y ' : ''}${inv && inv.perms && inv.perms.marks ? 'marcar las jugadas de ' + invWho(inv) : ''} del partido: ${url}`;
+    ov.innerHTML = `<button class="ghost close" data-inv="close">✕</button>
+      <h2>👥 Invitación${inv ? ' · ' + esc(inv.name) : ''}</h2>
+      <div class="qr">${svg}</div>
+      <div class="url">${esc(url.replace(/^https:\/\//, ''))}</div>
+      <p style="width:100%;max-width:420px"><button class="primary" style="width:100%" data-inv="wa">Enviar por WhatsApp</button></p>`;
+    ov.onclick = e => {
+      const b = e.target.closest('[data-inv]'); if (!b) return;
+      if (b.dataset.inv === 'close') { invShow = null; renderInv(); }
+      if (b.dataset.inv === 'wa') openUrl('https://wa.me/?text=' + encodeURIComponent(msg));
+    };
+  }
+  // ---- En el móvil que emite: escuchar a los invitados y devolverles el marcador ----
+  const invWatch = {};
+  function watchInvites() {
+    for (const t of Object.keys(invWatch)) if (!invValid(invites[t])) { invWatch[t].off(); delete invWatch[t]; }
+    for (const [t, inv] of Object.entries(invites)) {
+      if (!invValid(inv) || invWatch[t]) continue;
+      const r = db.ref('c/' + t + '/ops'); invWatch[t] = r;
+      r.on('child_added', s => applyInvOp(t, s));
+    }
+    pushInvViewsSoon();
+  }
+  function applyInvOp(t, s) {
+    const op = s.val() || {}; s.ref.remove();
+    const inv = invites[t]; if (!invValid(inv)) return;
+    const p = inv.perms || {};
+    if (Math.abs(now() - (op.ts || 0)) > 60000) return;   // toques antiguos (la app estaba cerrada): no se aplican
+    const side = op.s === 'h' || op.s === 'a' ? op.s : null;
+    if (op.op === 'point' && p.score && side) return handle({ act: live.sport === 'volley' ? 'point' : 'goal', s: side });
+    if (op.op === 'minus' && p.score && side) return handle({ act: 'minus', s: side });
+    if (op.op === 'mark' && p.marks) {
+      const who = invWho(inv);
+      marksRef.push({ ts: Math.min(now(), op.ts), label: markLabel(live, who), kind: 'fam', who, by: inv.name || '' });
+    }
+  }
+  let invViewTimer = 0;
+  function pushInvViewsSoon() {
+    if (!IS_NATIVE || invViewTimer) return;
+    invViewTimer = setTimeout(() => {
+      invViewTimer = 0;
+      const tv = side => { const t = sideTeam(side); return { name: t.name, short: t.short, color: t.color }; };
+      const view = { ts: now(), sport: live.sport, score: live.score, sets: live.sets, setNo: live.setNo, finished: !!live.finished,
+                     history: live.history, home: tv('h'), away: tv('a') };
+      for (const [t, inv] of Object.entries(invites)) if (invValid(inv)) db.ref('c/' + t + '/view').set(view);
+    }, 800);
+  }
+  if (IS_NATIVE) setInterval(() => { if (Object.values(invites).some(invValid)) pushInvViewsSoon(); }, 30000);
+
   function viewDespues() {
     const inUse = (ytState.broadcasts || []).find(b => b.selected);
     return `
+      ${finishPanel() || `<div class="card">${finishButton()}<p class="muted small" style="margin:6px 0 0">Resultado 20 s en el directo, para el directo y la grabación, sube la descripción, crea los resúmenes por sets, guarda en el historial y abre WhatsApp con todo.</p></div>`}
       ${sec('Resultado', `<div class="card">${resultTable()}
         <div class="grid2" style="margin-top:10px"><button class="primary" data-act="shareCurrent">📤 Compartir imagen</button>
           <button data-act="saveMatch">💾 Guardar en historial</button></div></div>`)}
-      ${sec('Resumen de jugadas', highlightsCard(), (() => { const v = Object.values(marks).map(tagsOf); const n = t => v.filter(x => x.has(t)).length; return `⭐ ${n('jugada')} · 💜 ${n('carmen')} · 🧱 ${n('bloqueo')} · 🛡 ${n('recepcion')}`; })())}
+      ${sec('Resumen de jugadas', highlightsCard(), (() => { const v = Object.values(marks).map(tagsOf); const n = t => v.filter(x => x.has(t)).length; return tagOrder().map(t => `${TAG_ICON[t]} ${n(t)}`).join(' · ') + (v.some(x => x.has('larga')) ? ` · ⏱ ${n('larga')}` : ''); })())}
       ${sec('YouTube', `<div class="card"><p class="muted small" style="margin-top:0">La descripción incluye el resultado final y los patrocinadores.</p>
         <div class="grid2"><button data-act="copyTitle">📋 Copiar título</button><button data-act="copyDesc">📋 Copiar descripción</button></div>
         ${IS_NATIVE && inUse ? `<p style="margin-bottom:0"><button class="primary" style="width:100%" data-act="ytDesc" data-id="${esc(inUse.id)}">⬆ Subir descripción a "${esc(inUse.title)}"</button></p>` : ''}</div>`)}
@@ -1209,12 +1395,18 @@ function start() {
       ${sec('Equipos', teamsBlock())}
       ${sec('Jugadoras', playersBlock(), Object.keys(players).length ? Object.keys(players).length + '' : '')}
       ${sec('Patrocinadores', sponsorsBlock())}
+      ${sec('👥 Invitar', invitesBlock(), (() => { const n = Object.values(invites).filter(invValid).length; return n ? n + ' activas' : ''; })())}
       ${sec('Portada', coverCard())}
       ${sec('Resumen de jugadas', `<div class="card" style="padding:4px 12px">
         <div class="optrow"><span>Segundos que coge cada jugada</span><span class="muted small">antes · después</span></div>
+        ${isFootball() ? `
+        <div class="optrow"><span>⭐ Jugada y 💜 ${esc(hlName())}</span><input type="number" min="1" max="60" id="hlFB" value="${live.hl.fb}" style="width:64px"><input type="number" min="0" max="60" id="hlFA" value="${live.hl.fa}" style="width:64px"></div>
+        <div class="optrow"><span>⚽ Gol</span><input type="number" min="1" max="60" id="hlGB" value="${live.hl.gb}" style="width:64px"><input type="number" min="0" max="60" id="hlGA" value="${live.hl.ga}" style="width:64px"></div>
+        <div class="optrow"><span>🟨 Tarjeta</span><input type="number" min="1" max="60" id="hlTB" value="${live.hl.tb}" style="width:64px"><input type="number" min="0" max="60" id="hlTA" value="${live.hl.ta}" style="width:64px"></div>` : `
         <div class="optrow"><span>⭐ Jugada y 💜 ${esc(hlName())}</span><input type="number" min="2" max="60" id="hlBefore" value="${live.hl.before}" style="width:64px"><input type="number" min="0" max="30" id="hlAfter" value="${live.hl.after}" style="width:64px"></div>
         <div class="optrow"><span>🧱 Bloqueo</span><input type="number" min="1" max="60" id="hlBB" value="${live.hl.bb}" style="width:64px"><input type="number" min="0" max="30" id="hlBA" value="${live.hl.ba}" style="width:64px"></div>
-        <div class="optrow"><span>🛡 Recepción</span><input type="number" min="1" max="60" id="hlRB" value="${live.hl.rb}" style="width:64px"><input type="number" min="0" max="30" id="hlRA" value="${live.hl.ra}" style="width:64px"></div>
+        <div class="optrow"><span>🛡 Recepción</span><input type="number" min="1" max="60" id="hlRB" value="${live.hl.rb}" style="width:64px"><input type="number" min="0" max="30" id="hlRA" value="${live.hl.ra}" style="width:64px"></div>`}
+        <p class="muted small" style="margin:2px 0 6px">⏱ La jugada larga coge justo desde el primer toque hasta el segundo.</p>
         ${opt('Marcar automáticamente el final de cada set', live.hl.auto, 'hlAuto')}
         <div class="optrow"><span>Nombre del botón 💜</span><input id="hlName" value="${esc(hlName())}" maxlength="16" style="width:130px"></div>
         <div class="optrow"><span>Repeticiones en el resumen</span><div class="seg">
@@ -1246,7 +1438,7 @@ function start() {
     return { ts: Date.now(), sport: live.sport, home: tv(live.homeId, 'LOCAL'), away: tv(live.awayId, 'VISITANTE'),
              score: live.score, sets: live.sets, history: live.history, finished: live.finished,
              liveStart: (status && status.liveStartTs) || 0, ytVideoId: (status && status.ytVideoId) || lastYtId || '',
-             marks: Object.values(marks).map(m => ({ ts: m.ts, label: m.label || '', kind: m.kind || '' })) };
+             marks: Object.values(marks).map(markOut) };
   }
   function hasData(L) { return L.score.h || L.score.a || L.sets.h || L.sets.a || L.history.length; }
 
@@ -1343,9 +1535,10 @@ function start() {
     [['yiWhen', 'when'], ['yiVenue', 'venue'], ['yiComp', 'comp'], ['yiCat', 'cat'], ['yiSeason', 'season']]
       .forEach(([id, k]) => on(id, 'change', e => setField('info/' + k, e.target.value.trim())));
     on('hlBefore', 'change', e => setField('hl/before', Math.min(60, Math.max(2, +e.target.value || 10))));
-    [['hlBB', 'bb', 1], ['hlBA', 'ba', 0], ['hlRB', 'rb', 1], ['hlRA', 'ra', 0]].forEach(([id, k, min]) =>
+    [['hlBB', 'bb', 1], ['hlBA', 'ba', 0], ['hlRB', 'rb', 1], ['hlRA', 'ra', 0], ['hlFB', 'fb', 1], ['hlFA', 'fa', 0],
+     ['hlGB', 'gb', 1], ['hlGA', 'ga', 0], ['hlTB', 'tb', 1], ['hlTA', 'ta', 0]].forEach(([id, k, min]) =>
       on(id, 'change', e => setField('hl/' + k, Math.min(60, Math.max(min, +e.target.value || 0)))));
-    on('hlName', 'change', e => setField('hl/name', e.target.value.trim() || 'Carmen'));
+    on('hlName', 'change', e => isFootball() ? setField('hl/fname', e.target.value.trim() || 'Jugador') : setField('hl/name', e.target.value.trim() || 'Carmen'));
     on('hlAfter', 'change', e => setField('hl/after', Math.min(30, Math.max(0, +e.target.value || 0))));
     m.querySelectorAll('[data-pan]').forEach(el => {
       el.addEventListener('pointerdown', e => { e.preventDefault(); if (!el.disabled) { try { el.setPointerCapture(e.pointerId); } catch (x) {} panHold(el, el.dataset.pan); } });
@@ -1409,6 +1602,18 @@ function start() {
       case 'dir': return setField('clock/dir', v);
       case 'sport': return setField('sport', v);
       case 'bestOf': return setField('rules/bestOf', +v);
+      case 'finishMatch': {
+        if (!confirm('¿Terminar el partido?\n\nResultado final 20 s en el directo, se para el directo y la grabación, se sube la descripción, se crean los resúmenes por sets, se guarda en el historial (marcador a cero) y se abre WhatsApp con la imagen y los vídeos.')) return;
+        await liveRef.update({ brk: { show: true, text: live.sport === 'volley' ? 'FIN DE PARTIDO' : 'FIN DEL PARTIDO', kind: 'end', until: now() + 20000 }, 'spFull/show': false });
+        await finishRef.set({ ts: now(), steps: { result: { s: 'wait', msg: 'Esperando a la app…' } } });
+        sendCmd('finish');
+        return toast('Terminando el partido…');
+      }
+      case 'finishRetry': return sendCmd('finish_retry_' + v);
+      case 'finishClose': return finishRef.remove();
+      case 'invCreate': return createInvite();
+      case 'invQr': invShow = d.id; return renderInv();
+      case 'invDel': return revokeInvite(d.id);
       case 'newMatch':
         if (!confirm('¿Empezar un partido nuevo? El partido actual se guarda en el historial con sus jugadas y el marcador se pone a cero.')) return;
         if (hasData(live) || Object.keys(marks).length) await matchesRef.push(matchRecord());
@@ -1419,10 +1624,15 @@ function start() {
       case 'markc': return addMark(null, 'carmen');
       case 'markb': return addMark(null, 'bloqueo');
       case 'markr': return addMark(null, 'recepcion');
+      case 'markg': return addMark(null, 'gol');
+      case 'markt': return addMark(null, 'tarjeta');
+      case 'markLong': return toggleLong();
       case 'markKind': editingMark = editingMark === d.id ? null : d.id; return render();
       case 'markTag': {
         const m = marks[d.id]; if (!m) return;
         const tags = tagsOf(m); tags.has(v) ? tags.delete(v) : tags.add(v);
+        if (v === 'local' && tags.has('local')) tags.delete('visit');
+        if (v === 'visit' && tags.has('visit')) tags.delete('local');
         if (!tags.size) tags.add('jugada');
         return marksRef.child(d.id).update({ kind: kindOf(tags) });
       }

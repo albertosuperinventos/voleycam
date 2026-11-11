@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#FFFFFF">
+<title>VoleyCam · Invitado</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F6FA;--panel:#fff;--text:#13233F;--muted:#5E6E85;--accent:#1D5FB4;--sun:#FFC629;--danger:#D62839;--ok:#1E9E5A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:500 16px/1.35 Barlow,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:520px;margin:0 auto;padding:14px 16px 32px}
+h1{font:800 28px/1 'Barlow Condensed',sans-serif;margin:4px 0 2px}h1 span{color:var(--accent)}
+.muted{color:var(--muted)}.small{font-size:13px}
+.card{background:var(--panel);border-radius:14px;padding:14px;margin-top:12px;box-shadow:0 1px 3px rgba(19,35,63,.08)}
+.status{display:flex;gap:8px;align-items:center;font-size:14px}.dot{width:10px;height:10px;border-radius:50%;background:#bbb}.dot.on{background:var(--ok)}
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.team{text-align:center}.team .name{font:800 20px/1.1 'Barlow Condensed',sans-serif;text-transform:uppercase;border-bottom:4px solid #ccc;padding-bottom:4px}
+.team .pts{font:800 72px/1 'Barlow Condensed',sans-serif;margin:6px 0}
+.sets{text-align:center;font:700 18px 'Barlow Condensed',sans-serif;color:var(--muted)}
+button{font:700 18px Barlow,sans-serif;border:1px solid #d5dbe5;border-radius:12px;background:var(--panel);color:var(--text);padding:14px 8px;width:100%;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.big{font-size:22px;padding:22px 8px}
+button.sun{background:var(--sun);border-color:var(--sun)}
+button:active{transform:scale(.98)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.gate{text-align:center;padding-top:60px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#13233F;color:#fff;padding:10px 16px;border-radius:10px;z-index:9}
+</style>
+</head>
+<body>
+<main id="app"><div class="gate"><h1>Voley<span>Cam</span></h1><p class="muted">Cargando…</p></div></main>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* Mando reducido para familias invitadas. El enlace solo lleva el código de la invitación (no la clave del canal):
+   los toques se escriben en c/<código>/ops y el móvil que emite los comprueba y los aplica. */
+(function () {
+  const $app = document.getElementById('app');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const T = new URLSearchParams(location.hash.slice(1)).get('i') || '';
+  const cfg = window.SPORTCAM_FIREBASE || {};
+  function toast(m) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 1600); }
+  const gate = msg => { $app.innerHTML = `<div class="gate"><h1>Voley<span>Cam</span></h1><p class="muted">${msg}</p></div>`; };
+  if (!cfg.databaseURL) return gate('Falta la configuración.');
+  if (T.length < 16) return gate('Enlace de invitación no válido. Pide uno nuevo.');
+
+  firebase.initializeApp(cfg);
+  const db = firebase.database();
+  const ch = db.ref('c/' + T);
+  let offset = 0, data = null;
+  const now = () => Date.now() + offset;
+  db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
+  ch.on('value', s => { data = s.val(); render(); }, () => gate('No se pudo conectar.'));
+  setInterval(() => render(), 15000);
+
+  function send(o) {
+    ch.child('ops').push(Object.assign({ ts: now() }, o));
+    if (navigator.vibrate) navigator.vibrate(40);
+  }
+
+  function render() {
+    if (!data) return gate('Esta invitación no existe o ha sido anulada.');
+    if (data.revoked) return gate('Esta invitación ha sido anulada.');
+    const inv = data.info || {};
+    if (inv.until && now() > inv.until) return gate('Esta invitación ha caducado.');
+    const p = inv.perms || {};
+    const v = data.view || null;
+    const live = v && now() - (v.ts || 0) < 90000;
+    const volley = !v || v.sport !== 'football';
+    const who = (inv.player || inv.name || '').trim();
+    const team = (t, side) => `<div class="team"><div class="name" style="border-color:${esc((t && t.color) || '#ccc')}">${esc((t && (t.short || t.name)) || (side === 'h' ? 'Local' : 'Visitante'))}</div>
+      <div class="pts">${v ? (v.score || {})[side] || 0 : '–'}</div></div>`;
+    let h = `<h1>Voley<span>Cam</span></h1>
+      <div class="status"><span class="dot ${live ? 'on' : ''}"></span>${live ? 'Conectado con la cámara' : 'La cámara no está conectada ahora: lo que pulses no se aplicará'}</div>
+      <div class="card"><div class="teams">${team(v && v.home, 'h')}${team(v && v.away, 'a')}</div>
+        ${v && volley ? `<div class="sets">${v.finished ? 'FINAL' : 'SET ' + (v.setNo || 1)} · Sets ${(v.sets || {}).h || 0}-${(v.sets || {}).a || 0}${(v.history || []).length ? ' · ' + v.history.map(x => x.h + '-' + x.a).join(' ') : ''}</div>` : ''}</div>`;
+    if (p.score) h += `<div class="card"><div class="muted small">Marcador</div>
+        <div class="row"><button class="primary big" data-op="point" data-s="h">+1 ${esc((v && v.home && v.home.short) || 'Local')}</button>
+          <button class="primary big" data-op="point" data-s="a">+1 ${esc((v && v.away && v.away.short) || 'Visit.')}</button></div>
+        <div class="row"><button data-op="minus" data-s="h">−1</button><button data-op="minus" data-s="a">−1</button></div></div>`;
+    if (p.marks) h += `<div class="card"><button class="sun big" data-op="mark">💜 Jugada de ${esc(who)}</button>
+        <p class="muted small" style="margin:8px 0 0">Púlsalo justo al terminar una buena jugada de ${esc(who)}: se guarda para su resumen.</p></div>`;
+    h += `<p class="muted small" style="text-align:center;margin-top:16px">Invitación para ${esc(inv.name || '')}${inv.until ? ' · válida hasta ' + new Date(inv.until).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</p>`;
+    $app.innerHTML = h;
+    $app.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
+      if (!live) return toast('La cámara no está conectada');
+      send(b.dataset.s ? { op: b.dataset.op, s: b.dataset.s } : { op: b.dataset.op });
+      toast(b.dataset.op === 'mark' ? '💜 Jugada marcada' : 'Enviado');
+    });
+  }
+})();
+</script>
+</body>
+</html>
