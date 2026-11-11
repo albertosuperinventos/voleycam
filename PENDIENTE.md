@@ -245,9 +245,13 @@ Cuando el partido es de fútbol, los botones/teclas y los resúmenes cambian:
 - Paradas, ocasiones/al palo, faltas o penaltis NO llevan botón propio: se marcan como ⭐ Jugada.
 - El resumen del partido incluye todo (jugadas + goles + tarjetas); los de goles, jugador y tarjetas salen aparte.
 
+## Estudio 1.4.1 — hecho en local, sin compilar
+- Banda de gol (opción B) con jugador (si lleva 💜) y marcador + minuto; botones «Local / Visitante» y «Anulado» en la jugada seleccionada para calcular el marcador.
+- Resúmenes por set con portada de set estilo club (opción B): resultado del set y «SETS x-y» en voley (de la tabla de sets del partido).
+
 ## Rótulos elegidos (11/11) — bocetos en scratchpad/rotulos
 - Voley: portada de cada set estilo CLUB (opción B): fondo granate con rayas, franja "VOLEIBOL TOMARES" con línea dorada, "SET 2" contorneado en dorado, resultado del set en dorado, escudos con aro dorado, "SETS 2-0", competición y fecha. (Móvil y Estudio.)
-- Fútbol: gol con BANDA (opción B): franja oscura abajo con "¡GOL!" en lima, nombre del jugador si lleva 💜, y debajo marcador + minuto. GOL ANULADO igual en rojo. Sustituye al rótulo actual del Estudio 1.4.0. Pendiente: de dónde sale el marcador en partidos de Veo (sin marcador en directo) → elegir en cada gol "nuestro / rival".
+- Fútbol: gol con BANDA (opción B): franja oscura abajo con "¡GOL!" en lima, nombre del jugador si lleva 💜, y debajo marcador + minuto. GOL ANULADO igual en rojo. Hecho en Estudio 1.4.1 (marcador con botones Local/Visitante en cada gol). Falta en el móvil.
 
 ## App 1.9.0 (próxima versión, acordado 11/11) — sin empezar
 1. 🏁 Terminar partido (botón en el mando, automático, una confirmación): resultado final 20 s en el directo → parar directo y grabación → subir descripción a YouTube → crear resúmenes POR SETS (en el móvil que emitió) → abrir WhatsApp con TODO JUNTO: imagen del resultado primero y luego los vídeos de cada set en orden (Albert elige grupo y envía) → guardar en historial y dejar listo el siguiente. Si no hay jugadas marcadas o no hay grabación: se salta los resúmenes y comparte solo la imagen. Pasos que fallen en rojo, repetibles.

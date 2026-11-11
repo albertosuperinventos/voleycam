@@ -30,7 +30,7 @@ SPORT_KINDS = {"volley": ("jugada", "carmen", "bloqueo", "recepcion"),
 # Segundos por defecto del fútbol (las jugadas son más largas)
 FOOTBALL_SECS = {"jugada": (12, 5), "carmen": (12, 5), "gol": (12, 10), "tarjeta": (8, 4)}
 # Etiquetas extra (no son tipos): gol anulado y jugada larga (inicio-fin)
-EXTRA_TAGS = ("anulado", "larga")
+EXTRA_TAGS = ("anulado", "larga", "local", "visit")
 
 SUMMARIES = [
     # clave, título, filtro de etiquetas, lleva portada y patrocinadores
@@ -172,7 +172,7 @@ class Mark:
         t = set(self.tags) or {"jugada"}
         if t == {"jugada"}:
             return ""
-        order = ["jugada", "carmen", "bloqueo", "recepcion", "gol", "tarjeta", "anulado", "larga"]
+        order = ["jugada", "carmen", "bloqueo", "recepcion", "gol", "tarjeta", "anulado", "larga", "local", "visit"]
         return "+".join(x for x in order if x in t)
 
     def to_json(self) -> dict:
@@ -563,40 +563,120 @@ def render_title(W: int, H: int):
     return im
 
 
-def render_goal(W: int, H: int, annulled=False):
-    """Rótulo transparente «¡GOL!» (o «GOL ANULADO») para poner encima del vídeo."""
-    from PIL import Image, ImageDraw, ImageFilter
+GOLD = (226, 176, 60)
+WINE = (110, 14, 24)
+
+
+def render_goal(W: int, H: int, annulled=False, player="", score_line="", side_color=(150, 20, 40)):
+    """Banda de gol (abajo): «¡GOL!» (o «GOL ANULADO»), jugador y marcador/minuto. Transparente."""
+    from PIL import Image, ImageDraw
     k = W / 1920
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    y0, bh = H - 250 * k, 160 * k
+    d.rectangle((0, y0, W, y0 + bh), fill=(11, 18, 32, 228))
+    d.rectangle((0, y0, 26 * k, y0 + bh), fill=tuple(side_color) + (255,))
     txt = "GOL ANULADO" if annulled else "¡GOL!"
     col = (230, 60, 60) if annulled else ACCENT
-    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    f = _font(int((150 if annulled else 220) * k))
-    y = H - 230 * k
-    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(sh).text((W / 2, y + 10 * k), txt, font=f, fill=(0, 0, 0, 235), anchor="mm")
-    im.alpha_composite(sh.filter(ImageFilter.GaussianBlur(12 * k)))
-    ImageDraw.Draw(im).text((W / 2, y), txt, font=f, fill=col + (255,), anchor="mm")
+    f = _font(int(96 * k))
+    tw = d.textlength(txt, font=f)
+    d.rectangle((70 * k, y0 + 22 * k, 70 * k + tw + 60 * k, y0 + bh - 22 * k), fill=col + (255,))
+    d.text((100 * k, y0 + bh / 2), txt, font=f, fill=INK if not annulled else (255, 255, 255), anchor="lm")
+    x = 70 * k + tw + 100 * k
+    if player:
+        d.text((x, y0 + (55 if score_line else 80) * k), player.upper(), font=_fit_font(d, player.upper(), int(78 * k), W - x - 60 * k),
+               fill=(255, 255, 255), anchor="lm")
+    if score_line:
+        d.text((x, y0 + (118 if player else 80) * k), score_line, font=_fit_font(d, score_line, int(50 * k if player else 64 * k), W - x - 60 * k, False),
+               fill=(205, 210, 220), anchor="lm")
     return im
 
 
-def goal_overlays(clips: list, videos: list, sec: dict, work: str, W: int, H: int) -> dict:
-    """{índice de tramo: [(png, desde, hasta)]}: el rótulo sale 3,5 s desde el momento del gol."""
-    out, pngs = {}, {}
+def goal_info(match, videos) -> dict:
+    """Para cada gol del partido: marcador tras ese gol (si se sabe de quién es) y minuto desde el inicio del vídeo."""
+    goals = sorted([mk for mk in match.marks if "gol" in (mk.tags or ())], key=lambda x: x.ts)
+    t0 = min((v.start_ms for v in videos if v.start_ms), default=0)
+    h = a = 0
+    known = True
+    out = {}
+    for mk in goals:
+        ann = "anulado" in mk.tags
+        side = "local" if "local" in mk.tags else "visit" if "visit" in mk.tags else ""
+        if not side:
+            known = False
+        if not ann and side == "local":
+            h += 1
+        elif not ann and side == "visit":
+            a += 1
+        minute = int((mk.ts - t0) / 60000) + 1 if t0 and mk.ts >= t0 else 0
+        parts = []
+        if known and side:
+            parts.append(f"{match.home.short} {h} - {a} {match.away.short}")
+        if minute:
+            parts.append(f"min {minute}")
+        out[id(mk)] = (" · ".join(parts), side)
+    return out
+
+
+def render_set_cover(m, set_name: str, set_score, W: int, H: int, sets_line="", subtitle=""):
+    """Portada de un set, estilo club: granate con rayas, dorado, escudos y resultado del set."""
+    from PIL import Image, ImageDraw
+    k = W / 1920
+    im = Image.new("RGB", (W, H), (30, 4, 10))
+    d = ImageDraw.Draw(im)
+    x = -H
+    while x < W:
+        d.polygon([(x, H), (x + 14 * k, H), (x + 14 * k + H, 0), (x + H, 0)], fill=(40, 6, 14))
+        x += 40 * k
+    d.rectangle((0, 0, W, 150 * k), fill=WINE)
+    d.rectangle((0, 150 * k, W, 157 * k), fill=GOLD)
+    _text(d, (W / 2, 76 * k), "RESUMEN DEL SET" if set_score else "RESUMEN", _font(int(64 * k)), (255, 255, 255))
+    f = _fit_font(d, set_name.upper(), int(200 * k), W - 200 * k)
+    d.text((W / 2, 330 * k), set_name.upper(), font=f, fill=(30, 4, 10), anchor="mm", stroke_width=max(2, int(6 * k)), stroke_fill=GOLD)
+    cy = 640 * k
+    for t, xx in ((m.home, W / 2 - 560 * k), (m.away, W / 2 + 560 * k)):
+        r = 120 * k
+        lg = _img_from_data(t.logo)
+        if lg:
+            lg = _fit(lg, int(2 * r), int(2 * r))
+            im.paste(lg, (int(xx - lg.width / 2), int(cy - lg.height / 2)), lg)
+        else:
+            d.ellipse((xx - r, cy - r, xx + r, cy + r), fill=t.color, outline=GOLD, width=max(2, int(6 * k)))
+        _text(d, (xx, cy + 190 * k), t.name.upper(), _fit_font(d, t.name.upper(), int(56 * k), 600 * k), (255, 255, 255))
+    if set_score:
+        _text(d, (W / 2, cy), f"{set_score[0]} - {set_score[1]}", _font(int(190 * k)), GOLD)
+    if sets_line:
+        _text(d, (W / 2, cy + 175 * k), sets_line, _font(int(56 * k)), (255, 255, 255))
+    if subtitle:
+        _text(d, (W / 2, H - 70 * k), subtitle, _fit_font(d, subtitle, int(42 * k), W - 200 * k, False), (220, 200, 170))
+    return im
+
+
+def goal_overlays(clips: list, videos: list, sec: dict, work: str, W: int, H: int, match=None, player="") -> dict:
+    """{índice de tramo: [(png, desde, hasta)]}: la banda sale 4 s desde el momento del gol."""
+    info = goal_info(match, videos) if match else {}
+    out = {}
+    n = 0
     for i, c in enumerate(clips):
         v = videos[c.video]
         for mk in c.marks:
             if "gol" not in (mk.tags or ()):
                 continue
             ann = "anulado" in mk.tags
-            if ann not in pngs:
-                pngs[ann] = os.path.join(work, f"gol_{int(ann)}.png")
-                render_goal(W, H, ann).save(pngs[ann])
+            line, side = info.get(id(mk), ("", ""))
+            col = (match.away.color if side == "visit" else match.home.color) if match else (150, 20, 40)
+            try:
+                col = tuple(int(str(col).lstrip("#")[j:j + 2], 16) for j in (0, 2, 4)) if isinstance(col, str) else tuple(col)
+            except ValueError:
+                col = (150, 20, 40)
+            png = os.path.join(work, f"gol_{n}.png"); n += 1
+            render_goal(W, H, ann, player if "carmen" in mk.tags else "", line, col).save(png)
             t = (mk.ts - v.start_ms) / 1000 - c.start
             if "larga" in mk.tags:   # jugada larga: el gol está al final
                 b, a = mark_window(mk, sec)
-                t = t + a - 3.5
+                t = t + a - 4.0
             t = max(0.0, min(t, (c.end - c.start) - 1.0))
-            out.setdefault(i, []).append((pngs[ann], t, t + 3.5))
+            out.setdefault(i, []).append((png, t, t + 4.0))
     return out
 
 
@@ -778,20 +858,26 @@ def run_job(args: list, total: float, on_progress=None, should_stop=None) -> tup
 
 
 def make_summary(kind: str, match: Match, clips: list, videos: list, sponsors: list, out: str, opt: Options,
-                 with_slides: bool, on_progress=None, should_stop=None, sec: dict | None = None) -> tuple:
+                 with_slides: bool, on_progress=None, should_stop=None, sec: dict | None = None,
+                 player: str = "", set_cover=None) -> tuple:
     work = tempfile.mkdtemp(prefix="voleycam_")
     try:
         intro, spons = None, []
         if with_slides:
             bg, tt = os.path.join(work, "portada.png"), os.path.join(work, "titulo.png")
-            render_intro(match, subtitle_for(match), opt.width, opt.height, with_title=False).save(bg)
-            render_title(opt.width, opt.height).save(tt)
-            intro = (bg, tt)
+            if set_cover:   # resumen de un set: portada del set (estilo club), sin título encima
+                name, score, sets_line = set_cover
+                render_set_cover(match, name, score, opt.width, opt.height, sets_line, subtitle_for(match)).save(bg)
+                intro = (bg, None)
+            else:
+                render_intro(match, subtitle_for(match), opt.width, opt.height, with_title=False).save(bg)
+                render_title(opt.width, opt.height).save(tt)
+                intro = (bg, tt)
             for i, sp in enumerate(sponsors):
                 pth = os.path.join(work, f"patro_{i}.png")
                 render_sponsor(sp, opt.width, opt.height).save(pth)
                 spons.append(pth)
-        ovs = goal_overlays(clips, videos, sec or {}, work, opt.width, opt.height) if kind != "completo" else {}
+        ovs = goal_overlays(clips, videos, sec or {}, work, opt.width, opt.height, match, player) if kind != "completo" else {}
         args, total = build_job(clips, videos, out, opt, intro, spons, work, ovs)
         ok, err = run_job(args, total, on_progress, should_stop)
         if not ok and "Unrecognized option" in err and "filter_complex" in err:

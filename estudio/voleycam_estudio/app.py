@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -437,9 +437,19 @@ class Main(QMainWindow):
             b.setToolTip(core.TYPES[k][1]); b.clicked.connect(lambda _=False, kk=k: self.toggle_kind(kk))
             hk.addWidget(b); self.selKind[k] = b
         sv.addLayout(hk)
-        self.chkAnnulled = QCheckBox("Gol anulado (rótulo «GOL ANULADO» en el resumen)")
+        self.chkAnnulled = QCheckBox("Anulado")
         self.chkAnnulled.setFocusPolicy(Qt.NoFocus); self.chkAnnulled.toggled.connect(self.on_annulled)
-        sv.addWidget(self.chkAnnulled)
+        hg = QHBoxLayout()
+        self.lblGoalSide = QLabel("Gol de:")
+        hg.addWidget(self.lblGoalSide)
+        self.btnGoalH, self.btnGoalA = QPushButton("Local"), QPushButton("Visitante")
+        for b, side in ((self.btnGoalH, "local"), (self.btnGoalA, "visit")):
+            b.setCheckable(True); b.setFocusPolicy(Qt.NoFocus)
+            b.setToolTip("Para calcular el marcador que sale en la banda del gol")
+            b.clicked.connect(lambda _=False, sd=side: self.set_goal_side(sd)); hg.addWidget(b)
+        hg.addWidget(self.chkAnnulled, 1)
+        self.goalRow = QWidget(); self.goalRow.setLayout(hg); hg.setContentsMargins(0, 0, 0, 0)
+        sv.addWidget(self.goalRow)
         hs = QHBoxLayout()
         hs.addWidget(QLabel("Antes"))
         self.spBefore = QDoubleSpinBox(); self.spAfter = QDoubleSpinBox()
@@ -1152,6 +1162,17 @@ class Main(QMainWindow):
         self.sel = mk
         self.refresh_marks()
 
+    def set_goal_side(self, side):
+        mk = self.sel
+        if mk is None or "gol" not in (mk.tags or ()):
+            return
+        tags = set(mk.tags) - {"local", "visit"}
+        if side not in mk.tags:   # pulsar el que ya estaba lo quita
+            tags.add(side)
+        mk.tags = tags
+        mk.dirty = True
+        self.refresh_marks()
+
     def on_annulled(self, on):
         mk = self.sel
         if mk is None or "gol" not in (mk.tags or ()):
@@ -1273,9 +1294,11 @@ class Main(QMainWindow):
         for w in list(self.selKind.values()) + [self.spBefore, self.spAfter, self.btnSelDel, self.chkSelOn]:
             w.setEnabled(on)
         isgol = on and "gol" in (mk.tags or ())
-        self.chkAnnulled.setVisible(bool(isgol))
+        self.goalRow.setVisible(bool(isgol))
         if isgol:
             self.chkAnnulled.blockSignals(True); self.chkAnnulled.setChecked("anulado" in mk.tags); self.chkAnnulled.blockSignals(False)
+            self.btnGoalH.setText(self.match.home.short or "Local"); self.btnGoalA.setText(self.match.away.short or "Visitante")
+            self.btnGoalH.setChecked("local" in mk.tags); self.btnGoalA.setChecked("visit" in mk.tags)
         if not on:
             self.lblSel.setText("Toca una jugada de la lista o de la barra")
             for k, b in self.selKind.items():
@@ -1712,6 +1735,21 @@ class Main(QMainWindow):
             self.player.setPlaybackRate([0.5, 1.0, 1.5, 2.0][self.cmbSpeed.currentIndex()])
 
     # ================================================================ crear
+    def set_cover_info(self, gs):
+        """(nombre, resultado del set o None, «SETS 2-0») para la portada de un resumen por sets."""
+        import re as _re
+        m = self.match
+        name = " + ".join(g["name"] for g in gs)
+        if len(gs) != 1 or self.sport() != "volley":
+            return (name, None, "")
+        n = _re.search(r"(\d+)", gs[0]["name"])
+        n = int(n.group(1)) if n else 0
+        if not (1 <= n <= len(m.history)):
+            return (name, None, "")
+        h, a = m.history[n - 1]
+        wh = sum(1 for x, y in m.history[:n] if x > y); wa = sum(1 for x, y in m.history[:n] if y > x)
+        return (name, (h, a), f"SETS {wh}-{wa}")
+
     def make_segs(self) -> list:
         """Sets marcados en «Crear resúmenes» ([] = todo el partido)."""
         keys = {self.lstMakeSeg.item(i).data(Qt.UserRole) for i in range(self.lstMakeSeg.count())
@@ -1777,6 +1815,7 @@ class Main(QMainWindow):
         stamp = datetime.fromtimestamp((self.videos[0].start_ms or m.ts) / 1000).strftime("%Y%m%d")
         vs = f"{m.home.short}_{m.away.short}".replace(" ", "")
         shown = core.SPORT_SUMMARIES[self.sport()]
+        player = name
         segs = self.make_segs()
         # Grupos: todo el partido, un grupo por set, o todos los sets juntos
         if not segs:
@@ -1788,10 +1827,11 @@ class Main(QMainWindow):
                        " + ".join(g["name"] for g in segs))]
         for gs, suf, gname in groups:
             marks = self.marks_in(gs)
+            setc = self.set_cover_info(gs) if gs else None
             if gs and self.chkFull.isChecked():
                 full = [c for g in gs for c in core.clips_range(g, self.videos)]
                 if full:
-                    jobs.append(("completo", f"{gname} completo", full, False, f"{suf.strip('_')}_completo_{vs}_{stamp}.mp4"))
+                    jobs.append(("completo", f"{gname} completo", full, False, f"{suf.strip('_')}_completo_{vs}_{stamp}.mp4", None))
             for key, title, filt, slides in core.SUMMARIES:
                 if key not in shown or not self.chk[key].isChecked() or not self.chk[key].isEnabled():
                     continue
@@ -1801,7 +1841,7 @@ class Main(QMainWindow):
                              "bloqueo": f"Bloqueos_{vs}_{stamp}{suf}.mp4", "recepcion": f"Recepciones_{vs}_{stamp}{suf}.mp4",
                              "gol": f"Goles_{vs}_{stamp}{suf}.mp4", "tarjeta": f"Tarjetas_{vs}_{stamp}{suf}.mp4"}[key]
                     title = self.chk[key].text().split("  (")[0] + (f" · {gname}" if gname else "")
-                    jobs.append((key, title, clips, slides and self.chkSlides.isChecked(), fname))
+                    jobs.append((key, title, clips, slides and self.chkSlides.isChecked(), fname, setc))
         if not jobs:
             return QMessageBox.information(self, APP, "No hay jugadas para los resúmenes elegidos.")
         out_dir = self.edOut.text().strip()
@@ -1818,7 +1858,7 @@ class Main(QMainWindow):
 
         def work(s, jobs):
             done = []
-            for i, (key, title, clips, slides, fname) in enumerate(jobs):
+            for i, (key, title, clips, slides, fname, setc) in enumerate(jobs):
                 if self.stop_flag:
                     break
                 out = os.path.join(out_dir, fname)
@@ -1829,7 +1869,7 @@ class Main(QMainWindow):
                     o = dataclasses.replace(opt, music="", venue_vol=1.0)
                 ok, err = core.make_summary(key, m, clips, self.videos, sponsors, out, o, slides,
                                             lambda p, t=title, i=i: s.progress.emit(int((i + p / 100) / len(jobs) * 100), t),
-                                            lambda: self.stop_flag, sec=sec)
+                                            lambda: self.stop_flag, sec=sec, player=player, set_cover=setc)
                 if ok:
                     s.log.emit(f"   ✔ Guardado: {fname}")
                     done.append(out)
