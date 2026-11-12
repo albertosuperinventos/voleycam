@@ -241,7 +241,20 @@ function start() {
   const coverRef = base.child('cover');
   const shareRef = base.child('share');
   const finishRef = base.child('finish');
-  const invitesRef = base.child('invites');   // 👥 invitaciones: cada una tiene su propio canal c/<token> (sin la clave)   // 🏁 Terminar partido: pasos que va haciendo la app
+  const invitesRef = base.child('invites');
+  const listsRef = base.child('lists');       // ligas, pabellones y categorías ya usadas (para elegirlas de una lista)
+  let lists = {};
+  listsRef.on('value', s => { lists = s.val() || {}; if (tab !== 'juego' && !compact) render(); });
+  const listKey = v => v.toLowerCase().replace(/[.#$\[\]\/]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  function remember(k, v) { if (v && listKey(v)) listsRef.child(k + '/' + listKey(v)).set(v); }
+  /** Valores usados antes para un campo: los guardados y los del historial. */
+  function usedValues(k) {
+    const out = new Map();
+    Object.values(lists[k] || {}).forEach(v => v && out.set(listKey(v), v));
+    Object.values(matches).forEach(m => { const v = m && m.info && m.info[k]; if (v) out.set(listKey(v), v); });
+    const cur = (live.info || {})[k]; if (cur) out.set(listKey(cur), cur);
+    return [...out.values()].sort((a, b) => a.localeCompare(b, 'es'));
+  }   // 👥 invitaciones: cada una tiene su propio canal c/<token> (sin la clave)   // 🏁 Terminar partido: pasos que va haciendo la app
   const playersRef = base.child('players'); // jugadoras del club (con foto o cromo opcional)
   const squadRef = base.child('squad');     // convocatoria del partido: { ids:{id:true}, num:{id:n}, team, tag }   // enlace del canal de YouTube y mensaje del chat
 
@@ -1018,13 +1031,14 @@ function start() {
   const histOf = m => Array.isArray(m.history) ? m.history : Object.values(m.history || {});
   function youtubeCard() {
     const i = live.info, t = ytTexts();
-    const inp = (id, v, ph, type = 'text') => `<input id="${id}" type="${type}" value="${esc(v)}" placeholder="${esc(ph)}">`;
+    const inp = (id, v, ph, type = 'text', k) => `<input id="${id}" type="${type}" value="${esc(v)}" placeholder="${esc(ph)}"${k ? ` list="${id}L" autocomplete="off"` : ''}>`
+      + (k ? `<datalist id="${id}L">${usedValues(k).map(x => `<option value="${esc(x)}">`).join('')}</datalist>` : '');
     return `<div class="card">
       <label style="margin-top:0">Fecha y hora</label>${inp('yiWhen', i.when, '', 'datetime-local')}
-      <label>Pabellón</label>${inp('yiVenue', i.venue, 'Pabellón Vistalegre')}
-      <label>Competición</label>${inp('yiComp', i.comp, 'Liga Oro Provincial Sevilla - Grupo B')}
+      <label>Pabellón</label>${inp('yiVenue', i.venue, 'Pabellón Vistalegre', 'text', 'venue')}
+      <label>Competición</label>${inp('yiComp', i.comp, 'Liga Oro Provincial Sevilla - Grupo B', 'text', 'comp')}
       <div class="grid2">
-        <div><label>Categoría</label>${inp('yiCat', i.cat, 'Juvenil Femenino')}</div>
+        <div><label>Categoría</label>${inp('yiCat', i.cat, 'Juvenil Femenino', 'text', 'cat')}</div>
         <div><label>Temporada</label>${inp('yiSeason', i.season, SC.defaultSeason(new Date()))}</div>
       </div>
       <details style="margin-top:10px"><summary class="muted">Ver título y descripción de YouTube</summary>
@@ -1438,7 +1452,7 @@ function start() {
     return { ts: Date.now(), sport: live.sport, home: tv(live.homeId, 'LOCAL'), away: tv(live.awayId, 'VISITANTE'),
              score: live.score, sets: live.sets, history: live.history, finished: live.finished,
              liveStart: (status && status.liveStartTs) || 0, ytVideoId: (status && status.ytVideoId) || lastYtId || '',
-             marks: Object.values(marks).map(markOut) };
+             marks: Object.values(marks).map(markOut), info: { comp: (live.info || {}).comp || '', cat: (live.info || {}).cat || '', venue: (live.info || {}).venue || '' } };
   }
   function hasData(L) { return L.score.h || L.score.a || L.sets.h || L.sets.a || L.history.length; }
 
@@ -1533,7 +1547,7 @@ function start() {
     on('tiePts', 'change', e => setField('rules/tiePts', Math.max(1, +e.target.value || 15)));
     on('durMin', 'change', e => setField('clock/durMs', Math.max(1, +e.target.value || 40) * 60000));
     [['yiWhen', 'when'], ['yiVenue', 'venue'], ['yiComp', 'comp'], ['yiCat', 'cat'], ['yiSeason', 'season']]
-      .forEach(([id, k]) => on(id, 'change', e => setField('info/' + k, e.target.value.trim())));
+      .forEach(([id, k]) => on(id, 'change', e => { const v = e.target.value.trim(); setField('info/' + k, v); if (['venue', 'comp', 'cat'].includes(k)) remember(k, v); }));
     on('hlBefore', 'change', e => setField('hl/before', Math.min(60, Math.max(2, +e.target.value || 10))));
     [['hlBB', 'bb', 1], ['hlBA', 'ba', 0], ['hlRB', 'rb', 1], ['hlRA', 'ra', 0], ['hlFB', 'fb', 1], ['hlFA', 'fa', 0],
      ['hlGB', 'gb', 1], ['hlGA', 'ga', 0], ['hlTB', 'tb', 1], ['hlTA', 'ta', 0]].forEach(([id, k, min]) =>
