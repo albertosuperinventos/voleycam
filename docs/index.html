@@ -242,6 +242,7 @@ function start() {
   const shareRef = base.child('share');
   const finishRef = base.child('finish');
   const invitesRef = base.child('invites');
+  const directoRef = base.child('directo');     // 📡 marcador en directo de solo lectura: { token, on } (enlace fijo del equipo)
   const listsRef = base.child('lists');       // ligas, pabellones y categorías ya usadas (para elegirlas de una lista)
   let lists = {};
   listsRef.on('value', s => { lists = s.val() || {}; if (tab !== 'juego' && !compact) render(); });
@@ -295,6 +296,7 @@ function start() {
     if (s.val() == null) { liveRef.set(SC.defaultLive()); return; }
     live = SC.normalize(s.val()); render(); pushNative();
     if (IS_NATIVE) pushInvViewsSoon();
+    publishDirectoSoon();
   });
   teamsRef.on('value', s => { teams = s.val() || {}; render(); pushNative(); pushSquad(); });
   sponsRef.on('value', s => { sponsors = s.val() || {}; render(); pushNative(); });
@@ -320,6 +322,8 @@ function start() {
   marksRef.on('value', s => { marks = s.val() || {}; if (tab !== 'juego' && !compact) render(); pushNative(); });
   playersRef.on('value', s => { players = s.val() || {}; if ((tab === 'ajustes' || tab === 'partido') && !compact) render(); pushSquad(); });
   squadRef.on('value', s => { squad = s.val() || {}; if (tab === 'partido' && !compact) render(); pushSquad(); });
+  let directo = null;
+  directoRef.on('value', s => { directo = s.val(); if (!compact) render(); publishDirectoSoon(); });
   let invites = {};
   invitesRef.on('value', s => { invites = s.val() || {}; if (tab === 'ajustes' && !compact) render(); if (IS_NATIVE) watchInvites(); });
   let finishState = null;
@@ -362,7 +366,8 @@ function start() {
         marks: Object.values(marks).map(markOut).sort((a, b) => a.ts - b.ts),
         ytDesc: ytTexts().desc,
         chatMsg: share.chatOff ? '' : chatMsg(),
-        serverOffset: offset
+        serverOffset: offset,
+        directoUrl: directoOn() ? directoUrl() : ''
       });
       try { window.SportCamNative.onState(JSON.stringify(model)); } catch (e) {}
     }, 40);
@@ -491,7 +496,7 @@ function start() {
     const match = (h === 'LOCAL' && a === 'VISITANTE') ? 'el partido' : `${h} – ${a}`;
     const first = w.video ? (w.live ? `🔴 Ahora en directo ${match}: ${w.url}` : `📅 Aquí podrás ver ${match}: ${w.url}`)
                           : `🏐 Mira ${match} en directo: ${w.url}`;
-    return first + `\n🔔 Sigue el canal: ${channelUrl()}`;
+    return first + (directoOn() ? `\n📊 Marcador en directo: ${directoUrl()}` : '') + `\n🔔 Sigue el canal: ${channelUrl()}`;
   }
   function openUrl(u) {
     if (IS_NATIVE && window.SportCamNative.openUrl) { try { window.SportCamNative.openUrl(u); return; } catch (e) {} }
@@ -556,6 +561,7 @@ function start() {
   };
   window.scFinishReset = async () => {
     try {
+      await publishDirecto(true);   // el enlace de los padres se queda con el resultado final
       if (hasData(live) || Object.keys(marks).length) await matchesRef.push(matchRecord());
       await act(L => SC.newMatch(L));
       await marksRef.remove();
@@ -1233,6 +1239,77 @@ function start() {
     await invitesRef.child(t).remove();
     toast('Invitación anulada');
   }
+  /* ---------- 📡 Marcador en directo (solo lectura) ----------
+     Enlace fijo del equipo (c/<código>/view, sin la clave). Lo publica cualquier mando abierto cuando cambia algo.
+     Sin nombres de jugadoras, sin escudos y sin el texto de las jugadas. */
+  const DIR_PAGE = location.protocol.startsWith('http') ? new URL('directo.html', location.href.split('#')[0]).href
+    : 'https://albertosuperinventos.github.io/voleycam/directo.html';
+  const directoOn = () => !!(directo && directo.on && directo.token);
+  const directoUrl = () => directo && directo.token ? DIR_PAGE + '#d=' + directo.token : '';
+  function directoView(final) {
+    const tv = side => { const t = sideTeam(side); return { name: t.name || '', short: t.short || '', color: t.color || '' }; };
+    const football = live.sport === 'football';
+    const events = !football ? [] : Object.values(marks).filter(m => tagsOf(m).has('gol') || tagsOf(m).has('tarjeta')).sort((a, b) => a.ts - b.ts).map(m => {
+      const t = tagsOf(m), lb = String(m.label || '');
+      const mm = lb.match(/(\d+):\d\d/), per = lb.match(/(\d)ª parte/i);
+      return { min: mm ? +mm[1] + 1 : null, per: per ? +per[1] : null, tipo: t.has('gol') ? 'gol' : 'tarjeta', anulado: t.has('anulado'),
+               equipo: t.has('local') ? 'L' : t.has('visit') ? 'R' : '' };
+    });
+    const fresh = status && now() - (status.ts || 0) < 6 * 3600000;
+    return { ts: now(), sport: live.sport, home: tv('h'), away: tv('a'), score: live.score, sets: live.sets, setNo: live.setNo,
+      history: live.history || [], finished: !!live.finished || !!final, pre: !!(live.brk && live.brk.show && live.brk.kind === 'pre'),
+      info: { comp: live.info.comp || '', cat: live.info.cat || '', venue: live.info.venue || '' },
+      clock: football ? live.clock : null, events, yt: fresh && status.ytVideoId ? status.ytVideoId : '', channel: channelUrl() };
+  }
+  let dirTimer = 0;
+  function publishDirectoSoon() { if (!directoOn() || !loaded) return; clearTimeout(dirTimer); dirTimer = setTimeout(() => publishDirecto(), 800); }
+  async function publishDirecto(final) {
+    if (!directoOn()) return;
+    // Partido a cero (recién terminado): se deja el resultado final hasta que empiece el siguiente
+    if (!final && !hasData(live) && !(live.brk && live.brk.show && live.brk.kind === 'pre')) return;
+    try { await db.ref('c/' + directo.token + '/view').set(directoView(final)); } catch (e) { console.error(e); }
+  }
+  async function startDirecto() {
+    const t = (directo && directo.token) || newToken();
+    await directoRef.set({ token: t, on: true });
+    await db.ref('c/' + t).update({ off: null });
+    await publishDirecto();
+    toast('📡 Marcador en directo activado');
+  }
+  async function stopDirecto() {
+    if (!confirm('¿Dejar de compartir el marcador? Los padres verán "no disponible" hasta que lo vuelvas a activar (el enlace será el mismo).')) return;
+    await db.ref('c/' + directo.token).set({ off: true });
+    await directoRef.update({ on: false });
+  }
+  function showQr(url, title, msg) {
+    invShow = null;
+    let ov = document.getElementById('invOv');
+    if (!ov) { ov = document.createElement('div'); ov.id = 'invOv'; document.body.appendChild(ov); }
+    let svg = '';
+    try { const q = qrcode(0, 'M'); q.addData(url); q.make(); svg = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }); } catch (e) {}
+    ov.innerHTML = `<button class="ghost close" data-q="close">✕</button><h2>${esc(title)}</h2><div class="qr">${svg}</div>
+      <div class="url">${esc(url.replace(/^https:\/\//, ''))}</div>
+      <p style="width:100%;max-width:420px"><button class="primary" style="width:100%" data-q="wa">Enviar por WhatsApp</button></p>`;
+    ov.onclick = e => { const b = e.target.closest('[data-q]'); if (!b) return;
+      if (b.dataset.q === 'close') ov.remove();
+      if (b.dataset.q === 'wa') openUrl('https://wa.me/?text=' + encodeURIComponent(msg)); };
+  }
+  function directoMsg() {
+    const [h, a] = namesForYt();
+    return `📊 Marcador en directo de ${h} – ${a} (guárdalo, vale para todos los partidos): ${directoUrl()}`;
+  }
+  function directoBlock() {
+    if (!directoOn()) return `<div class="card"><b>📡 Marcador en directo</b>
+      <p class="muted small" style="margin:6px 0 8px">Un enlace fijo del equipo para que los padres vean el marcador en directo, sin poder tocar nada. Lo guardan una vez y vale para todos los partidos.</p>
+      <button class="primary" style="width:100%" data-act="dirOn">📡 Compartir marcador en directo</button></div>`;
+    return `<div class="card"><b>📡 Marcador en directo</b> <span class="small" style="color:var(--ok, #1e9e5a);font-weight:700">● Compartiendo</span>
+      <p class="muted small" style="margin:6px 0">Enlace fijo del equipo; solo pueden mirar. También va en el mensaje de 📤 Compartir y en el prepartido como QR.</p>
+      <div class="small" style="background:#eef3fb;border-radius:10px;padding:8px 10px;word-break:break-all;font-family:monospace">${esc(directoUrl())}</div>
+      <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <button data-act="dirCopy">📋 Copiar</button><button data-act="dirWa">WhatsApp</button>
+        <button data-act="dirQr">🔳 QR</button><button class="danger" data-act="dirOff">Dejar de compartir</button></div></div>`;
+  }
+
   function invitesBlock() {
     const list = Object.entries(invites).sort((a, b) => (b[1].created || 0) - (a[1].created || 0));
     const fmt = ts => new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -1312,6 +1389,7 @@ function start() {
   function viewDespues() {
     const inUse = (ytState.broadcasts || []).find(b => b.selected);
     return `
+      ${directoBlock()}
       ${finishPanel() || `<div class="card">${finishButton()}<p class="muted small" style="margin:6px 0 0">Resultado 20 s en el directo, para el directo y la grabación, sube la descripción, guarda en el historial y abre WhatsApp con la imagen. A los 2 min crea un resumen por set y abre WhatsApp con esos vídeos; el resto de resúmenes se quedan en la galería.</p></div>`}
       ${sec('Resultado', `<div class="card">${resultTable()}
         <div class="grid2" style="margin-top:10px"><button class="primary" data-act="shareCurrent">📤 Compartir imagen</button>
@@ -1627,6 +1705,11 @@ function start() {
       case 'finishRetry': return sendCmd('finish_retry_' + v);
       case 'finishClose': return finishRef.remove();
       case 'invCreate': return createInvite();
+      case 'dirOn': return startDirecto();
+      case 'dirOff': return stopDirecto();
+      case 'dirQr': return showQr(directoUrl(), '📡 Marcador en directo', directoMsg());
+      case 'dirWa': return openUrl('https://wa.me/?text=' + encodeURIComponent(directoMsg()));
+      case 'dirCopy': try { await navigator.clipboard.writeText(directoUrl()); toast('Enlace copiado'); } catch (e) { prompt('Copia el enlace:', directoUrl()); } return;
       case 'invQr': invShow = d.id; return renderInv();
       case 'invDel': return revokeInvite(d.id);
       case 'newMatch':

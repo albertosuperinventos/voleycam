@@ -50,6 +50,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     object None : Screen()
     object Break : Screen()
     object Cover : Screen()
+    object Qr : Screen()
     data class Spons(val sp: Sponsor) : Screen()
     data class SquadPage(val page: Int) : Screen()
   }
@@ -63,6 +64,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     val slots = mutableListOf<Screen>()
     if (s.breakKind == "pre" && cover.isNotBlank()) slots += Screen.Cover
     slots += Screen.Break
+    if (s.breakKind == "pre" && s.directoUrl.isNotBlank()) slots += Screen.Qr
     if (s.breakKind == "pre") squad?.let { sq -> for (i in 0 until sq.pages) slots += Screen.SquadPage(i) }
     if (forced || s.sponsCarousel) s.sponsors.forEach { slots += Screen.Spons(it) }
     if (slots.size == 1) return slots[0]
@@ -100,6 +102,7 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     when (val sc = screen(s, now)) {
       is Screen.Spons -> { drawFullSponsor(c, sc.sp); return bmp }
       Screen.Break -> { drawBreak(c, s); return bmp }
+      Screen.Qr -> { drawDirectoQr(c, s.directoUrl); return bmp }
       is Screen.SquadPage -> { squad?.let { squadSlide.draw(c, it, sc.page) }; return bmp }
       Screen.Cover -> {
         rect(c, 0f, 0f, width.toFloat(), height.toFloat(), Color.BLACK)
@@ -307,6 +310,31 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
   private fun withShadow(block: () -> Unit) {
     shadowOn = true
     try { block() } finally { shadowOn = false; text.clearShadowLayer() }
+  }
+
+  private var qrUrl = ""
+  private var qrBmp: Bitmap? = null
+
+  /** Prepartido: QR del marcador en directo para las familias. */
+  private fun drawDirectoQr(c: Canvas, url: String) = withShadow {
+    rect(c, 0f, 0f, width.toFloat(), height.toFloat(), fullBg)
+    if (url != qrUrl || qrBmp == null) {
+      qrBmp = try {
+        val n = 41 * 8
+        val m = com.google.zxing.qrcode.QRCodeWriter().encode(url, com.google.zxing.BarcodeFormat.QR_CODE, n, n,
+          mapOf(com.google.zxing.EncodeHintType.MARGIN to 1))
+        Bitmap.createBitmap(m.width, m.height, Bitmap.Config.ARGB_8888).also { b ->
+          for (x in 0 until m.width) for (y in 0 until m.height) b.setPixel(x, y, if (m[x, y]) Color.BLACK else Color.WHITE) }
+      } catch (_: Exception) { null }
+      qrUrl = url
+    }
+    val w = width.toFloat(); val h = height.toFloat()
+    label(c, "SIGUE EL MARCADOR EN DIRECTO", w / 2, d(40f), d(120f), d(56f), Color.WHITE, 0)
+    val q = d(440f)
+    val box = RectF(w / 2 - q / 2, d(150f), w / 2 + q / 2, d(150f) + q)
+    fill.color = Color.WHITE; c.drawRoundRect(RectF(box.left - d(16f), box.top - d(16f), box.right + d(16f), box.bottom + d(16f)), d(18f), d(18f), fill)
+    qrBmp?.let { c.drawBitmap(it, null, box, Paint().apply { isFilterBitmap = false }) }
+    label(c, "Escanéalo con la cámara del móvil · resultado y sets al momento", w / 2, box.bottom + d(36f), box.bottom + d(90f), d(30f), Color.rgb(205, 214, 235), 0, w - d(120f))
   }
 
   private fun drawFullSponsor(c: Canvas, sp: Sponsor) = withShadow {

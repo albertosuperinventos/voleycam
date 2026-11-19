@@ -77,6 +77,8 @@ data class OverlayState(
   val footName: String = "Jugador",
   /** Hora (del servidor) a la que se puso la pantalla completa: el carrusel empieza por la primera. */
   val breakAt: Long = 0L,
+  /** Enlace del marcador en directo para las familias (vacío si no se comparte): sale como QR en el prepartido. */
+  val directoUrl: String = "",
 ) {
   val isVolley get() = sport != "football"
 
@@ -165,6 +167,7 @@ data class OverlayState(
         breakKind = brk.optString("kind", "custom"),
         breakUntil = brk.optLong("until"),
         breakAt = brk.optLong("at"),
+        directoUrl = o.optString("directoUrl", ""),
         sponsShow = spons.optBoolean("show", true),
         sponsSec = spons.optInt("sec", 10).coerceIn(3, 120),
         sponsors = sponsors,
