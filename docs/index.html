@@ -1202,7 +1202,7 @@ function start() {
   /* ---------- 👥 Invitaciones (familias) ----------
      El enlace lleva solo un código propio, no la clave. El invitado escribe en c/<código>/ops y
      el móvil que emite (la app) comprueba la invitación, lo aplica y le devuelve el marcador en c/<código>/view. */
-  const INV_PAGE = location.protocol.startsWith('http') ? new URL('invitado.html', location.href.split('#')[0]).href
+  const INV_PAGE = (location.protocol.startsWith('http') && !/appassets\.androidplatform\.net$/.test(location.hostname)) ? new URL('invitado.html', location.href.split('#')[0]).href
     : 'https://albertosuperinventos.github.io/voleycam/invitado.html';
   const invLink = t => INV_PAGE + '#i=' + t;
   const invValid = inv => !!inv && (!inv.until || now() < inv.until);
@@ -1242,7 +1242,7 @@ function start() {
   /* ---------- 📡 Marcador en directo (solo lectura) ----------
      Enlace fijo del equipo (c/<código>/view, sin la clave). Lo publica cualquier mando abierto cuando cambia algo.
      Sin nombres de jugadoras, sin escudos y sin el texto de las jugadas. */
-  const DIR_PAGE = location.protocol.startsWith('http') ? new URL('directo.html', location.href.split('#')[0]).href
+  const DIR_PAGE = (location.protocol.startsWith('http') && !/appassets\.androidplatform\.net$/.test(location.hostname)) ? new URL('directo.html', location.href.split('#')[0]).href
     : 'https://albertosuperinventos.github.io/voleycam/directo.html';
   const directoOn = () => !!(directo && directo.on && directo.token);
   const directoUrl = () => directo && directo.token ? DIR_PAGE + '#d=' + directo.token : '';
@@ -1259,7 +1259,7 @@ function start() {
     return { ts: now(), sport: live.sport, home: tv('h'), away: tv('a'), score: live.score, sets: live.sets, setNo: live.setNo,
       history: live.history || [], finished: !!live.finished || !!final, pre: !!(live.brk && live.brk.show && live.brk.kind === 'pre'),
       info: { comp: live.info.comp || '', cat: live.info.cat || '', venue: live.info.venue || '' },
-      clock: football ? live.clock : null, events, yt: fresh && status.ytVideoId ? status.ytVideoId : '', channel: channelUrl() };
+      clock: football ? live.clock : null, events, yt: fresh && status.connected && !live.finished && !final && status.ytVideoId ? status.ytVideoId : '', channel: channelUrl() };
   }
   /* Se escribe en pub/<código> (los padres solo pueden leer). Las reglas solo dejan escribir si en la misma
      escritura se guarda en proof/<código> la clave del mando (zona que nadie puede leer) con la hora del servidor. */
@@ -1276,7 +1276,7 @@ function start() {
     if (!final && !hasData(live) && !(live.brk && live.brk.show && live.brk.kind === 'pre')) return;
     const paths = { view: directoView(final) };
     // Los logos de los patrocinadores pesan: solo se mandan cuando cambian
-    const sp = Object.values(sponsors).map(x => x.logo || x.full || '').filter(Boolean);
+    const sp = directo.sp === false ? [] : Object.values(sponsors).map(x => x.full || x.logo || '').filter(Boolean);
     const sig = sp.length + ':' + sp.map(x => x.length + x.slice(-24)).join('|');
     if (sig !== lastSponsSig) paths.spons = sp;
     try { await writePub(directo.token, paths); if (paths.spons) lastSponsSig = sig; }
@@ -1321,7 +1321,8 @@ function start() {
       <div class="small" style="background:#eef3fb;border-radius:10px;padding:8px 10px;word-break:break-all;font-family:monospace">${esc(directoUrl())}</div>
       <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
         <button data-act="dirCopy">📋 Copiar</button><button data-act="dirWa">WhatsApp</button>
-        <button data-act="dirQr">🔳 QR</button><button class="danger" data-act="dirOff">Dejar de compartir</button></div></div>`;
+        <button data-act="dirQr">🔳 QR</button><button class="danger" data-act="dirOff">Dejar de compartir</button></div>
+      <div class="row" style="margin-top:10px;justify-content:space-between;align-items:center"><span class="small">Mostrar patrocinador en el marcador</span>${sw(directo.sp !== false, 'dirSp')}</div></div>`;
   }
 
   function invitesBlock() {
@@ -1721,6 +1722,7 @@ function start() {
       case 'invCreate': return createInvite();
       case 'dirOn': return startDirecto();
       case 'dirOff': return stopDirecto();
+      case 'dirSp': return directoRef.update({ sp: directo.sp === false });
       case 'dirQr': return showQr(directoUrl(), '📡 Marcador en directo', directoMsg());
       case 'dirWa': return openUrl('https://wa.me/?text=' + encodeURIComponent(directoMsg()));
       case 'dirCopy': try { await navigator.clipboard.writeText(directoUrl()); toast('Enlace copiado'); } catch (e) { prompt('Copia el enlace:', directoUrl()); } return;

@@ -78,7 +78,8 @@ a.yt{display:block;margin-top:16px;background:#ff0033;border-radius:12px;padding
   }
 
   function render() {
-    if (!data || data.revoked) return gate('Este marcador en directo no está disponible.');
+    if (!data) return gate('Todavía no hay partido. Esta página se actualizará sola cuando empiece.');
+    if (data.revoked) return gate('Este marcador en directo no está disponible.');
     if (data.off) return gate('El marcador en directo no está activo ahora mismo.');
     const v = data.view;
     if (!v) return gate('Todavía no hay partido.');
@@ -109,7 +110,7 @@ a.yt{display:block;margin-top:16px;background:#ff0033;border-radius:12px;padding
         ${e.tipo === 'gol' ? (e.anulado ? '⚽ Gol anulado' : '⚽ Gol') : '🟨 Tarjeta'}${side(e) ? ' · ' + side(e) : ''}${e.per > 1 ? ` <span style="color:#9fb0d6;font-size:13px">(${e.per}ª parte)</span>` : ''}</div>`).join('')}</div>`;
     }
     if (v.yt && /^[\w-]{6,20}$/.test(v.yt)) h += `<a class="yt" href="https://youtu.be/${v.yt}" target="_blank" rel="noopener">▶ Ver el vídeo en YouTube</a>`;
-    else if (v.channel && /^https:\/\/(www\.)?youtube\.com\//.test(v.channel)) h += `<a class="yt" href="${esc(v.channel)}/live" target="_blank" rel="noopener">▶ Ver el directo en YouTube</a>`;
+    else if (!v.finished && v.channel && /^https:\/\/(www\.)?youtube\.com\//.test(v.channel)) h += `<a class="yt" href="${esc(v.channel)}/live" target="_blank" rel="noopener">▶ Ver el directo en YouTube</a>`;
     h += `<div id="sp" class="sp"></div><div class="foot">Se actualiza solo · solo lectura</div>`;
     $app.innerHTML = h;
     showSpons();
