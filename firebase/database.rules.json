@@ -7,6 +7,18 @@
         ".read": "$key.length >= 16",
         ".write": "$key.length >= 16"
       }
+    },
+    "pub": {
+      "$t": {
+        ".read": "$t.length >= 16",
+        ".write": "$t.length >= 16 && newData.parent().parent().child('proof').child($t).child('ts').val() === now"
+      }
+    },
+    "proof": {
+      "$t": {
+        ".read": false,
+        ".write": "$t.length >= 16 && newData.child('ts').val() === now && newData.child('k').isString() && newData.child('k').val().length >= 16 && (!data.exists() || data.child('k').val() === newData.child('k').val())"
+      }
     }
   }
 }

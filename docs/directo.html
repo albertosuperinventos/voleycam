@@ -17,8 +17,8 @@ main{max-width:520px;margin:0 auto;padding:16px 16px 32px}
 .comp{text-align:center;color:#9fb0d6;font-size:14px;margin:10px 0 12px}
 .sb{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;background:#ffffff0f;border-radius:18px;padding:20px 10px}
 .tm{text-align:center;min-width:0}.tm .c{width:48px;height:48px;border-radius:50%;margin:0 auto 8px;border:3px solid #ffffff33}
-.tm .n{font:900 20px/1.05 'Barlow Condensed',sans-serif;letter-spacing:.3px;overflow-wrap:anywhere}
-.pts{font:900 clamp(56px,18vw,84px)/1 'Barlow Condensed',sans-serif;text-align:center;padding:0 8px;white-space:nowrap}.pts span{color:#ffffff55;font-size:56px}
+.tm .n{font:900 clamp(15px,4.8vw,22px)/1.05 'Barlow Condensed',sans-serif;letter-spacing:.2px;overflow-wrap:break-word}
+.pts{font:900 clamp(48px,15vw,84px)/1 'Barlow Condensed',sans-serif;text-align:center;padding:0 8px;white-space:nowrap}.pts span{color:#ffffff55;font-size:56px}
 .ph{text-align:center;margin:14px 0 4px;font:900 24px 'Barlow Condensed',sans-serif;letter-spacing:1px;color:#ffc629}
 .sets{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0}
 .s{background:#ffffff12;border-radius:10px;padding:8px 12px;text-align:center;font-weight:700;font-size:13px;color:#c9d4ee}
@@ -29,6 +29,9 @@ main{max-width:520px;margin:0 auto;padding:16px 16px 32px}
 a.yt{display:block;margin-top:16px;background:#ff0033;border-radius:12px;padding:14px;text-align:center;font-weight:800;color:#fff;text-decoration:none}
 .foot{text-align:center;color:#6f80a6;font-size:12px;margin-top:12px}
 .gate{text-align:center;padding-top:80px;color:#c9d4ee}
+.sp{margin-top:16px;background:#fff;border-radius:14px;padding:10px 14px 14px;text-align:center;min-height:0}.sp:empty{display:none}
+.sp .spl{color:#5e6e85;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.sp img{max-width:100%;max-height:110px;object-fit:contain}
 </style>
 </head>
 <body>
@@ -53,7 +56,17 @@ a.yt{display:block;margin-top:16px;background:#ff0033;border-radius:12px;padding
   let offset = 0, data = null;
   const now = () => Date.now() + offset;
   db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
-  db.ref('c/' + T).on('value', s => { data = s.val(); render(); }, () => gate('No se pudo conectar.'));
+  db.ref('pub/' + T).on('value', s => { data = s.val(); render(); }, () => gate('No se pudo conectar.'));
+  // Patrocinadores: van pasando solos en la banda de abajo
+  let spIdx = 0;
+  setInterval(() => { const n = data && Array.isArray(data.spons) ? data.spons.length : 0; if (n > 1) { spIdx = (spIdx + 1) % n; showSpons(); } }, 5000);
+  function showSpons() {
+    const el = document.getElementById('sp'); if (!el) return;
+    const l = (data && data.spons) || []; if (!l.length) { el.innerHTML = ''; return; }
+    const src = String(l[spIdx % l.length] || '');
+    if (!/^data:image\/|^https:\/\//.test(src)) return;
+    el.innerHTML = `<div class="spl">Patrocinan</div><img src="${esc(src)}" alt="">`;
+  }
   setInterval(() => { if (data && data.view && data.view.clock && data.view.clock.running) render(); }, 1000);
 
   function clockText(c) {
@@ -97,8 +110,9 @@ a.yt{display:block;margin-top:16px;background:#ff0033;border-radius:12px;padding
     }
     if (v.yt && /^[\w-]{6,20}$/.test(v.yt)) h += `<a class="yt" href="https://youtu.be/${v.yt}" target="_blank" rel="noopener">▶ Ver el vídeo en YouTube</a>`;
     else if (v.channel && /^https:\/\/(www\.)?youtube\.com\//.test(v.channel)) h += `<a class="yt" href="${esc(v.channel)}/live" target="_blank" rel="noopener">▶ Ver el directo en YouTube</a>`;
-    h += `<div class="foot">Se actualiza solo · solo lectura</div>`;
+    h += `<div id="sp" class="sp"></div><div class="foot">Se actualiza solo · solo lectura</div>`;
     $app.innerHTML = h;
+    showSpons();
   }
 })();
 </script>

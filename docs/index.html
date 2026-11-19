@@ -1261,24 +1261,38 @@ function start() {
       info: { comp: live.info.comp || '', cat: live.info.cat || '', venue: live.info.venue || '' },
       clock: football ? live.clock : null, events, yt: fresh && status.ytVideoId ? status.ytVideoId : '', channel: channelUrl() };
   }
-  let dirTimer = 0;
+  /* Se escribe en pub/<código> (los padres solo pueden leer). Las reglas solo dejan escribir si en la misma
+     escritura se guarda en proof/<código> la clave del mando (zona que nadie puede leer) con la hora del servidor. */
+  function writePub(t, paths) {
+    const u = { ['proof/' + t]: { k: KEY, ts: firebase.database.ServerValue.TIMESTAMP } };
+    for (const [k, v] of Object.entries(paths)) u['pub/' + t + (k ? '/' + k : '')] = v;
+    return db.ref().update(u);
+  }
+  let dirTimer = 0, lastSponsSig = '';
   function publishDirectoSoon() { if (!directoOn() || !loaded) return; clearTimeout(dirTimer); dirTimer = setTimeout(() => publishDirecto(), 800); }
   async function publishDirecto(final) {
     if (!directoOn()) return;
     // Partido a cero (recién terminado): se deja el resultado final hasta que empiece el siguiente
     if (!final && !hasData(live) && !(live.brk && live.brk.show && live.brk.kind === 'pre')) return;
-    try { await db.ref('c/' + directo.token + '/view').set(directoView(final)); } catch (e) { console.error(e); }
+    const paths = { view: directoView(final) };
+    // Los logos de los patrocinadores pesan: solo se mandan cuando cambian
+    const sp = Object.values(sponsors).map(x => x.logo || x.full || '').filter(Boolean);
+    const sig = sp.length + ':' + sp.map(x => x.length + x.slice(-24)).join('|');
+    if (sig !== lastSponsSig) paths.spons = sp;
+    try { await writePub(directo.token, paths); if (paths.spons) lastSponsSig = sig; }
+    catch (e) { console.error(e); if (!final) toast('No se pudo publicar el marcador en directo (¿reglas de Firebase sin publicar?)'); }
   }
   async function startDirecto() {
     const t = (directo && directo.token) || newToken();
     await directoRef.set({ token: t, on: true });
-    await db.ref('c/' + t).update({ off: null });
+    lastSponsSig = '';
+    try { await writePub(t, { off: null }); } catch (e) { console.error(e); }
     await publishDirecto();
     toast('📡 Marcador en directo activado');
   }
   async function stopDirecto() {
     if (!confirm('¿Dejar de compartir el marcador? Los padres verán "no disponible" hasta que lo vuelvas a activar (el enlace será el mismo).')) return;
-    await db.ref('c/' + directo.token).set({ off: true });
+    try { await writePub(directo.token, { off: true }); } catch (e) { console.error(e); }
     await directoRef.update({ on: false });
   }
   function showQr(url, title, msg) {
