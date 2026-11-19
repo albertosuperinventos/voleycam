@@ -66,14 +66,29 @@ class ScoreboardRenderer(val width: Int, val height: Int) {
     if (s.breakKind == "pre") squad?.let { sq -> for (i in 0 until sq.pages) slots += Screen.SquadPage(i) }
     if (forced || s.sponsCarousel) s.sponsors.forEach { slots += Screen.Spons(it) }
     if (slots.size == 1) return slots[0]
-    return slots[((now / 1000 / s.sponsSec) % slots.size).toInt()]
+    val (i, _) = carouselPos(s, now, slots.size)
+    return slots[i]
+  }
+
+  /**
+   * Posición del carrusel: empieza en la primera pantalla al poner el descanso y, si el descanso tiene
+   * duración (tiempo muerto 30 s, fin de set 2 min), reparte el tiempo para que salgan todos los patrocinadores.
+   * Devuelve (índice, nº de paso).
+   */
+  private fun carouselPos(s: OverlayState, now: Long, n: Int): Pair<Int, Long> {
+    val t = now + s.serverOffset
+    val start = if (s.breakAt > 0 && s.breakAt <= t) s.breakAt else 0L
+    var slotMs = s.sponsSec * 1000L
+    if (start > 0 && s.breakUntil > start) slotMs = minOf(slotMs, maxOf(3000L, (s.breakUntil - start) / n))
+    val step = (t - start) / slotMs
+    return (step % n).toInt() to step
   }
 
   /** Clave que cambia cuando hay que volver a pintar. */
   fun signature(s: OverlayState?, version: Int, now: Long): String {
     if (s == null) return "none"
     val clockSec = if (!s.isVolley || s.timerShow) s.clockMs(now) / 1000 else 0
-    val tick = if (s.sponsors.size > 1 || s.breakShow) now / 1000 / s.sponsSec else 0
+    val tick = if (s.breakShow) now / 1000 else if (s.sponsors.size > 1) now / 1000 / s.sponsSec else 0
     return "$version|$clockSec|$tick|${cover.length}|$squadSig|${s.breakActive(now)}"
   }
 

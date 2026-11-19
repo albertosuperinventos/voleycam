@@ -858,7 +858,7 @@ function start() {
   const backLabel = scr => scr && scr.until ? `Volver al partido <span class="brkLeft">(${fmtLeft(scr.until - now())})</span>` : (scr ? 'Volver al partido' : 'Quitar');
   function showBreak(text, kind) {
     const until = BRK_AUTO[kind] ? now() + BRK_AUTO[kind] : 0;
-    return liveRef.update({ brk: { show: true, text, kind, until }, 'spFull/show': false });
+    return liveRef.update({ brk: { show: true, text, kind, until, at: now() }, 'spFull/show': false });
   }
   /** Qué pantalla completa se ve ahora en el vídeo (solo puede haber una). */
   function onScreen() {
@@ -1172,7 +1172,8 @@ function start() {
 
   /* ----- Pestaña DESPUÉS ----- */
   const FINISH_STEPS = [['result', 'Resultado final 20 s en el directo'], ['stop', 'Parar directo y grabación'], ['desc', 'Descripción en YouTube'],
-    ['hl', 'Resúmenes por sets'], ['history', 'Guardar en historial y marcador a cero'], ['share', 'Abrir WhatsApp con imagen y vídeos']];
+    ['history', 'Guardar en historial y marcador a cero'], ['img', 'WhatsApp: imagen del resultado'], ['wait', 'Esperar 2 min antes de los resúmenes'],
+    ['hl', 'Resumen de cada set'], ['vids', 'WhatsApp: vídeos de los sets'], ['extra', 'Otros resúmenes (💜 🧱 🛡) a la galería']];
   const FINISH_ICON = { wait: '⏳', run: '🔄', ok: '✅', skip: '⏭', err: '❌' };
   /** Panel de 🏁 Terminar partido: un paso por línea; los que fallan salen en rojo con Repetir. */
   function finishPanel() {
@@ -1311,7 +1312,7 @@ function start() {
   function viewDespues() {
     const inUse = (ytState.broadcasts || []).find(b => b.selected);
     return `
-      ${finishPanel() || `<div class="card">${finishButton()}<p class="muted small" style="margin:6px 0 0">Resultado 20 s en el directo, para el directo y la grabación, sube la descripción, crea los resúmenes por sets, guarda en el historial y abre WhatsApp con todo.</p></div>`}
+      ${finishPanel() || `<div class="card">${finishButton()}<p class="muted small" style="margin:6px 0 0">Resultado 20 s en el directo, para el directo y la grabación, sube la descripción, guarda en el historial y abre WhatsApp con la imagen. A los 2 min crea un resumen por set y abre WhatsApp con esos vídeos; el resto de resúmenes se quedan en la galería.</p></div>`}
       ${sec('Resultado', `<div class="card">${resultTable()}
         <div class="grid2" style="margin-top:10px"><button class="primary" data-act="shareCurrent">📤 Compartir imagen</button>
           <button data-act="saveMatch">💾 Guardar en historial</button></div></div>`)}
@@ -1617,8 +1618,8 @@ function start() {
       case 'sport': return setField('sport', v);
       case 'bestOf': return setField('rules/bestOf', +v);
       case 'finishMatch': {
-        if (!confirm('¿Terminar el partido?\n\nResultado final 20 s en el directo, se para el directo y la grabación, se sube la descripción, se crean los resúmenes por sets, se guarda en el historial (marcador a cero) y se abre WhatsApp con la imagen y los vídeos.')) return;
-        await liveRef.update({ brk: { show: true, text: live.sport === 'volley' ? 'FIN DE PARTIDO' : 'FIN DEL PARTIDO', kind: 'end', until: now() + 20000 }, 'spFull/show': false });
+        if (!confirm('¿Terminar el partido?\n\nResultado final 20 s en el directo, se para el directo y la grabación, se sube la descripción, se guarda en el historial (marcador a cero) y se abre WhatsApp con la imagen. A los 2 min, un resumen por set y otra vez WhatsApp con esos vídeos.')) return;
+        await liveRef.update({ brk: { show: true, text: live.sport === 'volley' ? 'FIN DE PARTIDO' : 'FIN DEL PARTIDO', kind: 'end', until: now() + 20000, at: now() }, 'spFull/show': false });
         await finishRef.set({ ts: now(), steps: { result: { s: 'wait', msg: 'Esperando a la app…' } } });
         sendCmd('finish');
         return toast('Terminando el partido…');
@@ -1731,7 +1732,7 @@ function start() {
         return showBreak(v, d.k || 'custom');
       case 'brkCustom': {
         const t = val('brkText').trim(); if (!t) return toast('Escribe un texto');
-        return liveRef.update({ brk: { show: true, text: t.toUpperCase(), kind: 'custom', until: 0 }, 'spFull/show': false });
+        return liveRef.update({ brk: { show: true, text: t.toUpperCase(), kind: 'custom', until: 0, at: now() }, 'spFull/show': false });
       }
       case 'brkHide': return setField('brk/show', false);
       case 'allHide': return liveRef.update({ 'brk/show': false, 'spFull/show': false });

@@ -75,6 +75,8 @@ data class OverlayState(
   val footSecs: Map<String, Pair<Int, Int>> = emptyMap(),
   /** Fútbol: nombre del botón 💜. */
   val footName: String = "Jugador",
+  /** Hora (del servidor) a la que se puso la pantalla completa: el carrusel empieza por la primera. */
+  val breakAt: Long = 0L,
 ) {
   val isVolley get() = sport != "football"
 
@@ -162,6 +164,7 @@ data class OverlayState(
         breakText = brk.optString("text", ""),
         breakKind = brk.optString("kind", "custom"),
         breakUntil = brk.optLong("until"),
+        breakAt = brk.optLong("at"),
         sponsShow = spons.optBoolean("show", true),
         sponsSec = spons.optInt("sec", 10).coerceIn(3, 120),
         sponsors = sponsors,

@@ -266,14 +266,34 @@ object Highlights {
   }
 
   /** Capítulos para la descripción de YouTube (el primero debe ser 00:00). */
+  /** Capítulos de YouTube: solo los sets (o partes). Set N empieza en la marca automática "Fin del set N-1". */
   fun chapters(startTs: Long, marks: List<Mark>): String {
-    val sb = StringBuilder("00:00 Inicio\n")
+    val ends = marks.filter { it.ts > startTs }.mapNotNull { m ->
+      Regex("""(?i)fin del set (\d+)""").find(m.label)?.groupValues?.get(1)?.toIntOrNull()?.let { it to m.ts } }
+      .sortedBy { it.second }.distinctBy { it.first }
+    val parts = marks.filter { it.ts > startTs }.mapNotNull { m -> PART_RE.find(m.label)?.let { it.groupValues[1].toInt() to m.ts } }
+    val sb = StringBuilder()
+    if (ends.isNotEmpty() || parts.isEmpty()) {
+      sb.append("00:00 Set 1\n")
+      var lastSec = 0L
+      for ((n, ts) in ends) {
+        val sec = (ts - startTs) / 1000
+        if (sec - lastSec < 10) continue   // YouTube exige 10 s entre capítulos
+        lastSec = sec
+        sb.append(fmt(sec)).append(" Set ").append(n + 1).append('\n')
+      }
+      // El último "Set N" sobra si el partido acabó con ese fin de set (no hubo set siguiente)
+      val lines = sb.toString().trim().lines()
+      val last = ends.lastOrNull()
+      val played = marks.any { it.ts > (last?.second ?: Long.MAX_VALUE) + 5000 }
+      return (if (last != null && !played && lines.size > 1) lines.dropLast(1) else lines).joinToString("\n")
+    }
+    // Fútbol: primera marca de cada parte
+    sb.append("00:00 1ª parte\n")
     var lastSec = 0L
-    marks.filter { it.ts > startTs && it.inGame }.sortedBy { it.ts }.forEach { m ->
-      val sec = (m.ts - startTs) / 1000
-      if (sec - lastSec < 10) return@forEach   // YouTube exige 10 s entre capítulos
-      lastSec = sec
-      sb.append(fmt(sec)).append(' ').append(m.label).append('\n')
+    parts.groupBy { it.first }.filterKeys { it > 1 }.toSortedMap().forEach { (n, l) ->
+      val sec = (l.minOf { it.second } - startTs) / 1000
+      if (sec - lastSec >= 10) { lastSec = sec; sb.append(fmt(sec)).append(' ').append(n).append("ª parte\n") }
     }
     return sb.toString().trim()
   }

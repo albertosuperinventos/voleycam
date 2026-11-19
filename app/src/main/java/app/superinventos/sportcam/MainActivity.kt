@@ -131,7 +131,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   // Marcador superpuesto
   private var renderer: ScoreboardRenderer? = null
   private var overlayFilter: ImageFilterRender? = null
-  private val overlayBitmaps = arrayOfNulls<Bitmap>(3)
+  private val overlayBitmaps = arrayOfNulls<Bitmap>(4)
   private var overlayIdx = 0
   @Volatile private var overlayState: OverlayState? = null
   @Volatile private var stateVersion = 0
@@ -319,6 +319,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     super.onResume()
     hideSystemBars()
     if (loadedKey.isNotEmpty() && loadedKey != prefs.channelKey) loadWeb()
+    pendingShare?.let { go -> pendingShare = null; ui.postDelayed({ go() }, 600) }
     val s = stream
     if (s != null && configSig != configSignature() && !s.isStreaming && !s.isRecording) {
       val wasPreview = s.isOnPreview
@@ -871,6 +872,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     prefs.ytBroadcastId = broadcastId
   }
 
+  /* El marcador se pinta en una de 4 imágenes que se van turnando y la emisión la sube a la GPU un instante después.
+     Como mucho un repintado cada 200 ms: así nunca se pinta encima de una imagen que la emisión aún no ha recogido
+     (si pasaba, el marcador salía en blanco hasta el siguiente cambio). */
+  private var lastOverlayAt = 0L
+  private var overlayPending = false
+  private val overlayLater = Runnable { overlayPending = false; updateOverlay() }
+
   private fun updateOverlay() {
     if (replaying) return
     val r = renderer ?: return
@@ -879,13 +887,19 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val st = overlayState
     val sig = r.signature(st, stateVersion, now)
     if (sig == lastSig) return
-    lastSig = sig
-    overlayIdx = (overlayIdx + 1) % overlayBitmaps.size
-    val bmp = overlayBitmaps[overlayIdx] ?: return
+    val wait = 200 - (now - lastOverlayAt)
+    if (wait > 0) { if (!overlayPending) { overlayPending = true; ui.postDelayed(overlayLater, wait) }; return }
+    val idx = (overlayIdx + 1) % overlayBitmaps.size
+    val bmp = overlayBitmaps[idx] ?: return
     try {
       r.render(st, now, bmp)
       f.setImage(bmp)
-    } catch (_: Exception) {}
+      overlayIdx = idx; lastSig = sig; lastOverlayAt = now
+    } catch (e: Exception) {
+      // Se queda el marcador anterior; el error se apunta para poder verlo
+      lastOverlayAt = now
+      try { File(getExternalFilesDir(null), "marcador_errores.log").appendText("${java.util.Date()} ${e}\n${e.stackTrace.take(6).joinToString("\n")}\n\n") } catch (_: Exception) {}
+    }
   }
 
   private fun updateButtons() {
@@ -990,7 +1004,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       val groups = groupsIn(inRec)
       if (groups.size > 1) {
         val word = if (groups.first().startsWith("Set")) "sets" else "partes"
-        items += "🎬 Crear resúmenes por $word (${groups.size} $word, un vídeo por cada uno)" to { makeSummaries(kinds, bySet = true) }
+        items += "🎬 Crear resúmenes por $word (resumen del partido: un vídeo por cada uno)" to { makeSummaries(kinds, bySet = true) }
       }
       if (kinds.size > 1) kinds.forEach { k -> items += "${summaryIcon(k)} Solo ${summaryTitle(k).lowercase()}" to { makeSummaries(setOf(k)) } }
     }
@@ -1056,13 +1070,16 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     // Clave → tramos. Por sets: un vídeo por set (en orden) y tipo.
     val ranges = LinkedHashMap<String, List<LongRange>>()
     val jobMarks = HashMap<String, List<Highlights.Mark>>()
-    if (bySet) {
-      for (g in groupsIn(marks.filter { rec.contains(it.ts) })) for (k in kinds) {
-        val ms = marks.filter { it.group == g && Highlights.SUMMARY_FILTERS.getValue(k)(it) }
+    // Por sets solo el resumen del partido; 💜 🧱 🛡 (y ⚽ 🟨) son cortos y van enteros
+    if (bySet && "partido" in kinds) {
+      for (g in groupsIn(marks.filter { rec.contains(it.ts) })) {
+        val ms = marks.filter { it.group == g && Highlights.SUMMARY_FILTERS.getValue("partido")(it) }
         val rs = rangesOf(ms)
-        if (rs.isNotEmpty()) { ranges["$k|$g"] = rs; jobMarks["$k|$g"] = ms }
+        if (rs.isNotEmpty()) { ranges["partido|$g"] = rs; jobMarks["partido|$g"] = ms }
       }
-    } else for (k in kinds) {
+    }
+    for (k in kinds) {
+      if (bySet && k == "partido") continue
       val ms = marks.filter(Highlights.SUMMARY_FILTERS.getValue(k))
       val rs = rangesOf(ms)
       if (rs.isNotEmpty()) { ranges[k] = rs; jobMarks[k] = ms }
@@ -1071,7 +1088,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     if (ranges.isEmpty()) { toast("No hay jugadas marcadas en la última grabación"); return false }
     makingHighlights = true
     summariesDone = onDone
-    madeUris.clear()
+    madeUris.clear(); madeKeys.clear()
     val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
     val safe = playerName.replace(Regex("[^A-Za-z0-9ÁÉÍÓÚáéíóúÑñ]"), "").ifBlank { "jugadora" }
     val results = mutableListOf<String>()
@@ -1106,14 +1123,15 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             val out = File(cacheDir, "resumen_cortes.mp4").apply { delete() }
             val n = try { Highlights.cut(applicationContext, rec.uri, rs, out) } catch (e: Exception) { errors += "cortes: ${e.message}"; 0 }
             val u = if (n > 0) RecordingSaver.moveToGallery(applicationContext, out, fileName) else null
-            if (u != null) { lastUris[key] = u; madeUris += u; results += "$icon $title: ${rs.size} jugadas, con cortes normales" }
+            if (u != null) { lastUris[key] = u; madeUris += u; madeKeys += key; results += "$icon $title: ${rs.size} jugadas, con cortes normales" }
             else results += "$icon No se pudo crear: $title"
             if (errors.isNotEmpty()) results += "    Motivo: " + errors.joinToString(" / ") { it.take(160) }
             runOnUiThread { next(jobs, results) }
           }
+          var fadeTries = 0   // con fundidos se reintenta una vez antes de bajar a sin fundidos
           fun attempt(fades: Boolean) {
             val items = try { SummaryMaker.prepare(applicationContext, rec.uri, rs, slides, w, h, fades, bands) } catch (e: Exception) { errors += "preparar: ${e.message}"; null }
-            if (items == null) { if (fades) attempt(false) else cutOnly(); return }
+            if (items == null) { if (fades && fadeTries++ < 1) { Thread.sleep(3000); attempt(true) } else if (fades) attempt(false) else cutOnly(); return }
             runOnUiThread {
               val final = File(cacheDir, "resumen_montado.mp4")
               val stage = if (fades) "montando con fundidos" else "montando sin fundidos"
@@ -1123,14 +1141,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                   Thread {
                     val u = if (ok) RecordingSaver.moveToGallery(applicationContext, final, fileName) else null
                     if (u != null) {
-                      lastUris[key] = u; madeUris += u
+                      lastUris[key] = u; madeUris += u; madeKeys += key
                       results += "$icon $title: ${rs.size} jugadas" + (if (fades) ", con fundidos" else ", sin fundidos") +
                         (if (withSlides && slides != null) ", portada y patrocinadores" else "")
                       if (errors.isNotEmpty()) results += "    Con fundidos falló: " + errors.joinToString(" / ") { it.take(160) }
                       runOnUiThread { next(jobs, results) }
                     } else {
                       errors += (if (fades) "con fundidos: " else "sin fundidos: ") + (if (ok) "no se pudo guardar" else err)
-                      if (fades) attempt(false) else cutOnly()
+                      if (fades && fadeTries++ < 1) { Thread.sleep(3000); attempt(true) } else if (fades) attempt(false) else cutOnly()
                     }
                   }.start()
                 })
@@ -1148,6 +1166,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   /** Para 🏁 Terminar partido: a quién avisar al acabar los resúmenes y los vídeos hechos (en orden). */
   private var summariesDone: ((List<Uri>, List<String>) -> Unit)? = null
   private val madeUris = mutableListOf<Uri>()
+  private val madeKeys = mutableListOf<String>()
 
   /** Para cada gol (por su hora): marcador tras él (si se sabe de quién es) · minuto. Los anulados no suman. */
   private fun goalLines(st: OverlayState, marks: List<Highlights.Mark>): Map<Long, String> {
@@ -1243,13 +1262,19 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   /* ======================= 🏁 Terminar partido ======================= */
 
-  private val FINISH_STEPS = listOf("result", "stop", "desc", "hl", "history", "share")
+  /* Orden: resultado 20 s → parar → descripción → historial (marcador a cero) → WhatsApp con la imagen →
+     espera 2 min (el móvil libera cámara y codificador) → un resumen por set → WhatsApp con esos vídeos →
+     resto de resúmenes (💜 🧱 🛡 / ⚽ 🟨) a la galería sin enviarlos. */
+  private val FINISH_STEPS = listOf("result", "stop", "desc", "history", "img", "wait", "hl", "vids", "extra")
   private val finishSteps = LinkedHashMap<String, Pair<String, String>>()   // paso → (estado, mensaje)
   private var finishBusy = false
   private var finishImage: File? = null
   private var finishVideos: List<Uri> = emptyList()
   private var finishSnap: Pair<OverlayState, List<Highlights.Mark>>? = null
   private var finishImageWait: (() -> Unit)? = null
+  /** Compartir pendiente hasta que la app vuelva a primer plano (Android no deja abrir WhatsApp desde segundo plano). */
+  private var pendingShare: (() -> Unit)? = null
+  private val FINISH_WAIT_MS = 120_000L
 
   private fun publishFinish() {
     val steps = JSONObject()
@@ -1258,25 +1283,19 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     web.evaluateJavascript("window.scFinish && scFinish($o)", null)
   }
 
-  /** Cambia el estado de un paso y, si ha terminado bien (u omitido), sigue con el siguiente. */
+  /** Cambia el estado de un paso y sigue con el siguiente (los pasos que fallan no paran a los demás). */
   private fun finishStep(step: String, state: String, msg: String = "") {
     finishSteps[step] = state to msg
     publishFinish()
-    if (state == "ok" || state == "skip") {
-      val i = FINISH_STEPS.indexOf(step)
-      if (finishBusy && i >= 0 && i + 1 < FINISH_STEPS.size) runFinish(FINISH_STEPS[i + 1])
-      else if (i + 1 >= FINISH_STEPS.size) finishBusy = false
-    } else if (state == "err") {
-      // Los pasos que no dependen del que falló siguen adelante
-      val i = FINISH_STEPS.indexOf(step)
-      if (finishBusy && i >= 0 && i + 1 < FINISH_STEPS.size) runFinish(FINISH_STEPS[i + 1]) else finishBusy = false
-    }
+    if (state == "run" || state == "wait") return
+    val i = FINISH_STEPS.indexOf(step)
+    if (finishBusy && i >= 0 && i + 1 < FINISH_STEPS.size) runFinish(FINISH_STEPS[i + 1]) else finishBusy = false
   }
 
   private fun startFinish() {
     if (finishBusy) return toast("Ya se está terminando el partido")
     finishBusy = true
-    finishImage = null; finishVideos = emptyList()
+    finishImage = null; finishVideos = emptyList(); pendingShare = null
     finishSteps.clear(); FINISH_STEPS.forEach { finishSteps[it] = "wait" to "" }
     // Foto del partido tal como acaba (el marcador se pondrá a cero más tarde)
     finishSnap = overlayState?.let { it to allMarks() }
@@ -1287,6 +1306,19 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     if (step !in FINISH_STEPS) return
     if (finishBusy) return toast("Espera a que acabe el paso en curso")
     runFinish(step)   // solo ese paso
+  }
+
+  /** Comparte ya si la app está delante; si no, en cuanto vuelva. */
+  private fun shareWhenVisible(step: String, waitMsg: String, go: () -> Unit) {
+    if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) go()
+    else { pendingShare = go; finishSteps[step] = "run" to waitMsg; publishFinish() }
+  }
+
+  /** Jugadas del partido tal como acabó, dentro de la grabación. */
+  private fun finishMarks(): Pair<Highlights.Recording, List<Highlights.Mark>>? {
+    val rec = lastRecording ?: return null
+    val marks = finishSnap?.second ?: allMarks()
+    return rec to marks.filter { rec.contains(it.ts) }
   }
 
   private fun runFinish(step: String) {
@@ -1332,22 +1364,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
           }.start()
         }
       }
-      "hl" -> {
-        val rec = lastRecording
-        val snap = finishSnap
-        val marks = snap?.second ?: allMarks()
-        val inRec = if (rec != null) marks.filter { rec.contains(it.ts) } else emptyList()
-        if (rec == null || inRec.isEmpty()) return finishStep("hl", "skip", if (rec == null) "No hay grabación: se comparte solo la imagen" else "No hay jugadas: se comparte solo la imagen")
-        val kinds = Highlights.SUMMARY_FILTERS.filter { (_, f) -> inRec.any(f) }.keys
-        val bySet = groupsIn(inRec).size > 1
-        val started = makeSummaries(kinds, bySet, snap) { uris, results ->
-          finishVideos = uris
-          val failed = results.filter { it.contains("No se pudo") }
-          if (uris.isEmpty()) finishStep("hl", "err", failed.joinToString(" / ").ifBlank { "No se pudo crear ningún vídeo" })
-          else finishStep("hl", "ok", "${uris.size} vídeos" + if (failed.isNotEmpty()) " (${failed.size} fallaron)" else "")
-        }
-        if (!started) finishStep("hl", "err", "No se pudieron empezar los resúmenes")
-      }
       "history" -> {
         var answered = false
         ui.postDelayed({ if (!answered) { answered = true; finishSteps["history"]?.let { if (it.first == "run") finishStep("history", "err", "El mando no respondió") } } }, 20_000)
@@ -1355,13 +1371,60 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
           if (r?.contains("no") == true && !answered) { answered = true; finishStep("history", "err", "Actualiza el mando") }
         }
       }
-      "share" -> {
+      "img" -> {
         val go = {
           val img = finishImage
-          if (img == null && finishVideos.isEmpty()) finishStep("share", "err", "No hay imagen ni vídeos")
-          else { shareFinish(img, finishVideos); finishStep("share", "ok", if (finishVideos.isEmpty()) "Solo la imagen" else "Imagen y ${finishVideos.size} vídeos") }
+          if (img == null) finishStep("img", "err", "No se pudo hacer la imagen")
+          else shareWhenVisible("img", "Abre VoleyCam para enviar la imagen") { shareFinish(img, emptyList()); finishStep("img", "ok") }
         }
         if (finishImage != null) go() else requestFinishImage { go() }
+      }
+      "wait" -> {
+        val fm = finishMarks()
+        if (fm == null || fm.second.isEmpty()) return finishStep("wait", "skip")
+        val end = System.currentTimeMillis() + FINISH_WAIT_MS
+        val tick = object : Runnable {
+          override fun run() {
+            val left = ((end - System.currentTimeMillis()) / 1000).toInt()
+            if (left <= 0) finishStep("wait", "ok")
+            else { finishSteps["wait"] = "run" to "Los resúmenes empiezan en ${left / 60}:${"%02d".format(left % 60)}"; publishFinish(); ui.postDelayed(this, 10_000) }
+          }
+        }
+        tick.run()
+      }
+      "hl" -> {
+        val fm = finishMarks()
+        if (fm == null || fm.second.isEmpty())
+          return finishStep("hl", "skip", if (fm == null) "No hay grabación: solo la imagen" else "No hay jugadas: solo la imagen")
+        val inGame = fm.second.filter(Highlights.SUMMARY_FILTERS.getValue("partido"))
+        if (inGame.isEmpty()) return finishStep("hl", "skip", "No hay jugadas del partido")
+        val bySet = groupsIn(inGame).size > 1
+        val started = makeSummaries(setOf("partido"), bySet, finishSnap) { uris, results ->
+          finishVideos = uris
+          val failed = results.count { it.contains("No se pudo") }
+          val poor = results.count { it.contains("sin fundidos") || it.contains("con cortes normales") }
+          when {
+            uris.isEmpty() -> finishStep("hl", "err", "No se pudo crear ningún vídeo")
+            failed > 0 || poor > 0 -> finishStep("hl", "err", "${uris.size} vídeos, pero " +
+              listOfNotNull(if (failed > 0) "$failed fallaron" else null, if (poor > 0) "$poor sin portada o sin fundidos" else null).joinToString(" y "))
+            else -> finishStep("hl", "ok", "${uris.size} vídeos con portada y patrocinadores")
+          }
+        }
+        if (!started) finishStep("hl", "err", "No se pudieron empezar los resúmenes")
+      }
+      "vids" -> {
+        val v = finishVideos
+        if (v.isEmpty()) return finishStep("vids", "skip")
+        shareWhenVisible("vids", "Abre VoleyCam para enviar los vídeos") { shareFinish(null, v); finishStep("vids", "ok", "${v.size} vídeos") }
+      }
+      "extra" -> {
+        val fm = finishMarks()
+        val kinds = if (fm == null) emptySet() else Highlights.SUMMARY_FILTERS.filter { (k, f) -> k != "partido" && fm.second.any(f) }.keys
+        if (kinds.isEmpty()) return finishStep("extra", "skip")
+        val started = makeSummaries(kinds, false, finishSnap) { uris, _ ->
+          finishStep("extra", if (uris.isEmpty()) "err" else "ok", if (uris.isEmpty()) "No se pudieron crear" else "${uris.size} vídeos guardados en la galería")
+        }
+        if (!started) finishStep("extra", "err", "No se pudieron empezar")
       }
     }
   }
