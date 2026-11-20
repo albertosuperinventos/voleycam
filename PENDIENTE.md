@@ -288,3 +288,8 @@ Falta después: resúmenes por jugadora con las jugadas 👪 de las familias (id
 ## En espera (stand by)
 - Ideas tomadas de Kinovea (kinovea.org, gratuito, análisis de técnica): cámara lenta 0,25× y fotograma a fotograma en Ver y marcar; repetición lenta automática de cada jugada en el resumen; marcar a la jugadora con círculo/flecha en el resumen 💜. De momento se usa Kinovea aparte con los vídeos que saca el Estudio.
 - Cámara virtual para fútbol desde vídeo panorámico (como Once Sport Autocam): pendiente de que Albert decida.
+
+## Próxima versión (apuntado 20/11)
+- Prepartido: una pantalla con DOS QR en grande justo después de la portada: 🔔 «Sigue el canal» (canal de YouTube) y 📊 «Marcador en directo» (solo si se comparte). Sustituye a la pantalla actual del QR del marcador y a la idea del QR del canal en «NO TODO ES VOLEY».
+- Idea 1.9: resumen por jugadora con las jugadas 👪 que marcan las familias; el Estudio aún mete las 👪 en el resumen del partido.
+
