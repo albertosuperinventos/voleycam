@@ -292,4 +292,6 @@ Falta después: resúmenes por jugadora con las jugadas 👪 de las familias (id
 ## Próxima versión (apuntado 20/11)
 - Prepartido: una pantalla con DOS QR en grande justo después de la portada: 🔔 «Sigue el canal» (canal de YouTube) y 📊 «Marcador en directo» (solo si se comparte). Sustituye a la pantalla actual del QR del marcador y a la idea del QR del canal en «NO TODO ES VOLEY».
 - Idea 1.9: resumen por jugadora con las jugadas 👪 que marcan las familias; el Estudio aún mete las 👪 en el resumen del partido.
+- Crear y programar la emisión de YouTube también desde el mando del PC (hoy solo desde el mando de la app del móvil que emite). Pedido 20/11.
+- Leer la convocatoria del PDF de Drive (CHEMA VOLEIBOL · «Partidos y convocatorias») y marcarla sola por equipo.
 
