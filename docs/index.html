@@ -1268,7 +1268,7 @@ function start() {
     for (const [k, v] of Object.entries(paths)) u['pub/' + t + (k ? '/' + k : '')] = v;
     return db.ref().update(u);
   }
-  let dirTimer = 0, lastSponsSig = '';
+  let dirTimer = 0, lastSponsSig = '', lastLogoSig = '';
   function publishDirectoSoon() { if (!directoOn() || !loaded) return; clearTimeout(dirTimer); dirTimer = setTimeout(() => publishDirecto(), 800); }
   async function publishDirecto(final) {
     if (!directoOn()) return;
@@ -1279,13 +1279,17 @@ function start() {
     const sp = directo.sp === false ? [] : Object.values(sponsors).map(x => x.full || x.logo || '').filter(Boolean);
     const sig = sp.length + ':' + sp.map(x => x.length + x.slice(-24)).join('|');
     if (sig !== lastSponsSig) paths.spons = sp;
-    try { await writePub(directo.token, paths); if (paths.spons) lastSponsSig = sig; }
+    // Escudos: igual, solo cuando cambian los equipos
+    const lg = { h: sideTeam('h').logo || '', a: sideTeam('a').logo || '' };
+    const lsig = lg.h.length + lg.h.slice(-24) + '|' + lg.a.length + lg.a.slice(-24);
+    if (lsig !== lastLogoSig) paths.logos = lg;
+    try { await writePub(directo.token, paths); if (paths.spons) lastSponsSig = sig; if (paths.logos) lastLogoSig = lsig; }
     catch (e) { console.error(e); if (!final) toast('No se pudo publicar el marcador en directo (¿reglas de Firebase sin publicar?)'); }
   }
   async function startDirecto() {
     const t = (directo && directo.token) || newToken();
     await directoRef.set({ token: t, on: true });
-    lastSponsSig = '';
+    lastSponsSig = ''; lastLogoSig = '';
     try { await writePub(t, { off: null }); } catch (e) { console.error(e); }
     await publishDirecto();
     toast('📡 Marcador en directo activado');
