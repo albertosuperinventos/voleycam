@@ -93,11 +93,11 @@ a.yt{display:block;margin-top:16px;background:#ff0033;border-radius:12px;padding
         ? `<img class="logo" src="${esc(src)}" alt="">`
         : `<div class="c" style="background:${safeColor(t && t.color)}"></div>`;
     };
-    const state = v.finished ? ['🏁 FINALIZADO', 'fin'] : v.pre ? ['ANTES DE EMPEZAR', 'pre'] : ['🔴 EN JUEGO', ''];
+    const state = v.finished ? ['🏁 FINALIZADO', 'fin'] : v.pre ? ['PRÓXIMAMENTE', 'pre'] : ['🔴 EN JUEGO', ''];
     const inf = v.info || {};
     let phase = '';
     if (v.finished) phase = football ? 'FINAL' : `FINAL · SETS ${st.h || 0}-${st.a || 0}`;
-    else if (v.pre) phase = 'ANTES DE EMPEZAR';
+    else if (v.pre) phase = 'PRÓXIMAMENTE';
     else if (football) phase = `${esc((v.clock && v.clock.period) || '')} · ${clockText(v.clock)}`;
     else phase = `SET ${v.setNo || 1} · SETS ${st.h || 0}-${st.a || 0}`;
     let h = `<div class="top"><div class="brand">Voley<span>Cam</span></div><span class="state ${state[1]}">${state[0]}</span></div>
