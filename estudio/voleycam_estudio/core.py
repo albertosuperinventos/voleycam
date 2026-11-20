@@ -368,10 +368,17 @@ class Video:
     source: str              # nombre | fecha interna | directo | manual | ?
     width: int = 1920
     height: int = 1080
+    rotate: int = 0          # giro a mano (grados, sentido del reloj): 0, 90, 180, 270
 
     @property
     def end_ms(self) -> int:
         return self.start_ms + int(self.duration * 1000)
+
+    @property
+    def shown_size(self) -> tuple:
+        """Tamaño tal como se ve, con el giro a mano."""
+        return (self.height, self.width) if self.rotate % 180 == 90 else (self.width, self.height)
+
 
 
 def probe(path: str) -> dict:
@@ -730,6 +737,23 @@ class Options:
     fps: int = 30
 
 
+ROT_FILTER = {90: "transpose=1", 180: "hflip,vflip", 270: "transpose=2"}
+
+
+def fit_filter(inp: str, out: str, sw: int, sh: int, W: int, H: int, fps: int, pre: str = "", tag: str = "f") -> str:
+    """Encaja una imagen de sw×sh en W×H. Si la forma es distinta (vídeo vertical en resumen horizontal, o al revés),
+    rellena los lados con la misma imagen ampliada y desenfocada, como en la tele."""
+    pre = (pre + ",") if pre else ""
+    tail = f"setsar=1,fps={fps},format=yuv420p"
+    if sw <= 0 or sh <= 0 or abs(sw / sh - W / H) < 0.04:
+        return f"[{inp}]{pre}scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,{tail}[{out}]"
+    bw, bh = max(2, W // 4 // 2 * 2), max(2, H // 4 // 2 * 2)
+    return (f"[{inp}]{pre}split[{tag}a][{tag}b];"
+            f"[{tag}a]scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},boxblur=10:2,scale={W}:{H},eq=brightness=-0.08[{tag}bg];"
+            f"[{tag}b]scale={W}:{H}:force_original_aspect_ratio=decrease[{tag}fg];"
+            f"[{tag}bg][{tag}fg]overlay=(W-w)/2:(H-h)/2,{tail}[{out}]")
+
+
 def ffmpeg_major() -> int:
     r = _run([tool("ffmpeg"), "-version"])
     m = re.search(r"ffmpeg version n?(\d+)\.", r.stdout or "")
@@ -737,9 +761,16 @@ def ffmpeg_major() -> int:
     return int(m.group(1)) if m else 99
 
 
-def build_job(clips: list, videos: list, out: str, opt: Options, intro=None, sponsors=(), workdir: str = "", overlays=None) -> tuple:
-    """Devuelve (argumentos de ffmpeg, duración total en segundos). intro = (fondo.png, título.png)."""
+def build_job(clips: list, videos: list, out: str, opt: Options, intro=None, sponsors=(), workdir: str = "", overlays=None,
+              slide_wh: tuple | None = None) -> tuple:
+    """Devuelve (argumentos de ffmpeg, duración total en segundos). intro = (fondo.png, título.png).
+    slide_wh: tamaño al que se dibujaron portadas, patrocinadores y rótulos (en un resumen vertical van en 16:9)."""
     W, H, F = opt.width, opt.height, opt.fade
+    SW, SH = slide_wh or (W, H)
+    same = (SW, SH) == (W, H)
+    # Rótulos dibujados a otro tamaño: se ajustan al ancho y van abajo (vertical) o encima de todo (igual tamaño)
+    ov_scale = f"scale={W}:{H}" if same else f"scale={W}:-2"
+    ov_pos = "0:0" if same else f"0:{H}-h-{int(H * 0.10)}"
     args = [tool("ffmpeg"), "-hide_banner", "-y", "-nostdin"]
     items = []   # (tipo, duración)
     n_in = 0
@@ -759,10 +790,11 @@ def build_job(clips: list, videos: list, out: str, opt: Options, intro=None, spo
         ai = n_in; n_in += 1
         k = len(vlab)
         if title_png:
-            parts.append(f"[{vi}:v]{norm_v}[bg{k}];[{ti}:v]scale={W}:{H},format=rgba,fade=in:st=0:d=0.9:alpha=1[tt{k}];"
-                         f"[bg{k}][tt{k}]overlay=0:0:shortest=1,format=yuv420p[v{k}]")
+            parts.append(fit_filter(f"{vi}:v", f"bg{k}", SW, SH, W, H, opt.fps, tag=f"s{k}") + ";" +
+                         f"[{ti}:v]{'scale=' + str(W) + ':' + str(H) if same else 'scale=' + str(W) + ':-2'},format=rgba,fade=in:st=0:d=0.9:alpha=1[tt{k}];"
+                         f"[bg{k}][tt{k}]overlay={'0:0' if same else '0:(H-h)/2'}:shortest=1,format=yuv420p[v{k}]")
         else:
-            parts.append(f"[{vi}:v]{norm_v}[v{k}]")
+            parts.append(fit_filter(f"{vi}:v", f"v{k}", SW, SH, W, H, opt.fps, tag=f"s{k}"))
         parts.append(f"[{ai}:a]{norm_a}[a{k}]")
         vlab.append(f"v{k}"); alab.append(f"a{k}"); items.append(secs)
 
@@ -775,16 +807,20 @@ def build_job(clips: list, videos: list, out: str, opt: Options, intro=None, spo
         src = n_in
         n_in += 1
         ovs = (overlays or {}).get(ci) or []
+        vid = videos[c.video]
+        rot = ROT_FILTER.get(getattr(vid, "rotate", 0) % 360, "")
+        vw, vh = vid.shown_size if hasattr(vid, "shown_size") else (vid.width, vid.height)
+        parts.append(fit_filter(f"{src}:v", f"n{k}", vw, vh, W, H, opt.fps, pre=rot, tag=f"c{k}"))
         if not ovs:
-            parts.append(f"[{src}:v]{norm_v},setpts=PTS-STARTPTS[v{k}]")
+            parts.append(f"[n{k}]setpts=PTS-STARTPTS[v{k}]")
         else:
-            parts.append(f"[{src}:v]{norm_v},setpts=PTS-STARTPTS[c{k}o0]")
+            parts.append(f"[n{k}]setpts=PTS-STARTPTS[c{k}o0]")
             for j, (png, t0, t1) in enumerate(ovs):
                 args.extend(["-loop", "1", "-framerate", str(opt.fps), "-t", f"{d:.3f}", "-i", png])
                 oi = n_in; n_in += 1
                 outl = f"v{k}" if j == len(ovs) - 1 else f"c{k}o{j + 1}"
-                parts.append(f"[{oi}:v]scale={W}:{H},format=rgba,fade=in:st={t0:.2f}:d=0.3:alpha=1,fade=out:st={max(t0, t1 - 0.4):.2f}:d=0.4:alpha=1[g{k}_{j}];"
-                             f"[c{k}o{j}][g{k}_{j}]overlay=0:0:enable='between(t,{t0:.2f},{t1:.2f})':shortest=1,format=yuv420p[{outl}]")
+                parts.append(f"[{oi}:v]{ov_scale},format=rgba,fade=in:st={t0:.2f}:d=0.3:alpha=1,fade=out:st={max(t0, t1 - 0.4):.2f}:d=0.4:alpha=1[g{k}_{j}];"
+                             f"[c{k}o{j}][g{k}_{j}]overlay={ov_pos}:enable='between(t,{t0:.2f},{t1:.2f})':shortest=1,format=yuv420p[{outl}]")
         parts.append(f"[{src}:a]{norm_a},asetpts=PTS-STARTPTS[a{k}]")
         vlab.append(f"v{k}"); alab.append(f"a{k}"); items.append(d)
     for png in sponsors:
@@ -862,24 +898,27 @@ def make_summary(kind: str, match: Match, clips: list, videos: list, sponsors: l
                  with_slides: bool, on_progress=None, should_stop=None, sec: dict | None = None,
                  player: str = "", set_cover=None) -> tuple:
     work = tempfile.mkdtemp(prefix="voleycam_")
+    # Resumen vertical (TikTok, Shorts): portadas, patrocinadores y rótulos se dibujan en 16:9 y se encajan
+    slide_wh = (1920, 1080) if opt.height > opt.width else (opt.width, opt.height)
+    sw, sh = slide_wh
     try:
         intro, spons = None, []
         if with_slides:
             bg, tt = os.path.join(work, "portada.png"), os.path.join(work, "titulo.png")
             if set_cover:   # resumen de un set: portada del set (estilo club), sin título encima
                 name, score, sets_line = set_cover
-                render_set_cover(match, name, score, opt.width, opt.height, sets_line, subtitle_for(match)).save(bg)
+                render_set_cover(match, name, score, sw, sh, sets_line, subtitle_for(match)).save(bg)
                 intro = (bg, None)
             else:
-                render_intro(match, subtitle_for(match), opt.width, opt.height, with_title=False).save(bg)
-                render_title(opt.width, opt.height).save(tt)
+                render_intro(match, subtitle_for(match), sw, sh, with_title=False).save(bg)
+                render_title(sw, sh).save(tt)
                 intro = (bg, tt)
             for i, sp in enumerate(sponsors):
                 pth = os.path.join(work, f"patro_{i}.png")
-                render_sponsor(sp, opt.width, opt.height).save(pth)
+                render_sponsor(sp, sw, sh).save(pth)
                 spons.append(pth)
-        ovs = goal_overlays(clips, videos, sec or {}, work, opt.width, opt.height, match, player) if kind != "completo" else {}
-        args, total = build_job(clips, videos, out, opt, intro, spons, work, ovs)
+        ovs = goal_overlays(clips, videos, sec or {}, work, sw, sh, match, player) if kind != "completo" else {}
+        args, total = build_job(clips, videos, out, opt, intro, spons, work, ovs, slide_wh)
         ok, err = run_job(args, total, on_progress, should_stop)
         if not ok and "Unrecognized option" in err and "filter_complex" in err:
             # La otra forma de pasar el filtro (cambia según la versión de ffmpeg)

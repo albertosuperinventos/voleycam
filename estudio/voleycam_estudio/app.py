@@ -19,16 +19,53 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
         raise ImportError
     from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-    from PySide6.QtMultimediaWidgets import QVideoWidget
+    from PySide6.QtMultimediaWidgets import QGraphicsVideoItem
+    from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
     HAS_MM = True
 except Exception:  # sin multimedia: no hay vídeo
     HAS_MM = False
+
+if HAS_MM:
+    class RotVideoView(QGraphicsView):
+        """Vista del vídeo que se puede girar (vídeos de móvil grabados en vertical o de lado)."""
+        def __init__(self):
+            super().__init__()
+            self.setScene(QGraphicsScene(self))
+            self.item = QGraphicsVideoItem()
+            self.scene().addItem(self.item)
+            self.rot = 0
+            self.setStyleSheet("background:#000;border:0")
+            self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.setFrameShape(QGraphicsView.NoFrame)
+            self.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            self.item.nativeSizeChanged.connect(lambda *_: self.fit())
+
+        def set_rotation(self, deg: int):
+            self.rot = deg % 360
+            self.fit()
+
+        def fit(self):
+            ns = self.item.nativeSize()
+            if ns.width() <= 0 or ns.height() <= 0:
+                return
+            self.item.setSize(ns)
+            self.item.setTransformOriginPoint(ns.width() / 2, ns.height() / 2)
+            self.item.setRotation(self.rot)
+            r = self.item.mapRectToScene(self.item.boundingRect())
+            self.scene().setSceneRect(r)
+            self.fitInView(r, Qt.KeepAspectRatio)
+
+        def resizeEvent(self, e):
+            super().resizeEvent(e)
+            self.fit()
+
 
 KINDS = ("jugada", "carmen", "bloqueo", "recepcion", "gol", "tarjeta")   # todos; cada deporte usa 4 (core.SPORT_KINDS)
 COLORS = {"jugada": "#F2B705", "carmen": "#9B4DCA", "bloqueo": "#C0392B", "recepcion": "#2D7FD3", "gol": "#16A34A", "tarjeta": "#F97316"}
@@ -367,11 +404,11 @@ class Main(QMainWindow):
         # --- Izquierda: vídeo + barra + controles
         left = QWidget(); lv = QVBoxLayout(left); lv.setContentsMargins(0, 0, 6, 0)
         if HAS_MM:
-            self.vw = QVideoWidget(); self.vw.setStyleSheet("background:#000"); self.vw.setMinimumSize(480, 270)
+            self.vw = RotVideoView(); self.vw.setMinimumSize(480, 270)
             self.vw.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             lv.addWidget(self.vw, 1)
             self.player = QMediaPlayer(); self.audio = QAudioOutput()
-            self.player.setAudioOutput(self.audio); self.player.setVideoOutput(self.vw)
+            self.player.setAudioOutput(self.audio); self.player.setVideoOutput(self.vw.item)
             self.player.positionChanged.connect(self.on_pos)
             self.player.mediaStatusChanged.connect(self.on_media_status)
             self.player.playbackStateChanged.connect(lambda *_: self.btnPlay.setText("❚❚" if self.playing() else "▶"))
@@ -412,6 +449,7 @@ class Main(QMainWindow):
         self.cmbSpeed = QComboBox(); self.cmbSpeed.addItems(["0.5x", "1x", "1.5x", "2x"]); self.cmbSpeed.setCurrentIndex(1)
         self.cmbSpeed.setFocusPolicy(Qt.NoFocus); self.cmbSpeed.currentIndexChanged.connect(self.on_speed)
         hc.addWidget(self.cmbSpeed)
+        self.btnRot = btn("⟳ Girar", self.rotate_video, "Gira este vídeo 90° (vídeos de móvil en vertical o de lado). Se aplica también a los resúmenes.")
         hc.addSpacing(10)
         self.addBtns = {}
         for k in KINDS:
@@ -589,7 +627,7 @@ class Main(QMainWindow):
         f.addRow("Fundido entre jugadas:", self.spFade)
         self.cmbQ = QComboBox(); self.cmbQ.addItems(["Normal (más rápido)", "Alta", "Máxima"]); self.cmbQ.setCurrentIndex(self.cfg.get("quality", 1))
         f.addRow("Calidad:", self.cmbQ)
-        self.cmbRes = QComboBox(); self.cmbRes.addItems(["1080p", "720p"]); self.cmbRes.setCurrentIndex(self.cfg.get("res", 0))
+        self.cmbRes = QComboBox(); self.cmbRes.addItems(["1080p", "720p", "Vertical 1080×1920 (TikTok, Shorts, estados)"]); self.cmbRes.setCurrentIndex(self.cfg.get("res", 0))
         f.addRow("Resolución:", self.cmbRes)
         hm = QHBoxLayout()
         self.edMusic = QLineEdit(self.cfg.get("music", "")); self.edMusic.setPlaceholderText("Sin música")
@@ -827,6 +865,9 @@ class Main(QMainWindow):
             self.assign_youtube_video(v)
 
     def on_videos(self, vids, remember=True):
+        rots = self.cfg.get("video_rot") or {}
+        for v in vids:
+            v.rotate = int(rots.get(v.path, 0) or 0)
         for v in vids:
             if not v.start_ms:   # sin hora (p. ej. Veo): se pone una para poder marcar; se puede cambiar en «Empieza»
                 base = self.match.ts if self.match and self.match.ts else 0
@@ -1707,6 +1748,8 @@ class Main(QMainWindow):
         if self.cur_video != i:
             self.cur_video = i
             self.pending = (pos_ms, play)
+            self.vw.set_rotation(self.videos[i].rotate)
+            self.btnRot.setText(f"⟳ {self.videos[i].rotate}°" if self.videos[i].rotate else "⟳ Girar")
             self.player.setSource(QUrl.fromLocalFile(self.videos[i].path))
             self.cmbVid.setCurrentIndex(i)
             self.update_timeline()
@@ -1715,6 +1758,22 @@ class Main(QMainWindow):
             if play:
                 self.player.play()
         self.timeline.set_pos(pos_ms)
+
+    def rotate_video(self):
+        """Gira el vídeo actual 90° (0 → 90 → 180 → 270 → 0) y lo recuerda para ese archivo."""
+        if not (0 <= self.cur_video < len(self.videos)):
+            return
+        v = self.videos[self.cur_video]
+        v.rotate = (v.rotate + 90) % 360
+        rots = self.cfg.setdefault("video_rot", {})
+        if v.rotate:
+            rots[v.path] = v.rotate
+        else:
+            rots.pop(v.path, None)
+        save_cfg(self.cfg)
+        if self.player:
+            self.vw.set_rotation(v.rotate)
+        self.btnRot.setText(f"⟳ {v.rotate}°" if v.rotate else "⟳ Girar")
 
     def on_media_status(self, st):
         if self.pending and st in (QMediaPlayer.LoadedMedia, QMediaPlayer.BufferedMedia):
@@ -1835,7 +1894,7 @@ class Main(QMainWindow):
 
     def options(self) -> core.Options:
         q = self.cmbQ.currentIndex()
-        w, h = (1920, 1080) if self.cmbRes.currentIndex() == 0 else (1280, 720)
+        w, h = [(1920, 1080), (1280, 720), (1080, 1920)][min(2, max(0, self.cmbRes.currentIndex()))]
         return core.Options(fade=self.spFade.value(), crf=[23, 20, 17][q], preset=["veryfast", "faster", "medium"][q],
                             music=self.edMusic.text().strip(), music_vol=self.slMusic.value() / 100,
                             venue_vol=self.slVenue.value() / 100, width=w, height=h)
