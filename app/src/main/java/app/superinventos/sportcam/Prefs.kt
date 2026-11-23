@@ -62,6 +62,11 @@ class Prefs(context: Context) {
     get() = sp.getString("ytBroadcastStatus", "") ?: ""
     set(v) = sp.edit().putString("ytBroadcastStatus", v).apply()
 
+  /** Lo que Terminar partido dejó listo para enviar por WhatsApp (imagen + vídeos), aunque se cierre la app. */
+  var finishSendJson: String
+    get() = sp.getString("finishSendJson", "") ?: ""
+    set(v) = sp.edit().putString("finishSendJson", v).apply()
+
   /** Últimas grabaciones con su hora de inicio y fin (JSON), para unirlas y hacer resúmenes. */
   var recordingsJson: String
     get() = sp.getString("recordingsJson", "[]") ?: "[]"

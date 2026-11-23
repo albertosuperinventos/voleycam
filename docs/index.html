@@ -1178,8 +1178,8 @@ function start() {
 
   /* ----- Pestaña DESPUÉS ----- */
   const FINISH_STEPS = [['result', 'Resultado final 20 s en el directo'], ['stop', 'Parar directo y grabación'], ['desc', 'Descripción en YouTube'],
-    ['history', 'Guardar en historial y marcador a cero'], ['img', 'WhatsApp: imagen del resultado'], ['wait', 'Esperar 2 min antes de los resúmenes'],
-    ['hl', 'Resumen de cada set'], ['vids', 'WhatsApp: vídeos de los sets'], ['extra', 'Otros resúmenes (💜 🧱 🛡) a la galería']];
+    ['history', 'Guardar en historial y marcador a cero'], ['img', 'Imagen del resultado'], ['wait', 'Esperar 2 min antes de los resúmenes'],
+    ['hl', 'Resumen de cada set'], ['send', 'Listo para enviar por WhatsApp'], ['extra', 'Otros resúmenes (💜 🧱 🛡) a la galería']];
   const FINISH_ICON = { wait: '⏳', run: '🔄', ok: '✅', skip: '⏭', err: '❌' };
   /** Panel de 🏁 Terminar partido: un paso por línea; los que fallan salen en rojo con Repetir. */
   function finishPanel() {
@@ -1192,7 +1192,12 @@ function start() {
         ${err ? `<button class="danger" data-act="finishRetry" data-v="${k}">Repetir</button>` : ''}</div>`;
     }).join('');
     const done = FINISH_STEPS.every(([k]) => ['ok', 'skip', 'err'].includes((f.steps[k] || {}).s));
-    return `<div class="card" style="border:2px solid var(--accent)"><b>🏁 Terminar partido</b>${rows}
+    // 📤 Enviar: WhatsApp se abre en el móvil que emite (Android no deja enviar sin que alguien pulse allí)
+    const sd = f.send && f.send.n > 0 ? f.send : null;
+    const inApp = !!window.SportCamNative;
+    const sendBtn = sd ? `<button class="primary" style="width:100%;margin-top:8px" data-act="finishSend">📤 ${sd.sent ? 'Volver a enviar' : 'Enviar por WhatsApp'} (${sd.n})</button>
+      <p class="muted small" style="margin:4px 0 0">${sd.sent ? '✅ Enviado. ' : ''}${inApp ? 'Se abre WhatsApp con la imagen y los vídeos: elige el grupo.' : 'WhatsApp se abre en el móvil que emite (si la app no está delante, en cuanto la abras).'}</p>` : '';
+    return `<div class="card" style="border:2px solid var(--accent)"><b>🏁 Terminar partido</b>${rows}${sendBtn}
       ${done ? `<button style="width:100%;margin-top:6px" data-act="finishClose">Cerrar</button>` : ''}</div>`;
   }
   function finishButton() {
@@ -1715,13 +1720,14 @@ function start() {
       case 'sport': return setField('sport', v);
       case 'bestOf': return setField('rules/bestOf', +v);
       case 'finishMatch': {
-        if (!confirm('¿Terminar el partido?\n\nResultado final 20 s en el directo, se para el directo y la grabación, se sube la descripción, se guarda en el historial (marcador a cero) y se abre WhatsApp con la imagen. A los 2 min, un resumen por set y otra vez WhatsApp con esos vídeos.')) return;
+        if (!confirm('¿Terminar el partido?\n\nResultado final 20 s en el directo, se para el directo y la grabación, se sube la descripción, se guarda en el historial (marcador a cero) y se hace la imagen del resultado. A los 2 min, un resumen por set. No se abre WhatsApp: cuando quieras, pulsa 📤 Enviar.')) return;
         await liveRef.update({ brk: { show: true, text: live.sport === 'volley' ? 'FIN DE PARTIDO' : 'FIN DEL PARTIDO', kind: 'end', until: now() + 20000, at: now() }, 'spFull/show': false });
         await finishRef.set({ ts: now(), steps: { result: { s: 'wait', msg: 'Esperando a la app…' } } });
         sendCmd('finish');
         return toast('Terminando el partido…');
       }
       case 'finishRetry': return sendCmd('finish_retry_' + v);
+      case 'finishSend': sendCmd('finish_send'); return toast(window.SportCamNative ? 'Abriendo WhatsApp…' : 'Enviado al móvil que emite');
       case 'finishClose': return finishRef.remove();
       case 'invCreate': return createInvite();
       case 'dirOn': return startDirecto();
