@@ -1195,8 +1195,10 @@ function start() {
     // 📤 Enviar: WhatsApp se abre en el móvil que emite (Android no deja enviar sin que alguien pulse allí)
     const sd = f.send && f.send.n > 0 ? f.send : null;
     const inApp = !!window.SportCamNative;
-    const sendBtn = sd ? `<button class="primary" style="width:100%;margin-top:8px" data-act="finishSend">📤 ${sd.sent ? 'Volver a enviar' : 'Enviar por WhatsApp'} (${sd.n})</button>
-      <p class="muted small" style="margin:4px 0 0">${sd.sent ? '✅ Enviado. ' : ''}${inApp ? 'Se abre WhatsApp con la imagen y los vídeos: elige el grupo.' : 'WhatsApp se abre en el móvil que emite (si la app no está delante, en cuanto la abras).'}</p>` : '';
+    const sendBtn = !sd ? '' : inApp
+      ? `<button class="primary" style="width:100%;margin-top:8px" data-act="finishSend">📤 ${sd.sent ? 'Volver a enviar' : 'Enviar por WhatsApp'} (${sd.n})</button>
+         <p class="muted small" style="margin:4px 0 0">${sd.sent ? '✅ Enviado. ' : ''}Se abre WhatsApp con la imagen y los vídeos: elige el grupo.</p>`
+      : `<p style="margin:8px 0 0"><b>${sd.sent ? '✅ Enviado' : '📤 Listo para enviar'} (${sd.n})</b><br><span class="muted small">Se envía desde el mando de la app, en el móvil que emite.</span></p>`;
     return `<div class="card" style="border:2px solid var(--accent)"><b>🏁 Terminar partido</b>${rows}${sendBtn}
       ${done ? `<button style="width:100%;margin-top:6px" data-act="finishClose">Cerrar</button>` : ''}</div>`;
   }

@@ -5,7 +5,9 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -321,7 +323,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     if (loadedKey.isNotEmpty() && loadedKey != prefs.channelKey) loadWeb()
     pendingShare?.let { go -> pendingShare = null; ui.postDelayed({ go() }, 600) }
     val s = stream
-    if (s != null && configSig != configSignature() && !s.isStreaming && !s.isRecording) {
+    if (s != null && !isPortrait() && configSig != configSignature() && !s.isStreaming && !s.isRecording) {
       val wasPreview = s.isOnPreview
       if (wasPreview) s.stopPreview()
       if (!prepare()) toast("Esta cámara no admite esa calidad. Prueba otra en Ajustes.")
@@ -529,6 +531,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   private fun startLive(fromRemote: Boolean) {
     if (wantLive) return
+    if (backToLandscape { startLive(fromRemote) }) return
     val s = stream ?: return toast("La cámara aún no está lista")
     val url = prefs.streamUrl()
     if (url == null) {
@@ -558,6 +561,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   private fun toggleRecord() {
     val s = stream ?: return
+    if (!s.isRecording && backToLandscape { toggleRecord() }) return
     if (s.isRecording) stopRecord() else { startRecord(auto = false); attachOverlay() }
   }
 
@@ -904,6 +908,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   }
 
   private fun updateButtons() {
+    updateOrientation()
     btnLive.text = if (wantLive) "PARAR" else "EN\nDIRECTO"
     btnLive.setBackgroundResource(if (wantLive) R.drawable.bg_btn else R.drawable.bg_btn_live)
     val rec = stream?.isRecording == true
@@ -1797,13 +1802,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     web.loadUrl("https://appassets.androidplatform.net/assets/index.html#k=$loadedKey&native=1&mini=${if (panelMini) 1 else 0}")
   }
 
-  private fun panelWidth(): Int = (panel.layoutParams as FrameLayout.LayoutParams).width
+  private fun panelWidth(): Int = (panel.layoutParams as FrameLayout.LayoutParams).width.let { if (it > 0) it else root.width }
 
   /** Mini: esquina inferior izquierda, pequeño. Completo: todo el alto, ~42% del ancho. */
   private fun applyPanelSize() {
     val dp = resources.displayMetrics.density
     val lp = panel.layoutParams as FrameLayout.LayoutParams
-    if (panelMini) {
+    if (root.height > root.width && !panelMini) {
+      lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+      lp.height = FrameLayout.LayoutParams.MATCH_PARENT
+      lp.gravity = Gravity.START
+      lp.setMargins(0, 0, 0, 0)
+    } else if (panelMini) {
       lp.width = maxOf((root.width * 0.36f).toInt(), (340 * dp).toInt()).coerceAtMost(root.width)
       lp.height = minOf((root.height * 0.9f).toInt(), (320 * dp).toInt())
       lp.gravity = Gravity.BOTTOM or Gravity.START
@@ -1815,7 +1825,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       lp.setMargins(0, 0, 0, 0)
     }
     panel.layoutParams = lp
-    panel.translationX = if (panelOpen) 0f else -lp.width.toFloat() - 40f
+    panel.translationX = if (panelOpen) 0f else -panelWidth().toFloat() - 40f
   }
 
   private fun togglePanel() {
@@ -1823,6 +1833,47 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     panel.animate().translationX(if (panelOpen) 0f else -panelWidth().toFloat() - 40f).setDuration(200).start()
     btnRemote.setBackgroundResource(if (panelOpen) R.drawable.bg_btn_on else R.drawable.bg_btn)
     btnRemote.setTextColor(ContextCompat.getColor(this, if (panelOpen) R.color.bg else R.color.text))
+    updateOrientation()
+  }
+
+  /* ======================= Mando en vertical para preparar ======================= */
+  /* Con el mando abierto en grande y SIN directo ni grabación, el móvil puede girar a vertical para
+     preparar cómodo (equipos, convocatoria, patrocinadores…). En vertical la cámara se para; en cuanto
+     se cierra el mando, se pasa a mini o se pide directo/REC, vuelve a horizontal y la cámara arranca.
+     La emisión y la grabación siempre son en horizontal. */
+  private var afterLandscape: (() -> Unit)? = null
+
+  private fun isPortrait() = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+
+  private fun canRotate() = panelOpen && !panelMini && !wantLive && stream?.isRecording != true && afterLandscape == null
+
+  private fun updateOrientation() {
+    val want = if (canRotate()) ActivityInfo.SCREEN_ORIENTATION_FULL_USER else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    if (requestedOrientation != want) requestedOrientation = want
+  }
+
+  /** Si está en vertical, vuelve a horizontal y luego hace [then]. Devuelve true si ha tenido que esperar. */
+  private fun backToLandscape(then: () -> Unit): Boolean {
+    if (!isPortrait()) return false
+    afterLandscape = then
+    toast("Girando a horizontal…")
+    updateOrientation()
+    return true
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    root.post { applyPanelSize() }
+    if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+      stream?.let { if (it.isOnPreview && !it.isStreaming && !it.isRecording) it.stopPreview() }
+    } else {
+      root.postDelayed({
+        val s = stream
+        if (s != null && configSig != configSignature() && !s.isStreaming && !s.isRecording) prepare()
+        startPreview()
+        afterLandscape?.let { go -> afterLandscape = null; ui.postDelayed({ go(); updateOrientation() }, 700) }
+      }, 400)
+    }
   }
 
   inner class Bridge {
@@ -1833,7 +1884,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     @JavascriptInterface
     fun setMini(mini: Boolean) {
-      ui.post { panelMini = mini; applyPanelSize() }
+      ui.post { panelMini = mini; applyPanelSize(); updateOrientation() }
     }
 
     @JavascriptInterface
