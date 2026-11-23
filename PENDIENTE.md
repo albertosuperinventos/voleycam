@@ -306,3 +306,6 @@ Falta después: resúmenes por jugadora con las jugadas 👪 de las familias (id
 4. Control en Firebase: reglas que solo permiten c/KEY y pub/ con licencia en vigor (lic/…); revocar desde consola si un club no paga.
 5. Herramienta privada para Albert que genera las licencias (código dispositivo, club, caducidad → clave).
 - Por decidir: licencia por móvil o por canal (2-3 móviles del club); caducidad anual ligada al mantenimiento o perpetua. Precio que baraja Albert: 200 € por licencia y dispositivo.
+- HECHO en rama app-1.9.3 (sin compilar, 23/11): Terminar partido ya no abre WhatsApp; deja imagen + vídeos de sets listos (guardados aunque se cierre la app) y botón «📤 Enviar por WhatsApp (n)» en el panel (desde el navegador abre WhatsApp en el emisor en cuanto la app esté delante).
+- Propuesto 23/11, sin confirmar: mando de la app en vertical solo para preparar (pantalla aparte), bloqueado en horizontal en cuanto hay directo o REC.
+- Opción B (más adelante): imagen del resultado generada y compartida desde el mando del navegador; vídeos de sets subidos a YouTube como ocultos y enlaces para enviar desde el móvil en mano (ojo cuota ~6 subidas/día).
