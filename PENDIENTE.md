@@ -295,3 +295,14 @@ Falta después: resúmenes por jugadora con las jugadas 👪 de las familias (id
 - Crear y programar la emisión de YouTube también desde el mando del PC (hoy solo desde el mando de la app del móvil que emite). Pedido 20/11.
 - Leer la convocatoria del PDF de Drive (CHEMA VOLEIBOL · «Partidos y convocatorias») y marcarla sola por equipo.
 
+- Terminar partido: si no tiene localizada la grabación (app reiniciada, REC cortado), buscar sola en Películas/VoleyCam la de hoy que cubra las jugadas, en vez de «No hay grabación» (pasó el 21/11). Pedido 21/11.
+- 📱 Highlight vertical TikTok/Shorts en la app (pedido 22/11, faltan respuestas): paso nuevo en Terminar partido (solo a galería) + opción en el menú de resúmenes. Portada = imagen del resultado en vertical (2 s) · jugadas ⭐ ~4 s c/u, máx. ~45 s, con marcador · final 3 s con imagen de patrocinador/anuncio VoleyCam vertical · sin música. Pendiente decidir: ¿solo ⭐ o también 💜🧱🛡? ¿recorte centro o vídeo entero con fondo desenfocado? ¿final solo Superinventos/VoleyCam o todos?
+- Anuncio VoleyCam (hecho 22/11, imágenes fuera del repo): 1920×1080 para el carrusel de patrocinadores y 1080×1920 para el final de TikTok; con TikTok @albertxat5qy y YouTube @bertoni1313.
+
+## Protección y licencias (decidido 23/11 — ESPERAR a tener cliente y la app definitiva)
+1. Separar repos: código de app y Estudio a repo PRIVADO (builds y releases allí); repo público solo con la web de Pages (mando, directo, invitado) para no romper enlaces de familias.
+2. Ofuscar la APK con R8 (isMinifyEnabled + reglas keep para Firebase, zxing, RTMP…).
+3. Licencia por dispositivo («mochila» por software): la app muestra código del dispositivo → Albert genera clave firmada (Ed25519) con dispositivo + club + caducidad; la APK solo lleva la clave pública. Sin licencia válida no arranca. Móviles de Albert: licencia sin caducidad.
+4. Control en Firebase: reglas que solo permiten c/KEY y pub/ con licencia en vigor (lic/…); revocar desde consola si un club no paga.
+5. Herramienta privada para Albert que genera las licencias (código dispositivo, club, caducidad → clave).
+- Por decidir: licencia por móvil o por canal (2-3 móviles del club); caducidad anual ligada al mantenimiento o perpetua. Precio que baraja Albert: 200 € por licencia y dispositivo.
