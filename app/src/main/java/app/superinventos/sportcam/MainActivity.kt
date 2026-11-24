@@ -5,7 +5,9 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -321,7 +323,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     if (loadedKey.isNotEmpty() && loadedKey != prefs.channelKey) loadWeb()
     pendingShare?.let { go -> pendingShare = null; ui.postDelayed({ go() }, 600) }
     val s = stream
-    if (s != null && configSig != configSignature() && !s.isStreaming && !s.isRecording) {
+    if (s != null && !isPortrait() && configSig != configSignature() && !s.isStreaming && !s.isRecording) {
       val wasPreview = s.isOnPreview
       if (wasPreview) s.stopPreview()
       if (!prepare()) toast("Esta cámara no admite esa calidad. Prueba otra en Ajustes.")
@@ -529,6 +531,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   private fun startLive(fromRemote: Boolean) {
     if (wantLive) return
+    if (backToLandscape { startLive(fromRemote) }) return
     val s = stream ?: return toast("La cámara aún no está lista")
     val url = prefs.streamUrl()
     if (url == null) {
@@ -558,6 +561,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   private fun toggleRecord() {
     val s = stream ?: return
+    if (!s.isRecording && backToLandscape { toggleRecord() }) return
     if (s.isRecording) stopRecord() else { startRecord(auto = false); attachOverlay() }
   }
 
@@ -758,6 +762,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       "dim_off" -> setDim(false)
       "replay" -> toggleReplay()
       "finish" -> startFinish()
+      "finish_send" -> finishSend()
       else -> if (action.startsWith("finish_retry_")) retryFinish(action.removePrefix("finish_retry_"))
     }
     lastStatusAt = 0L
@@ -903,6 +908,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   }
 
   private fun updateButtons() {
+    updateOrientation()
     btnLive.text = if (wantLive) "PARAR" else "EN\nDIRECTO"
     btnLive.setBackgroundResource(if (wantLive) R.drawable.bg_btn else R.drawable.bg_btn_live)
     val rec = stream?.isRecording == true
@@ -1262,10 +1268,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   /* ======================= 🏁 Terminar partido ======================= */
 
-  /* Orden: resultado 20 s → parar → descripción → historial (marcador a cero) → WhatsApp con la imagen →
-     espera 2 min (el móvil libera cámara y codificador) → un resumen por set → WhatsApp con esos vídeos →
-     resto de resúmenes (💜 🧱 🛡 / ⚽ 🟨) a la galería sin enviarlos. */
-  private val FINISH_STEPS = listOf("result", "stop", "desc", "history", "img", "wait", "hl", "vids", "extra")
+  /* Orden: resultado 20 s → parar → descripción → historial (marcador a cero) → imagen del resultado →
+     espera 2 min (el móvil libera cámara y codificador) → un resumen por set → queda LISTO para enviar →
+     resto de resúmenes (💜 🧱 🛡 / ⚽ 🟨) a la galería. Nunca sale de la app: WhatsApp solo se abre
+     cuando Albert pulsa «📤 Enviar» (en el mando de la app o en el del navegador, y entonces se abre en el emisor). */
+  private val FINISH_STEPS = listOf("result", "stop", "desc", "history", "img", "wait", "hl", "send", "extra")
+  private var finishSent = false
   private val finishSteps = LinkedHashMap<String, Pair<String, String>>()   // paso → (estado, mensaje)
   private var finishBusy = false
   private var finishImage: File? = null
@@ -1279,8 +1287,34 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private fun publishFinish() {
     val steps = JSONObject()
     finishSteps.forEach { (k, v) -> steps.put(k, JSONObject().put("s", v.first).put("msg", v.second)) }
-    val o = JSONObject().put("steps", steps).toString()
-    web.evaluateJavascript("window.scFinish && scFinish($o)", null)
+    val o = JSONObject().put("steps", steps)
+    val n = pendingSendCount()
+    if (n > 0) o.put("send", JSONObject().put("n", n).put("sent", finishSent))
+    web.evaluateJavascript("window.scFinish && scFinish(${o})", null)
+  }
+
+  /** Guarda lo que hay que enviar (sobrevive a cerrar la app). */
+  private fun savePendingSend(img: File?, videos: List<Uri>) {
+    val o = JSONObject().put("img", img?.absolutePath ?: "").put("vids", JSONArray(videos.map { it.toString() }))
+    prefs.finishSendJson = o.toString()
+  }
+
+  private fun loadPendingSend(): Pair<File?, List<Uri>>? = try {
+    val o = JSONObject(prefs.finishSendJson)
+    val img = o.optString("img").takeIf { it.isNotBlank() }?.let { File(it) }?.takeIf { it.exists() }
+    val a = o.optJSONArray("vids") ?: JSONArray()
+    val v = (0 until a.length()).map { Uri.parse(a.getString(it)) }
+    if (img == null && v.isEmpty()) null else img to v
+  } catch (_: Exception) { null }
+
+  private fun pendingSendCount(): Int = loadPendingSend()?.let { (if (it.first != null) 1 else 0) + it.second.size } ?: 0
+
+  /** 📤 Enviar: abre WhatsApp con la imagen y los vídeos (si la app no está delante, en cuanto vuelva). */
+  private fun finishSend() {
+    val p = loadPendingSend() ?: return toast("No hay nada pendiente de enviar")
+    val go = { shareFinish(p.first, p.second); finishSent = true; publishFinish() }
+    if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) go()
+    else { pendingShare = go; toast("Abre VoleyCam en este móvil para enviar") }
   }
 
   /** Cambia el estado de un paso y sigue con el siguiente (los pasos que fallan no paran a los demás). */
@@ -1295,7 +1329,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private fun startFinish() {
     if (finishBusy) return toast("Ya se está terminando el partido")
     finishBusy = true
-    finishImage = null; finishVideos = emptyList(); pendingShare = null
+    finishImage = null; finishVideos = emptyList(); pendingShare = null; finishSent = false
+    prefs.finishSendJson = ""
     finishSteps.clear(); FINISH_STEPS.forEach { finishSteps[it] = "wait" to "" }
     // Foto del partido tal como acaba (el marcador se pondrá a cero más tarde)
     finishSnap = overlayState?.let { it to allMarks() }
@@ -1306,12 +1341,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     if (step !in FINISH_STEPS) return
     if (finishBusy) return toast("Espera a que acabe el paso en curso")
     runFinish(step)   // solo ese paso
-  }
-
-  /** Comparte ya si la app está delante; si no, en cuanto vuelva. */
-  private fun shareWhenVisible(step: String, waitMsg: String, go: () -> Unit) {
-    if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) go()
-    else { pendingShare = go; finishSteps[step] = "run" to waitMsg; publishFinish() }
   }
 
   /** Jugadas del partido tal como acabó, dentro de la grabación. */
@@ -1375,7 +1404,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val go = {
           val img = finishImage
           if (img == null) finishStep("img", "err", "No se pudo hacer la imagen")
-          else shareWhenVisible("img", "Abre VoleyCam para enviar la imagen") { shareFinish(img, emptyList()); finishStep("img", "ok") }
+          else { savePendingSend(img, finishVideos); finishStep("img", "ok", "Lista para enviar") }
         }
         if (finishImage != null) go() else requestFinishImage { go() }
       }
@@ -1401,6 +1430,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val bySet = groupsIn(inGame).size > 1
         val started = makeSummaries(setOf("partido"), bySet, finishSnap) { uris, results ->
           finishVideos = uris
+          savePendingSend(finishImage, uris)
           val failed = results.count { it.contains("No se pudo") }
           val poor = results.count { it.contains("sin fundidos") || it.contains("con cortes normales") }
           when {
@@ -1412,10 +1442,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         if (!started) finishStep("hl", "err", "No se pudieron empezar los resúmenes")
       }
-      "vids" -> {
-        val v = finishVideos
-        if (v.isEmpty()) return finishStep("vids", "skip")
-        shareWhenVisible("vids", "Abre VoleyCam para enviar los vídeos") { shareFinish(null, v); finishStep("vids", "ok", "${v.size} vídeos") }
+      "send" -> {
+        savePendingSend(finishImage, finishVideos)
+        val n = pendingSendCount()
+        if (n == 0) return finishStep("send", "skip", "Nada que enviar")
+        val v = finishVideos.size
+        finishStep("send", "ok", (if (finishImage != null) "Imagen" else "") + (if (v > 0) (if (finishImage != null) " + " else "") + "$v vídeos" else "") +
+          " · pulsa 📤 Enviar cuando quieras")
       }
       "extra" -> {
         val fm = finishMarks()
@@ -1769,13 +1802,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     web.loadUrl("https://appassets.androidplatform.net/assets/index.html#k=$loadedKey&native=1&mini=${if (panelMini) 1 else 0}")
   }
 
-  private fun panelWidth(): Int = (panel.layoutParams as FrameLayout.LayoutParams).width
+  private fun panelWidth(): Int = (panel.layoutParams as FrameLayout.LayoutParams).width.let { if (it > 0) it else root.width }
 
   /** Mini: esquina inferior izquierda, pequeño. Completo: todo el alto, ~42% del ancho. */
   private fun applyPanelSize() {
     val dp = resources.displayMetrics.density
     val lp = panel.layoutParams as FrameLayout.LayoutParams
-    if (panelMini) {
+    if (root.height > root.width && !panelMini) {
+      lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+      lp.height = FrameLayout.LayoutParams.MATCH_PARENT
+      lp.gravity = Gravity.START
+      lp.setMargins(0, 0, 0, 0)
+    } else if (panelMini) {
       lp.width = maxOf((root.width * 0.36f).toInt(), (340 * dp).toInt()).coerceAtMost(root.width)
       lp.height = minOf((root.height * 0.9f).toInt(), (320 * dp).toInt())
       lp.gravity = Gravity.BOTTOM or Gravity.START
@@ -1787,7 +1825,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       lp.setMargins(0, 0, 0, 0)
     }
     panel.layoutParams = lp
-    panel.translationX = if (panelOpen) 0f else -lp.width.toFloat() - 40f
+    panel.translationX = if (panelOpen) 0f else -panelWidth().toFloat() - 40f
   }
 
   private fun togglePanel() {
@@ -1795,6 +1833,47 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     panel.animate().translationX(if (panelOpen) 0f else -panelWidth().toFloat() - 40f).setDuration(200).start()
     btnRemote.setBackgroundResource(if (panelOpen) R.drawable.bg_btn_on else R.drawable.bg_btn)
     btnRemote.setTextColor(ContextCompat.getColor(this, if (panelOpen) R.color.bg else R.color.text))
+    updateOrientation()
+  }
+
+  /* ======================= Mando en vertical para preparar ======================= */
+  /* Con el mando abierto en grande y SIN directo ni grabación, el móvil puede girar a vertical para
+     preparar cómodo (equipos, convocatoria, patrocinadores…). En vertical la cámara se para; en cuanto
+     se cierra el mando, se pasa a mini o se pide directo/REC, vuelve a horizontal y la cámara arranca.
+     La emisión y la grabación siempre son en horizontal. */
+  private var afterLandscape: (() -> Unit)? = null
+
+  private fun isPortrait() = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+
+  private fun canRotate() = panelOpen && !panelMini && !wantLive && stream?.isRecording != true && afterLandscape == null
+
+  private fun updateOrientation() {
+    val want = if (canRotate()) ActivityInfo.SCREEN_ORIENTATION_FULL_USER else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    if (requestedOrientation != want) requestedOrientation = want
+  }
+
+  /** Si está en vertical, vuelve a horizontal y luego hace [then]. Devuelve true si ha tenido que esperar. */
+  private fun backToLandscape(then: () -> Unit): Boolean {
+    if (!isPortrait()) return false
+    afterLandscape = then
+    toast("Girando a horizontal…")
+    updateOrientation()
+    return true
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    root.post { applyPanelSize() }
+    if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+      stream?.let { if (it.isOnPreview && !it.isStreaming && !it.isRecording) it.stopPreview() }
+    } else {
+      root.postDelayed({
+        val s = stream
+        if (s != null && configSig != configSignature() && !s.isStreaming && !s.isRecording) prepare()
+        startPreview()
+        afterLandscape?.let { go -> afterLandscape = null; ui.postDelayed({ go(); updateOrientation() }, 700) }
+      }, 400)
+    }
   }
 
   inner class Bridge {
@@ -1805,7 +1884,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     @JavascriptInterface
     fun setMini(mini: Boolean) {
-      ui.post { panelMini = mini; applyPanelSize() }
+      ui.post { panelMini = mini; applyPanelSize(); updateOrientation() }
     }
 
     @JavascriptInterface
