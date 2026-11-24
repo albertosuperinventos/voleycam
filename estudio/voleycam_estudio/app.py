@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import core
 
 APP = "VoleyCam Estudio"
-VERSION = "1.4.2"
+VERSION = "1.5.0"
 
 try:
     if os.environ.get("VOLEYCAM_NO_MM"):
@@ -46,6 +46,31 @@ if HAS_MM:
             self.setFrameShape(QGraphicsView.NoFrame)
             self.setRenderHint(QPainter.SmoothPixmapTransform, True)
             self.item.nativeSizeChanged.connect(lambda *_: self.fit())
+            self.on_click = None          # 🎯 si está puesto, el clic sobre la imagen da (x, y) de 0 a 1
+            self.ring = self.scene().addEllipse(0, 0, 10, 10, QPen(QColor("#FFCD28"), 4))
+            self.ring.setZValue(5); self.ring.hide()
+
+        def frame_rect(self):
+            return self.item.mapRectToScene(self.item.boundingRect())
+
+        def mousePressEvent(self, e):
+            if self.on_click and e.button() == Qt.LeftButton:
+                r = self.frame_rect()
+                p = self.mapToScene(e.position().toPoint())
+                if r.width() > 0 and r.contains(p):
+                    self.on_click((p.x() - r.left()) / r.width(), (p.y() - r.top()) / r.height())
+                    return
+            super().mousePressEvent(e)
+
+        def show_ring(self, x=None, y=None):
+            """Aro amarillo donde está marcada la jugadora (None = quitar)."""
+            if x is None:
+                self.ring.hide(); return
+            r = self.frame_rect()
+            rad = min(r.width(), r.height()) * 0.085
+            self.ring.setPen(QPen(QColor("#FFCD28"), max(2.0, rad * 0.12)))
+            self.ring.setRect(r.left() + x * r.width() - rad, r.top() + y * r.height() - rad, rad * 2, rad * 2)
+            self.ring.show()
 
         def set_rotation(self, deg: int):
             self.rot = deg % 360
@@ -69,6 +94,8 @@ if HAS_MM:
 
 KINDS = ("jugada", "carmen", "bloqueo", "recepcion", "gol", "tarjeta")   # todos; cada deporte usa 4 (core.SPORT_KINDS)
 COLORS = {"jugada": "#F2B705", "carmen": "#9B4DCA", "bloqueo": "#C0392B", "recepcion": "#2D7FD3", "gol": "#16A34A", "tarjeta": "#F97316"}
+SPEEDS = (0.25, 0.5, 1.0, 1.5, 2.0)
+SPEED_NAMES = ["0,25x", "0,5x", "1x", "1,5x", "2x"]
 KEYS = ("Z", "X", "C", "V")   # teclas de los 4 botones (y 1-4); B (o 5) = jugada larga
 
 
@@ -446,7 +473,9 @@ class Main(QMainWindow):
         btn("+5 s", lambda: self.seek_rel(5000), "→")
         btn("+10 s", lambda: self.seek_rel(10000))
         btn("Siguiente ⏭", lambda: self.nav(1), "Jugada siguiente (N)")
-        self.cmbSpeed = QComboBox(); self.cmbSpeed.addItems(["0.5x", "1x", "1.5x", "2x"]); self.cmbSpeed.setCurrentIndex(1)
+        btn("◀|", lambda: self.step_frame(-1), "Fotograma anterior (tecla ,)")
+        btn("|▶", lambda: self.step_frame(1), "Fotograma siguiente (tecla .)")
+        self.cmbSpeed = QComboBox(); self.cmbSpeed.addItems(SPEED_NAMES); self.cmbSpeed.setCurrentIndex(SPEEDS.index(1.0))
         self.cmbSpeed.setFocusPolicy(Qt.NoFocus); self.cmbSpeed.currentIndexChanged.connect(self.on_speed)
         hc.addWidget(self.cmbSpeed)
         self.btnRot = btn("⟳ Girar", self.rotate_video, "Gira este vídeo 90° (vídeos de móvil en vertical o de lado). Se aplica también a los resúmenes.")
@@ -502,6 +531,17 @@ class Main(QMainWindow):
         sv.addLayout(hs)
         self.chkSelOn = QCheckBox("Entra en los resúmenes"); self.chkSelOn.setFocusPolicy(Qt.NoFocus); self.chkSelOn.toggled.connect(self.on_sel_enabled)
         sv.addWidget(self.chkSelOn)
+        hx = QHBoxLayout(); hx.setSpacing(4)
+        self.btnSpot = QPushButton("🎯 Señalar jugadora"); self.btnSpot.setCheckable(True); self.btnSpot.setFocusPolicy(Qt.NoFocus)
+        self.btnSpot.setToolTip("Para el vídeo en el momento bueno, pulsa aquí y haz clic sobre la jugadora en la imagen.\n"
+                                "En el resumen la imagen se congela un momento con un círculo y una flecha sobre ella.")
+        self.btnSpot.toggled.connect(self.on_spot_mode); hx.addWidget(self.btnSpot)
+        self.btnSpotDel = QPushButton("✖"); self.btnSpotDel.setFocusPolicy(Qt.NoFocus); self.btnSpotDel.setToolTip("Quitar la señal 🎯 de esta jugada")
+        self.btnSpotDel.clicked.connect(self.spot_clear); hx.addWidget(self.btnSpotDel)
+        self.btnSlow = QPushButton("🐢 Guardar a cámara lenta"); self.btnSlow.setFocusPolicy(Qt.NoFocus)
+        self.btnSlow.setToolTip("Crea un vídeo solo de esta jugada a cámara lenta y sin sonido, para ver la técnica")
+        self.btnSlow.clicked.connect(self.export_slow); hx.addWidget(self.btnSlow, 1)
+        sv.addLayout(hx)
         rv.addWidget(cs)
 
         cg2 = QFrame(objectName="card"); gv = QVBoxLayout(cg2); gv.setContentsMargins(12, 8, 12, 8)
@@ -608,8 +648,21 @@ class Main(QMainWindow):
             self.chk[key] = c
             boxes.addWidget(c)
         f.addRow(boxw)
+        ht = QHBoxLayout()
+        self.chkTech = QCheckBox("🐢 Técnica a cámara lenta:"); self.chkTech.setChecked(False)
+        self.chkTech.setToolTip("Un vídeo con las jugadas del tipo elegido, una tras otra, a cámara lenta y sin sonido")
+        self.chkTech.toggled.connect(lambda *_: self.update_counts())
+        ht.addWidget(self.chkTech)
+        self.cmbTechKind = QComboBox(); self.cmbTechKind.currentIndexChanged.connect(lambda *_: self.update_counts()); ht.addWidget(self.cmbTechKind)
+        self.cmbTechSpeed = QComboBox(); self.cmbTechSpeed.addItems(["0,5×", "0,25×"]); ht.addWidget(self.cmbTechSpeed)
+        ht.addStretch(1)
+        f.addRow(ht)
         self.chkSlides = QCheckBox("Portada «MEJORES JUGADAS» y patrocinadores (solo el del partido)"); self.chkSlides.setChecked(True)
         f.addRow(self.chkSlides)
+        self.chkSpot = QCheckBox("🎯 Señalar a la jugadora (congela la imagen un momento en las jugadas que tienen señal)")
+        self.chkSpot.setChecked(self.cfg.get("spot", True))
+        self.chkSpot.toggled.connect(lambda v: (self.cfg.__setitem__("spot", v), save_cfg(self.cfg)))
+        f.addRow(self.chkSpot)
         from PySide6.QtWidgets import QListWidget
         self.lstMakeSeg = QListWidget(); self.lstMakeSeg.setMaximumHeight(110)
         self.lstMakeSeg.itemChanged.connect(lambda *_: self.update_counts())
@@ -701,6 +754,8 @@ class Main(QMainWindow):
         sc("B", self.toggle_long)
         sc("5", self.toggle_long)
         sc(Qt.Key_Delete, self.delete_selected)
+        sc(",", lambda: self.step_frame(-1))
+        sc(".", lambda: self.step_frame(1))
         sc("N", lambda: self.nav(1))
         sc("P", lambda: self.nav(-1))
 
@@ -1364,8 +1419,12 @@ class Main(QMainWindow):
     def update_sel_panel(self):
         mk = self.sel
         on = mk is not None
-        for w in list(self.selKind.values()) + [self.spBefore, self.spAfter, self.btnSelDel, self.chkSelOn]:
+        for w in list(self.selKind.values()) + [self.spBefore, self.spAfter, self.btnSelDel, self.chkSelOn, self.btnSpot, self.btnSlow]:
             w.setEnabled(on)
+        self.btnSpotDel.setEnabled(bool(on and mk.spot))
+        if not on and self.btnSpot.isChecked():
+            self.btnSpot.setChecked(False)
+        self.update_ring()
         isgol = on and "gol" in (mk.tags or ())
         self.goalRow.setVisible(bool(isgol))
         if isgol:
@@ -1797,6 +1856,77 @@ class Main(QMainWindow):
             v = self.videos[self.cur_video]
             self.lblTime.setText(fmt_dur(p / 1000))
             self.lblTime2.setText(f"/ {fmt_dur(v.duration)}  ·  {fmt_time(v.start_ms + p) if v.start_ms else ''}")
+            self.update_ring(v.start_ms + p)
+
+    # ---------------------------------------------------------------- 🎯 señalar a la jugadora
+    def on_spot_mode(self, on):
+        if not self.player:
+            return
+        if on:
+            if self.playing():
+                self.player.pause()
+            self.vw.on_click = self.spot_set
+            self.vw.setCursor(Qt.CrossCursor)
+            self.btnSpot.setText("🎯 Haz clic sobre ella…")
+        else:
+            self.vw.on_click = None
+            self.vw.unsetCursor()
+            self.btnSpot.setText("🎯 Señalar jugadora")
+
+    def spot_set(self, x, y):
+        mk = self.sel
+        if not mk:
+            return
+        t = self.now_abs()
+        b, a = core.mark_window(mk, self.sec())
+        if not (mk.ts - b * 1000 <= t <= mk.ts + a * 1000):
+            self.btnSpot.setChecked(False)
+            return QMessageBox.information(self, APP, "Ese momento está fuera de esta jugada. Ve a un momento dentro de la jugada "
+                                                      "(o amplía sus segundos «Antes» / «Después») y vuelve a señalar.")
+        mk.spot = {"t": int(t), "x": float(x), "y": float(y)}
+        mk.dirty = True
+        self.btnSpot.setChecked(False)
+        self.update_dirty(); self.update_sel_panel()
+
+    def spot_clear(self):
+        if self.sel and self.sel.spot:
+            self.sel.spot = None
+            self.sel.dirty = True
+            self.update_dirty(); self.update_sel_panel()
+
+    def update_ring(self, now=None):
+        if not self.player:
+            return
+        mk = self.sel
+        if mk and mk.spot:
+            now = self.now_abs() if now is None else now
+            if abs(now - mk.spot["t"]) <= 600:
+                return self.vw.show_ring(mk.spot["x"], mk.spot["y"])
+        self.vw.show_ring(None)
+
+    # ---------------------------------------------------------------- 🐢 cámara lenta de una jugada
+    def export_slow(self):
+        mk = self.sel
+        if self.busy or not mk or not self.match:
+            return
+        from PySide6.QtWidgets import QInputDialog
+        opts = ["0,5× (la mitad de rápido)", "0,25× (cuatro veces más lento)"]
+        ch, ok = QInputDialog.getItem(self, APP, "Velocidad:", opts, self.cfg.get("slow_idx", 0), False)
+        if not ok:
+            return
+        idx = opts.index(ch)
+        self.cfg["slow_idx"] = idx; save_cfg(self.cfg)
+        import copy
+        m2 = copy.copy(mk); m2.enabled = True
+        clips = core.clips_for([m2], self.videos, self.sec())
+        if not clips:
+            return QMessageBox.information(self, APP, "Esta jugada no cae dentro de ningún vídeo.")
+        import dataclasses
+        o = dataclasses.replace(self.options(), slow=(0.5, 0.25)[idx], music="", fade=0, spot=self.chkSpot.isChecked())
+        stamp = datetime.fromtimestamp(mk.ts / 1000).strftime("%Y%m%d_%H%M%S")
+        fname = f"Tecnica_{('x05', 'x025')[idx]}_{stamp}.mp4"
+        self.go_tab(2)
+        self.run_jobs([("tecnica", f"🐢 Cámara lenta {mk.icon} {fmt_time(mk.ts)}", clips, False, fname, None, o)], self.sec(), self.mark_name("carmen"))
 
     def on_timeline_seek(self, ms):
         if not self.player:
@@ -1829,7 +1959,17 @@ class Main(QMainWindow):
 
     def on_speed(self, _=None):
         if self.player:
-            self.player.setPlaybackRate([0.5, 1.0, 1.5, 2.0][self.cmbSpeed.currentIndex()])
+            self.player.setPlaybackRate(SPEEDS[self.cmbSpeed.currentIndex()])
+
+    def step_frame(self, d):
+        """Avanza o retrocede un fotograma (con el vídeo en pausa)."""
+        if not self.player or self.cur_video < 0:
+            return
+        if self.playing():
+            self.player.pause()
+        self.play_end = 0
+        dur = int(self.videos[self.cur_video].duration * 1000)
+        self.player.setPosition(min(max(0, self.player.position() + d * 33), dur))
 
     # ================================================================ crear
     def set_cover_info(self, gs):
@@ -1869,6 +2009,17 @@ class Main(QMainWindow):
         if not segs:
             self.chkFull.setChecked(False)
         marks = self.marks_in(segs)
+        kinds = self.kinds()
+        if [self.cmbTechKind.itemData(i) for i in range(self.cmbTechKind.count())] != list(kinds):
+            cur = self.cmbTechKind.currentData()
+            self.cmbTechKind.blockSignals(True); self.cmbTechKind.clear()
+            for k in kinds:
+                self.cmbTechKind.addItem(f"{core.TYPES[k][0]} {self.mark_name(k)}", k)
+            self.cmbTechKind.setCurrentIndex(max(0, list(kinds).index(cur)) if cur in kinds else (1 if len(kinds) > 1 else 0))
+            self.cmbTechKind.blockSignals(False)
+        tk = self.cmbTechKind.currentData() or "carmen"
+        nt = len(core.clips_for(marks, self.videos, sec, lambda tags, k=tk: k in tags)) if self.videos else 0
+        self.chkTech.setText(f"🐢 Técnica a cámara lenta  ({nt} tramo{'' if nt == 1 else 's'}):")
         for key, title, filt, _ in core.SUMMARIES:
             if key not in core.SPORT_SUMMARIES[self.sport()]:
                 continue
@@ -1897,7 +2048,7 @@ class Main(QMainWindow):
         w, h = [(1920, 1080), (1280, 720), (1080, 1920)][min(2, max(0, self.cmbRes.currentIndex()))]
         return core.Options(fade=self.spFade.value(), crf=[23, 20, 17][q], preset=["veryfast", "faster", "medium"][q],
                             music=self.edMusic.text().strip(), music_vol=self.slMusic.value() / 100,
-                            venue_vol=self.slVenue.value() / 100, width=w, height=h)
+                            venue_vol=self.slVenue.value() / 100, width=w, height=h, spot=self.chkSpot.isChecked())
 
     def make(self):
         if self.busy or not self.match:
@@ -1928,7 +2079,7 @@ class Main(QMainWindow):
             if gs and self.chkFull.isChecked():
                 full = [c for g in gs for c in core.clips_range(g, self.videos)]
                 if full:
-                    jobs.append(("completo", f"{gname} completo", full, False, f"{suf.strip('_')}_completo_{vs}_{stamp}.mp4", None))
+                    jobs.append(("completo", f"{gname} completo", full, False, f"{suf.strip('_')}_completo_{vs}_{stamp}.mp4", None, None))
             for key, title, filt, slides in core.SUMMARIES:
                 if key not in shown or not self.chk[key].isChecked() or not self.chk[key].isEnabled():
                     continue
@@ -1938,15 +2089,32 @@ class Main(QMainWindow):
                              "bloqueo": f"Bloqueos_{vs}_{stamp}{suf}.mp4", "recepcion": f"Recepciones_{vs}_{stamp}{suf}.mp4",
                              "gol": f"Goles_{vs}_{stamp}{suf}.mp4", "tarjeta": f"Tarjetas_{vs}_{stamp}{suf}.mp4"}[key]
                     title = self.chk[key].text().split("  (")[0] + (f" · {gname}" if gname else "")
-                    jobs.append((key, title, clips, slides and self.chkSlides.isChecked(), fname, setc))
+                    jobs.append((key, title, clips, slides and self.chkSlides.isChecked(), fname, setc, None))
+            if self.chkTech.isChecked():
+                tk = self.cmbTechKind.currentData() or "carmen"
+                clips = core.clips_for(marks, self.videos, sec, lambda tags, k=tk: k in tags)
+                if clips:
+                    import dataclasses
+                    sp = (0.5, 0.25)[self.cmbTechSpeed.currentIndex()]
+                    o = dataclasses.replace(self.options(), slow=sp, music="")
+                    jobs.append(("tecnica", f"🐢 Técnica {core.TYPES[tk][0]} {self.mark_name(tk)}" + (f" · {gname}" if gname else ""),
+                                 clips, False, f"Tecnica_{tk}_{stamp}{suf}.mp4", None, o))
         if not jobs:
             return QMessageBox.information(self, APP, "No hay jugadas para los resúmenes elegidos.")
+        self.cfg.update(fade=self.spFade.value(), quality=self.cmbQ.currentIndex(), res=self.cmbRes.currentIndex(),
+                        music=self.edMusic.text(), music_vol=self.slMusic.value(), venue_vol=self.slVenue.value())
+        save_cfg(self.cfg)
+        self.run_jobs(jobs, sec, player)
+
+    def run_jobs(self, jobs, sec, player):
+        """Crea los vídeos de la lista: (tipo, título, tramos, portada, archivo, portada de set, opciones propias o None)."""
+        if self.busy:
+            return
+        m = self.match
         out_dir = self.edOut.text().strip()
         os.makedirs(out_dir, exist_ok=True)
+        self.cfg["out"] = out_dir; save_cfg(self.cfg)
         opt = self.options()
-        self.cfg.update(fade=self.spFade.value(), quality=self.cmbQ.currentIndex(), res=self.cmbRes.currentIndex(),
-                        music=self.edMusic.text(), music_vol=self.slMusic.value(), venue_vol=self.slVenue.value(), out=out_dir)
-        save_cfg(self.cfg)
         sponsors = core.sponsors_from(self.channel)
         self.busy = True
         self.stop_flag = False
@@ -1955,15 +2123,15 @@ class Main(QMainWindow):
 
         def work(s, jobs):
             done = []
-            for i, (key, title, clips, slides, fname, setc) in enumerate(jobs):
+            import dataclasses
+            for i, (key, title, clips, slides, fname, setc, own) in enumerate(jobs):
                 if self.stop_flag:
                     break
                 out = os.path.join(out_dir, fname)
                 s.log.emit(f"▶ {title}: {len(clips)} tramos…")
-                o = opt
-                if key == "completo":   # el set entero, con su sonido y sin música
-                    import dataclasses
-                    o = dataclasses.replace(opt, music="", venue_vol=1.0)
+                o = own or opt
+                if key == "completo":   # el set entero, con su sonido, sin música y sin congelar
+                    o = dataclasses.replace(opt, music="", venue_vol=1.0, spot=False)
                 ok, err = core.make_summary(key, m, clips, self.videos, sponsors, out, o, slides,
                                             lambda p, t=title, i=i: s.progress.emit(int((i + p / 100) / len(jobs) * 100), t),
                                             lambda: self.stop_flag, sec=sec, player=player, set_cover=setc)

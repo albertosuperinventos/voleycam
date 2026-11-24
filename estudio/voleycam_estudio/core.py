@@ -165,6 +165,7 @@ class Mark:
     after: float | None = None
     key: str = ""                 # clave en el canal (para guardar cambios)
     dirty: bool = False           # cambiada o añadida en Estudio, pendiente de guardar
+    spot: dict | None = None      # 🎯 dónde está la jugadora: {"t": ms (hora), "x": 0-1, "y": 0-1} sobre la imagen tal como se ve
 
     @property
     def kind(self) -> str:
@@ -183,6 +184,8 @@ class Mark:
             d["before"] = round(float(self.before), 1)
         if self.after is not None:
             d["after"] = round(float(self.after), 1)
+        if self.spot:
+            d["spot"] = {"t": int(self.spot["t"]), "x": round(float(self.spot["x"]), 4), "y": round(float(self.spot["y"]), 4)}
         return d
 
     @property
@@ -221,8 +224,15 @@ def mark_from(d: dict, key: str = "") -> Mark:
             return float(x) if x is not None and x != "" else None
         except (TypeError, ValueError):
             return None
+    sp = d.get("spot")
+    spot = None
+    if isinstance(sp, dict):
+        try:
+            spot = {"t": int(sp["t"]), "x": min(1.0, max(0.0, float(sp["x"]))), "y": min(1.0, max(0.0, float(sp["y"])))}
+        except (KeyError, TypeError, ValueError):
+            spot = None
     return Mark(int(d.get("ts") or 0), d.get("label") or "Jugada", tags, before=num(d.get("before")), after=num(d.get("after")),
-                key=str(key))
+                key=str(key), spot=spot)
 
 
 def _items(x):
@@ -735,6 +745,53 @@ class Options:
     width: int = 1920
     height: int = 1080
     fps: int = 30
+    slow: float = 1.0        # 🐢 técnica: 0.5 = mitad de velocidad, 0.25 = cuarto (sin sonido)
+    spot: bool = True        # 🎯 congelar la imagen y señalar a la jugadora donde haya marca
+    spot_secs: float = 1.5
+
+
+def render_spot(W: int, H: int, cx: float, cy: float, r: float):
+    """🎯 Velo oscuro con un hueco, aro amarillo y flecha sobre la jugadora (PNG con transparencia)."""
+    from PIL import Image, ImageDraw, ImageFilter
+    S = 2   # se dibuja al doble y se reduce: bordes suaves
+    veil = Image.new("L", (W * S, H * S), 120)
+    ImageDraw.Draw(veil).ellipse([(cx - r * 1.15) * S, (cy - r * 1.15) * S, (cx + r * 1.15) * S, (cy + r * 1.15) * S], fill=0)
+    veil = veil.filter(ImageFilter.GaussianBlur(r * 0.25 * S))
+    im = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0))
+    im.putalpha(veil)
+    d = ImageDraw.Draw(im)
+    yel = (255, 205, 40, 255)
+    w = max(4, int(r * 0.12)) * S
+    d.ellipse([(cx - r) * S, (cy - r) * S, (cx + r) * S, (cy + r) * S], outline=yel, width=w)
+    # Flecha: arriba apuntando hacia abajo; si no cabe, abajo apuntando hacia arriba
+    L, hw = r * 1.3, r * 0.5
+    up = cy - r - L - hw > 0
+    tip = cy - r * 1.12 if up else cy + r * 1.12
+    sgn = -1 if up else 1
+    base = tip + sgn * hw * 1.1
+    d.polygon([(cx * S, tip * S), ((cx - hw) * S, base * S), ((cx + hw) * S, base * S)], fill=yel)
+    d.line([(cx * S, base * S), (cx * S, (base + sgn * L) * S)], fill=yel, width=int(r * 0.22) * S)
+    return im.resize((W, H), Image.LANCZOS)
+
+
+def spot_in(c, videos: list, d: float):
+    """Primera marca 🎯 dentro de un tramo: (segundos desde el principio del tramo, marca) o None."""
+    v = videos[c.video]
+    for mk in c.marks:
+        if mk.spot and v.start_ms:
+            t = (mk.spot["t"] - v.start_ms) / 1000 - c.start
+            if 0.15 < t < d - 0.15:
+                return t, mk
+    return None
+
+
+def atempo_chain(speed: float) -> str:
+    """atempo solo admite 0.5-2: 0.25 = atempo=0.5,atempo=0.5."""
+    out, sp = [], speed
+    while sp < 0.5:
+        out.append("atempo=0.5"); sp /= 0.5
+    out.append(f"atempo={sp:.4f}")
+    return ",".join(out)
 
 
 ROT_FILTER = {90: "transpose=1", 180: "hflip,vflip", 270: "transpose=2"}
@@ -812,16 +869,49 @@ def build_job(clips: list, videos: list, out: str, opt: Options, intro=None, spo
         vw, vh = vid.shown_size if hasattr(vid, "shown_size") else (vid.width, vid.height)
         parts.append(fit_filter(f"{src}:v", f"n{k}", vw, vh, W, H, opt.fps, pre=rot, tag=f"c{k}"))
         if not ovs:
-            parts.append(f"[n{k}]setpts=PTS-STARTPTS[v{k}]")
+            parts.append(f"[n{k}]setpts=PTS-STARTPTS[p{k}]")
         else:
             parts.append(f"[n{k}]setpts=PTS-STARTPTS[c{k}o0]")
             for j, (png, t0, t1) in enumerate(ovs):
                 args.extend(["-loop", "1", "-framerate", str(opt.fps), "-t", f"{d:.3f}", "-i", png])
                 oi = n_in; n_in += 1
-                outl = f"v{k}" if j == len(ovs) - 1 else f"c{k}o{j + 1}"
+                outl = f"p{k}" if j == len(ovs) - 1 else f"c{k}o{j + 1}"
                 parts.append(f"[{oi}:v]{ov_scale},format=rgba,fade=in:st={t0:.2f}:d=0.3:alpha=1,fade=out:st={max(t0, t1 - 0.4):.2f}:d=0.4:alpha=1[g{k}_{j}];"
                              f"[c{k}o{j}][g{k}_{j}]overlay={ov_pos}:enable='between(t,{t0:.2f},{t1:.2f})':shortest=1,format=yuv420p[{outl}]")
-        parts.append(f"[{src}:a]{norm_a},asetpts=PTS-STARTPTS[a{k}]")
+        parts.append(f"[{src}:a]{norm_a},asetpts=PTS-STARTPTS[pa{k}]")
+        vcur, acur = f"p{k}", f"pa{k}"
+        # 🎯 La imagen se congela unos segundos con la jugadora señalada y luego sigue
+        hit = spot_in(c, videos, d) if opt.spot else None
+        if hit:
+            t, mk = hit
+            S = opt.spot_secs
+            s_ = min(W / vw, H / vh) if vw and vh else 1
+            cx = (W - vw * s_) / 2 + mk.spot["x"] * vw * s_
+            cy = (H - vh * s_) / 2 + mk.spot["y"] * vh * s_
+            png = os.path.join(workdir or tempfile.gettempdir(), f"spot_{k}.png")
+            render_spot(W, H, cx, cy, max(28.0, min(W, H) * 0.085)).save(png)
+            args.extend(["-loop", "1", "-framerate", str(opt.fps), "-t", f"{S:.3f}", "-i", png])
+            oi = n_in; n_in += 1
+            parts.append(f"[{vcur}]split[sa{k}][sb{k}];"
+                         f"[sa{k}]trim=end={t:.3f},setpts=PTS-STARTPTS[sA{k}];"
+                         f"[sb{k}]trim=start={t:.3f},setpts=PTS-STARTPTS,tpad=start_mode=clone:start_duration={S:.3f}[sB{k}];"
+                         f"[{oi}:v]format=rgba,fade=in:st=0:d=0.25:alpha=1,fade=out:st={max(0.0, S - 0.3):.2f}:d=0.3:alpha=1[sp{k}];"
+                         f"[sB{k}][sp{k}]overlay=0:0:eof_action=pass,format=yuv420p[sC{k}];"
+                         f"[sA{k}][sC{k}]concat=n=2:v=1:a=0[q{k}]")
+            parts.append(f"[{acur}]asplit[xa{k}][xb{k}];"
+                         f"[xa{k}]atrim=end={t:.3f},asetpts=PTS-STARTPTS[aA{k}];"
+                         f"[xb{k}]atrim=start={t:.3f},asetpts=PTS-STARTPTS,adelay={int(S * 1000)}:all=1[aB{k}];"
+                         f"[aA{k}][aB{k}]concat=n=2:v=0:a=1[qa{k}]")
+            vcur, acur = f"q{k}", f"qa{k}"
+            d += S
+        # 🐢 Técnica: a cámara lenta y sin sonido
+        if opt.slow < 0.99:
+            parts.append(f"[{vcur}]setpts=PTS/{opt.slow:.4f},fps={opt.fps}[v{k}]")
+            parts.append(f"[{acur}]{atempo_chain(opt.slow)},volume=0[a{k}]")
+            d = d / opt.slow
+        else:
+            parts.append(f"[{vcur}]{'fps=' + str(opt.fps) + ',settb=1/' + str(opt.fps) if hit else 'null'}[v{k}]")
+            parts.append(f"[{acur}]anull[a{k}]")
         vlab.append(f"v{k}"); alab.append(f"a{k}"); items.append(d)
     for png in sponsors:
         add_still(png, opt.slide_secs)
@@ -917,7 +1007,7 @@ def make_summary(kind: str, match: Match, clips: list, videos: list, sponsors: l
                 pth = os.path.join(work, f"patro_{i}.png")
                 render_sponsor(sp, sw, sh).save(pth)
                 spons.append(pth)
-        ovs = goal_overlays(clips, videos, sec or {}, work, sw, sh, match, player) if kind != "completo" else {}
+        ovs = goal_overlays(clips, videos, sec or {}, work, sw, sh, match, player) if kind not in ("completo", "tecnica") else {}
         args, total = build_job(clips, videos, out, opt, intro, spons, work, ovs, slide_wh)
         ok, err = run_job(args, total, on_progress, should_stop)
         if not ok and "Unrecognized option" in err and "filter_complex" in err:
