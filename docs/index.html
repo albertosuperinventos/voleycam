@@ -1416,7 +1416,7 @@ function start() {
     const inUse = (ytState.broadcasts || []).find(b => b.selected);
     return `
       ${directoBlock()}
-      ${finishPanel() || `<div class="card">${finishButton()}<p class="muted small" style="margin:6px 0 0">Resultado 20 s en el directo, para el directo y la grabación, sube la descripción, guarda en el historial y abre WhatsApp con la imagen. A los 2 min crea un resumen por set y abre WhatsApp con esos vídeos; el resto de resúmenes se quedan en la galería.</p></div>`}
+      ${finishPanel() || `<div class="card">${finishButton()}<p class="muted small" style="margin:6px 0 0">Resultado 20 s en el directo, para el directo y la grabación, sube la descripción, guarda en el historial y prepara la imagen del resultado. A los 2 min crea un resumen por set; el resto de resúmenes se quedan en la galería. No abre WhatsApp: cuando quieras, pulsa 📤 Enviar en el mando de la app.</p></div>`}
       ${sec('Resultado', `<div class="card">${resultTable()}
         <div class="grid2" style="margin-top:10px"><button class="primary" data-act="shareCurrent">📤 Compartir imagen</button>
           <button data-act="saveMatch">💾 Guardar en historial</button></div></div>`)}
