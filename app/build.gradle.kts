@@ -10,8 +10,8 @@ android {
     applicationId = "app.superinventos.sportcam"
     minSdk = 29
     targetSdk = 35
-    versionCode = 20
-    versionName = "1.9.3"
+    versionCode = 21
+    versionName = "1.9.4"
   }
 
   signingConfigs {

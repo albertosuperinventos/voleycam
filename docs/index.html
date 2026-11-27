@@ -246,6 +246,60 @@ function start() {
   const listsRef = base.child('lists');       // ligas, pabellones y categorías ya usadas (para elegirlas de una lista)
   let lists = {};
   listsRef.on('value', s => { lists = s.val() || {}; if (tab !== 'juego' && !compact) render(); });
+  // 📅 Próximos partidos: datos de cada partido guardados para cargarlos de un toque
+  const plansRef = base.child('plans');
+  let plans = {};
+  plansRef.on('value', s => { plans = s.val() || {}; if (tab === 'partido' && !compact) render(); });
+  function planFromLive() {
+    const info = Object.assign({}, live.info || {});
+    const p = { saved: Date.now(), when: info.when || '', sport: live.sport, homeId: live.homeId || '', awayId: live.awayId || '',
+      rules: live.rules || null, info, squadTeam: squad.team || '' };
+    if (live.sport !== 'volley' && live.clock) p.clock = { dir: live.clock.dir || 'up', durMs: live.clock.durMs || 0 };
+    return p;
+  }
+  function savePlan(silent) {
+    const p = planFromLive();
+    const same = Object.entries(plans).find(([, x]) => x.when && x.when === p.when && x.homeId === p.homeId && x.awayId === p.awayId);
+    (same ? plansRef.child(same[0]) : plansRef.push()).set(p);
+    if (!silent) toast(same ? 'Próximo partido actualizado' : 'Guardado en próximos partidos');
+  }
+  async function loadPlan(id) {
+    const p = plans[id]; if (!p) return;
+    const u = { sport: p.sport || 'volley', homeId: p.homeId || '', awayId: p.awayId || '', info: p.info || {} };
+    if (p.rules) u.rules = p.rules;
+    if (p.clock) { u['clock/dir'] = p.clock.dir; u['clock/durMs'] = p.clock.durMs; }
+    await liveRef.update(u);
+    await squadRef.child('team').set(p.squadTeam || null);
+    // En la app: elegir también su emisión de YouTube (la misma fecha y hora)
+    let yt = '';
+    if (IS_NATIVE && p.when) {
+      const t = new Date(p.when).getTime();
+      const b = (ytState.broadcasts || []).find(b => b.startIso && Math.abs(new Date(b.startIso).getTime() - t) < 60000);
+      if (b) { try { window.SportCamNative.ytUse(b.id); yt = ' y su emisión de YouTube'; } catch (e) {} }
+    }
+    toast('Partido cargado' + yt);
+  }
+  function plansCard() {
+    const day = 24 * 3600 * 1000;
+    const list = Object.entries(plans).filter(([, p]) => !p.when || new Date(p.when).getTime() > Date.now() - day)
+      .sort((a, b) => (a[1].when || '').localeCompare(b[1].when || ''));
+    const cur = planFromLive();
+    const rows = list.map(([id, p]) => {
+      const h = teamView(p.homeId, 'LOCAL'), a = teamView(p.awayId, 'VISITANTE');
+      const d = p.when ? new Date(p.when) : null;
+      const when = d ? d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }) + ' · ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'sin fecha';
+      const isCur = p.when === cur.when && p.homeId === cur.homeId && p.awayId === cur.awayId && (p.squadTeam || '') === (cur.squadTeam || '');
+      const extra = [p.info && p.info.cat, p.info && p.info.venue].filter(Boolean).join(' · ');
+      return `<div class="item"><div class="grow"><b>${esc(h.short || h.name)} – ${esc(a.short || a.name)}</b>${isCur ? ' <span class="small" style="color:var(--accent)">✔ cargado</span>' : ''}<br>
+        <span class="muted small">${esc(when)}${extra ? ' · ' + esc(extra) : ''}</span></div>
+        <div style="display:flex;gap:6px">${isCur ? '' : `<button data-act="planLoad" data-v="${esc(id)}">▶ Cargar</button>`}<button class="danger" data-act="planDel" data-v="${esc(id)}">✕</button></div></div>`;
+    }).join('');
+    return `<div class="card">
+      ${rows || '<p class="muted small" style="margin-top:0">Todavía no hay ninguno. Rellena Quién juega, Datos del partido y Convocatoria y pulsa Guardar.</p>'}
+      <button class="primary" style="width:100%;margin-top:8px" data-act="planSave">💾 Guardar este partido como próximo</button>
+      <p class="muted small" style="margin-bottom:0">Guarda equipos, formato, fecha, pabellón, competición, categoría y el equipo de la convocatoria. Al crear la emisión de YouTube se guarda solo.${IS_NATIVE ? ' Al cargar, también se elige su emisión.' : ' Su emisión de YouTube se elige desde el mando de la app.'}</p>
+    </div>`;
+  }
   const listKey = v => v.toLowerCase().replace(/[.#$\[\]\/]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
   function remember(k, v) { if (v && listKey(v)) listsRef.child(k + '/' + listKey(v)).set(v); }
   /** Valores usados antes para un campo: los guardados y los del historial. */
@@ -1103,6 +1157,7 @@ function start() {
     return `
       ${sec('Compartir', `<div class="card"><button class="primary" style="width:100%" data-act="shareOpen">📱 Enseñar QR / enviar por WhatsApp</button>
         <p class="muted small" style="margin-bottom:0">QR grande para que lo escaneen desde tu móvil, o envío por WhatsApp a un número que no tienes guardado.</p></div>`)}
+      ${sec('📅 Próximos partidos', plansCard(), 'prepara la semana y carga cada uno de un toque')}
       ${sec('Quién juega', `<div class="card">
         <div class="grid2">
           <button class="${volley ? 'on' : ''}" data-act="sport" data-v="volley">Voleibol</button>
@@ -1813,9 +1868,13 @@ function start() {
       case 'ytCreate': {
         if (!live.info.when) return toast('Pon la fecha y hora en la tarjeta de título y descripción');
         const t = ytTexts();
+        savePlan(true);
         try { window.SportCamNative.ytCreate(JSON.stringify({ title: t.title, desc: t.desc, when: new Date(live.info.when).toISOString(), privacy: live.info.privacy || 'unlisted', kids: !!live.info.kids })); } catch (e) {}
         return toast('Creando emisión…');
       }
+      case 'planSave': if (!live.info.when) return toast('Pon primero la fecha y hora en Datos del partido'); return savePlan();
+      case 'planLoad': return loadPlan(v);
+      case 'planDel': if (confirm('¿Quitar este partido de la lista?\n(La emisión de YouTube no se borra.)')) plansRef.child(v).remove(); return;
       case 'ytUse': try { window.SportCamNative.ytUse(d.id); } catch (e) {} return;
       case 'ytDesc': try { window.SportCamNative.ytUpdateDesc(d.id, ytTexts().desc); } catch (e) {} return;
       case 'copyTitle': return copyText(ytTexts().title, 'Título copiado');
